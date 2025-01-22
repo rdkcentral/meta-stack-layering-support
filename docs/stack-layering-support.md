@@ -25,7 +25,7 @@ Path:  [build directory]/[image folder]/[version]/temp/log.do_rootfs
 6. Identify the required files (do_populate_syroot) and create the hardlinks in the recipe sysroot instead of installing all the files.
 
 
-### Logic :
+### Solution :
 #### base-deps-resolver.bbclass
   - This will process the DEPENDS and RDEPENDS variables, generate the metadata for the ipk packages, and create the hard links 
       for the required files in the recipe sysroot. This is globally inherited for all the recipes.
