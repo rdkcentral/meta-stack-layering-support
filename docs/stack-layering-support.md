@@ -7,11 +7,11 @@ Logic to handle both development and release layer IPKs within the same build.
 - update_install_pkgs_list – pre rootfs function:
 
 Detailed logs will be available in log.do_rootfs<br> 
-Path:  [build directory]/[image folder]/1.0-r0/temp/log.do_rootfs
+Path:  [build directory]/[image folder]/[version]/temp/log.do_rootfs
 
 ## Resolve package dependencies using ipk
 
-1. Use the option "--no-install-recommends" while installing the IPKs to create the recipe sysroot. 
+1. Use option "--no-install-recommends" while installing the IPKs to create the recipe sysroot. 
     - This will reduce the usage of hard disk space and the build time.
 2. Use cache mechanism to install the  IPKs to create the recipe sysroot.
     - It will reduce the build time.
@@ -20,8 +20,8 @@ Path:  [build directory]/[image folder]/1.0-r0/temp/log.do_rootfs
     - To populate the proper sysroot from IPKs with minimal files.
     - To update the INSANE check instead of removing 'do_package_qa' task.
     - To update the broken dependencies.
-4. Create the IPK with proper control data, including all the runtime dependencies.
-5. Create the common staging directory for inter layer dependent components.
+4. Create IPK with proper control data, including all the runtime dependencies.
+5. Create common staging directory for inter layer dependent components.
 6. Identify the required files (do_populate_syroot) and create the hardlinks in the recipe sysroot instead of installing all the files.
 
 
