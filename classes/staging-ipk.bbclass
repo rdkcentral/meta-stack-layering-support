@@ -332,6 +332,8 @@ python(){
 }
 do_populate_ipk_sysroot[umask] = "022"
 
+do_populate_ipk_sysroot[network] = "1"
+
 deltask do_fetch
 deltask do_unpack
 deltask do_patch
