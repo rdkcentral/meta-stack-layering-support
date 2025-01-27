@@ -178,7 +178,6 @@ python do_update_opkg_config () {
              break
 
     bb.note("[update_opkg_config] feed arch list : %s"%feed_arch_list)
-    deploy_dir = oe.path.join(d.getVar('WORKDIR'), "oe-rootfs-repo")
     ipk_feed_uris = []
     feed_uri = ""
     entry = (d.getVar("STACK_LAYER_EXTENSION") or "").split(" ")
@@ -193,7 +192,7 @@ python do_update_opkg_config () {
                     feed_from_server = True
                     ipk_feed_uris.append(line)
                     break
-        if feed_from_server:
+        if (arch not in feed_arch_list) or (feed_from_server):
             continue
         pkgs_dir = os.path.join(d.getVar("DEPLOY_DIR_IPK"), arch)
         if os.path.exists(pkgs_dir):
