@@ -888,6 +888,28 @@ def update_dep_pkgs(e):
         create_ipk_deps_pkgdata(e,pkg_pn)
         have_ipk_deps = False
 
+# Create IPK pkgdata for qa check
+def update_pkgdata(d, pkg):
+    output_file = d.expand('${PKGDATA_DIR}/runtime/%s' % pkg)
+    lock_file = bb.utils.lockfile("%s.lock"%output_file)
+    if os.path.exists(output_file):
+        bb.utils.unlockfile(lock_file)
+        return
+    pkgdata_dir = d.getVar("PKGDATA_DIR")
+    if not os.path.exists(pkgdata_dir):
+        bb.utils.mkdirhier(pkgdata_dir)
+    filerprovides = []
+    input_file = d.expand("${SYSROOT_IPK}/var/lib/opkg/info/%s.list" % pkg)
+    with open(input_file, 'r') as fd:
+        lines = fd.readlines()
+    for l in lines:
+        filename = l.split("\t")[0]
+        filerprovides.append("FILERPROVIDES:%s:%s: %s"%(filename,pkg, filename.split("/")[-1]))
+    with open(output_file, 'w') as outfile:
+       outfile.write("PN: %s\n"%pkg)
+        for item in filerprovides:
+            outfile.write("%s\n"%item)
+    bb.utils.unlockfile(lock_file)
 
 # Determine which IPK provides the runtime dependency - sharedlib, pkgconfig.
 def get_rdeps_provider_ipk(d, rdep):
@@ -921,6 +943,7 @@ def get_rdeps_provider_ipk(d, rdep):
         bb.note("[deps-resolver] rdep - %s - not available in IPK pkgs "%rdep)
     else:
         bb.note("[deps-resolver] rdep - %s - available in IPK pkg %s"%(rdep, ipk_pkg))
+        update_pkgdata(d, pkg)
     return ipk_pkg
 
 
