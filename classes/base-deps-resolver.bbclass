@@ -906,7 +906,7 @@ def update_pkgdata(d, pkg):
         filename = l.split("\t")[0]
         filerprovides.append("FILERPROVIDES:%s:%s: %s"%(filename,pkg, filename.split("/")[-1]))
     with open(output_file, 'w') as outfile:
-       outfile.write("PN: %s\n"%pkg)
+        outfile.write("PN: %s\n"%pkg)
         for item in filerprovides:
             outfile.write("%s\n"%item)
     bb.utils.unlockfile(lock_file)
