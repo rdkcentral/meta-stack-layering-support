@@ -29,6 +29,17 @@ useradd_sysroot_sstate function in useradd bbclass.
 >         bb.build.exec_func("useradd_sysroot", d)
 >     elif task == "prepare_recipe_sysroot" or task == "install_ipk_recipe_sysroot":
 
+# Add support to skip files from IPK in qa check in insane bbclass.
+To skip qa check for the files from IPK packages.
+
+package_qa_check_rdepends function in insane bbclass.
+>            if filerdepends:
+>                for key in filerdepends:
+>                    if key in (d.getVar("FILES_IPK_PKG:%s"%pkg) or ""):
+>                        # Skip qa check for files from IPK
+>                        continue
+>                    error_msg = "%s contained in package %s requires %s, but no providers found in RDEPENDS:%s?" %
+
 # Requires the upstream patch "Add Requires.private field in process_pkgconfig".
 
 https://github.com/openembedded/openembedded-core/commit/4b5c8b7006aae2162614ba810ecf4418ca3f36b4
