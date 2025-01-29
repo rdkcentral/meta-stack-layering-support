@@ -29,7 +29,7 @@ useradd_sysroot_sstate function in useradd bbclass.
 >         bb.build.exec_func("useradd_sysroot", d)
 >     elif task == "prepare_recipe_sysroot" or task == "install_ipk_recipe_sysroot":
 
-# Add support to skip files from IPK in qa check in insane bbclass.
+# Add check for FILES_IPK_PKG:pkg in insane bbclass.
 To skip qa check for the files from IPK packages.
 
 package_qa_check_rdepends function in insane bbclass.
