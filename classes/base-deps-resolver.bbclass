@@ -11,6 +11,9 @@
 STACK_LAYER_SYSROOT_DIRS = "${includedir} ${libdir} ${base_libdir} ${nonarch_base_libdir} ${datadir} "
 SYSROOT_DIRS_BIN_REQUIRED = "gobject-introspection"
 
+# Pkgdata directory to store runtime IPK dependency details.
+IPK_PKGDATA_RUNTIME_DIR = "${WORKDIR}/pkgdata/ipk"
+
 do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
 inherit gir-ipk-qemuwrapper
