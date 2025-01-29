@@ -11,6 +11,9 @@
 STACK_LAYER_SYSROOT_DIRS = "${includedir} ${libdir} ${base_libdir} ${nonarch_base_libdir} ${datadir} "
 SYSROOT_DIRS_BIN_REQUIRED = "gobject-introspection"
 
+# Pkgdata directory to store runtime IPK dependency details.
+IPK_PKGDATA_RUNTIME_DIR = "${WORKDIR}/pkgdata/ipk"
+
 do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
 inherit gir-ipk-qemuwrapper
@@ -888,29 +891,6 @@ def update_dep_pkgs(e):
         create_ipk_deps_pkgdata(e,pkg_pn)
         have_ipk_deps = False
 
-# Create IPK pkgdata for qa check
-def update_pkgdata(d, pkg):
-    output_file = d.expand('${PKGDATA_DIR}/runtime/%s' % pkg)
-    lock_file = bb.utils.lockfile("%s.lock"%output_file)
-    if os.path.exists(output_file):
-        bb.utils.unlockfile(lock_file)
-        return
-    pkgdata_dir = d.getVar("PKGDATA_DIR")
-    if not os.path.exists(pkgdata_dir):
-        bb.utils.mkdirhier(pkgdata_dir)
-    filerprovides = []
-    input_file = d.expand("${SYSROOT_IPK}/var/lib/opkg/info/%s.list" % pkg)
-    with open(input_file, 'r') as fd:
-        lines = fd.readlines()
-    for l in lines:
-        filename = l.split("\t")[0]
-        filerprovides.append("FILERPROVIDES:%s:%s: %s"%(filename,pkg, filename.split("/")[-1]))
-    with open(output_file, 'w') as outfile:
-        outfile.write("PN: %s\n"%pkg)
-        for item in filerprovides:
-            outfile.write("%s\n"%item)
-    bb.utils.unlockfile(lock_file)
-
 # Determine which IPK provides the runtime dependency - sharedlib, pkgconfig.
 def get_rdeps_provider_ipk(d, rdep):
     import re
@@ -943,7 +923,6 @@ def get_rdeps_provider_ipk(d, rdep):
         bb.note("[deps-resolver] rdep - %s - not available in IPK pkgs "%rdep)
     else:
         bb.note("[deps-resolver] rdep - %s - available in IPK pkg %s"%(rdep, ipk_pkg))
-        update_pkgdata(d, pkg)
     return ipk_pkg
 
 
@@ -953,11 +932,18 @@ def update_rdeps_shlib(d,pkg):
     ipks = []
     # SHLIBSKIPLIST should set with missing sahred libs in package_do_shlibs
     if d.getVar('SHLIBSKIPLIST_%s'%pkg):
-        shlib_skip = d.getVar('SHLIBSKIPLIST_%s'%pkg).split(" ")
-        for shlib in shlib_skip:
-            ipk = get_rdeps_provider_ipk(d,shlib)
-            if ipk not in ipks and ipk != " ":
-                ipks.append(ipk)
+        pkg_dir = d.getVar("IPK_PKGDATA_RUNTIME_DIR")
+        if not os.path.exists(pkg_dir):
+            bb.utils.mkdirhier(pkg_dir)
+        pkg_path = os.path.join(pkg_dir, pkg)
+        with open(pkg_path, 'a') as file:
+            shlib_skip = d.getVar('SHLIBSKIPLIST_%s'%pkg).split(" ")
+            for shlib in shlib_skip:
+                ipk = get_rdeps_provider_ipk(d,shlib)
+                if ipk not in ipks and ipk != " ":
+                    ipks.append(ipk)
+                if ipk != " ":
+                    file.write("%s\n"%shlib)
     return ipks
 
 def update_rdeps_pkgconfig(d,pkg):
@@ -1034,6 +1020,7 @@ python do_update_rdeps_ipk () {
                     if devrdep not in rdepends:
                         rdepends.append(devrdep)
                     bb.note("[deps-resolver] pkg %s has runtime dependency [from pkgconfig] with IPK %s"%(pkg, devrdep))
+
         for rdep in (d.getVar("INSTALL_RDEPENDS:"+ pkg) or "").split(","):
             if rdep not in rdepends:
                 rdepends.append(rdep)
@@ -1094,38 +1081,21 @@ python deps_taskhandler() {
 deps_taskhandler[eventmask] = "bb.event.RecipeTaskPreProcess"
 addhandler deps_taskhandler
 
-# Check ipk dependencies and add only the required insane skip,
-python do_check_insane_skip () {
+python do_skip_ipk_files_qa_check () {
     bb.build.exec_func("read_subpackage_metadata", d)
     packages = d.getVar('PACKAGES').split(" ")
-    pkgdata_path = d.getVar("DEPS_IPK_DIR")
+    pkg_dir = d.getVar("IPK_PKGDATA_RUNTIME_DIR")
     for pkg in packages:
-        insane_skip_rdep = False
-        insane_skip_dep = False
-        pkg_path = os.path.join(pkgdata_path,pkg)
-        if os.path.exists(pkg_path+".lrdep") and not insane_skip_rdep:
-            insane_skip_rdep = True
-        else:
-            rdeplist = (d.getVar('RDEPENDS:%s' % pkg) or "").split()
-            for rdep in rdeplist:
-                rdep_path = os.path.join(pkgdata_path,rdep)
-                if os.path.exists(rdep_path+".lrdep") and not insane_skip_rdep:
-                    insane_skip_rdep = True
-
-        if os.path.exists(pkg_path+".ldep") and not insane_skip_dep:
-            insane_skip_dep = True
-
-        if insane_skip_rdep:
-            if 'file-rdeps' not in (d.getVar('INSANE_SKIP:' + pkg) or "").split():
-                d.appendVar('INSANE_SKIP:%s'%pkg, " file-rdeps")
-            if 'build-deps' not in (d.getVar('INSANE_SKIP:' + pkg) or "").split():
-                d.appendVar('INSANE_SKIP:%s'%pkg, " build-deps")
-
-        if insane_skip_dep:
-            if 'dev-so' not in (d.getVar('INSANE_SKIP:' + pkg) or "").split():
-                d.appendVar('INSANE_SKIP:%s'%pkg, " dev-so")
+        pkg_path = os.path.join(pkg_dir,pkg)
+        if os.path.isdir(pkg_path):
+            continue
+        if os.path.exists(pkg_path):
+            with open(pkg_path,"r") as fd:
+                lines = fd.readlines()
+            for l in lines:
+                d.appendVar("FILES_IPK_PKG:%s"%pkg, " %s"%l[:-1])
 }
-do_package_qa[prefuncs] += "do_check_insane_skip"
+do_package_qa[prefuncs] += "do_skip_ipk_files_qa_check"
 
 def create_abiversion(d,version):
     kernel_depmod = oe.path.join(d.getVar('PKGDATA_DIR'), "kernel-depmod")
