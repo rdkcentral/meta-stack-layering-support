@@ -9,7 +9,7 @@
 # -----------------------------------------------------------------------
 
 STACK_LAYER_SYSROOT_DIRS = "${includedir} ${libdir} ${base_libdir} ${nonarch_base_libdir} ${datadir} "
-SYSROOT_DIRS_BIN_REQUIRED = f"{d.getVar('MLPREFIX')}gobject-introspection"
+SYSROOT_DIRS_BIN_REQUIRED = "lib32-gobject-introspection"
 
 # Pkgdata directory to store runtime IPK dependency details.
 IPK_PKGDATA_RUNTIME_DIR = "${WORKDIR}/pkgdata/ipk"
