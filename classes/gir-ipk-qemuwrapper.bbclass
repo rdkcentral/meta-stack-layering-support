@@ -61,7 +61,7 @@ def generate_wrapper(d):
     wrapperfile = "%s/g-ir-scanner-lddwrapper" %(d.getVar('STAGING_BINDIR'))
     with open (wrapperfile, 'w') as rsh:
        rsh.write("#!/bin/sh\n")
-       rsh.write('''prelink-rtld --root=%s "$@"\n''' %(d.getVar('STAGING_DIR_HOST')))
+       rsh.write('''%s -p "\$@"\n'''%(d.getVar('OBJDUMP')))
     st = os.stat(wrapperfile)
     os.chmod(wrapperfile, st.st_mode | stat.S_IEXEC)
 
