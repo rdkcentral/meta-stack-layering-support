@@ -35,8 +35,9 @@ To skip qa check for the files from IPK packages.
 package_qa_check_rdepends function in insane bbclass.
 >            if filerdepends:
 >                for key in filerdepends:
->                    if key in (d.getVar("FILES_IPK_PKG:%s"%pkg) or ""):
+>                    if key.split("(")[0] in (d.getVar("FILES_IPK_PKG:%s"%pkg) or ""):
 >                        # Skip qa check for files from IPK
+>                        bb.warn("Skipping qa check for file %s which is available in IPK"%key)
 >                        continue
 >                    error_msg = "%s contained in package %s requires %s, but no providers found in RDEPENDS:%s?" %
 
