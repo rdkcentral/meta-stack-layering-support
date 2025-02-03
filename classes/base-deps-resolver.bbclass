@@ -822,9 +822,6 @@ def update_dep_pkgs(e):
     if ipk_mode and not check_targets(e.data, pkg_pn) :
         skip_depends = True
 
-    if bb.data.inherits_class('multilib_global', d) and not d.getVar('MLPREFIX'):
-        return
-
     # Handle DEPENDS which needs recipe to process
     deps = (e.data.getVar('DEPENDS') or "").strip()
     if deps:
@@ -895,6 +892,10 @@ def update_dep_pkgs(e):
 
     if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
         e.data.appendVar("DEPENDS", " ${MLPREFIX}staging-ipk-pkgs")
+
+    if bb.data.inherits_class('multilib_global', d) and not d.getVar('MLPREFIX'):
+        have_ipk_deps = False
+
     if have_ipk_deps:
         e.data.appendVar("DEPENDS", " ${MLPREFIX}staging-ipk-pkgs")
         create_ipk_deps_pkgdata(e,pkg_pn)
