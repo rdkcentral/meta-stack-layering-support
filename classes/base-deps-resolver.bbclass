@@ -9,7 +9,7 @@
 # -----------------------------------------------------------------------
 
 STACK_LAYER_SYSROOT_DIRS = "${includedir} ${libdir} ${base_libdir} ${nonarch_base_libdir} ${datadir} "
-SYSROOT_DIRS_BIN_REQUIRED = "gobject-introspection"
+SYSROOT_DIRS_BIN_REQUIRED = "${MLPREFIX}gobject-introspection"
 
 # Pkgdata directory to store runtime IPK dependency details.
 IPK_PKGDATA_RUNTIME_DIR = "${WORKDIR}/pkgdata/ipk"
@@ -43,7 +43,13 @@ def decode(str):
 
 def is_excluded_pkg(d, pkg):
     is_excluded = False
-    if pkg and pkg.strip() in (d.getVar("IPK_EXCLUSION_LIST") or "").split():
+    if not pkg:
+        return is_excluded
+    pkg = pkg.strip()
+    prefix = d.getVar('MLPREFIX') or ""
+    if prefix and pkg.startswith(prefix):
+        pkg = pkg[len(prefix):]
+    if pkg in (d.getVar("IPK_EXCLUSION_LIST") or "").split():
         is_excluded = True
     return is_excluded
 
@@ -370,7 +376,7 @@ python do_install_ipk_recipe_sysroot () {
                             staging_copy_ipk_file(layer_sysroot+file,recipe_sysroot+file,seendirs)
                         break
 
-            if pkg == "gobject-introspection":
+            if pkg == f"{d.getVar('MLPREFIX')}gobject-introspection":
                 bb.note(" [deps-resolver] gobject-introspection requires cross compilation support")
                 g_ir_cc_support(d,recipe_sysroot,pkg_pn)
             if bb.data.inherits_class('useradd', d):
@@ -815,6 +821,9 @@ def update_dep_pkgs(e):
     (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, pkg_pn, False, version)
     if ipk_mode and not check_targets(e.data, pkg_pn) :
         skip_depends = True
+
+    if bb.data.inherits_class('multilib_global', d) and not d.getVar('MLPREFIX'):
+        return
 
     # Handle DEPENDS which needs recipe to process
     deps = (e.data.getVar('DEPENDS') or "").strip()
