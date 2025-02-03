@@ -9,7 +9,7 @@
 # -----------------------------------------------------------------------
 
 STACK_LAYER_SYSROOT_DIRS = "${includedir} ${libdir} ${base_libdir} ${nonarch_base_libdir} ${datadir} "
-SYSROOT_DIRS_BIN_REQUIRED = "gobject-introspection"
+SYSROOT_DIRS_BIN_REQUIRED = "${MLPREFIX}gobject-introspection"
 
 # Pkgdata directory to store runtime IPK dependency details.
 IPK_PKGDATA_RUNTIME_DIR = "${WORKDIR}/pkgdata/ipk"
@@ -358,7 +358,7 @@ python do_install_ipk_recipe_sysroot () {
 
             d.setVar('SYSROOT_REQ_DIRS',d.getVar("STACK_LAYER_SYSROOT_DIRS"))
             for ipkdeps in staging_bin_pkgs:
-                if ("%s%s"%(d.getVar("MLPREFIX"),ipkdeps)) == pkg:
+                if pkg == ipkdeps:
                     d.appendVar('SYSROOT_REQ_DIRS',d.getVar("bindir"))
                     break
             for l in devlines:
@@ -376,7 +376,7 @@ python do_install_ipk_recipe_sysroot () {
                             staging_copy_ipk_file(layer_sysroot+file,recipe_sysroot+file,seendirs)
                         break
 
-            if pkg == ("%sgobject-introspection"%d.getVar("MLPREFIX")):
+            if pkg == f"{d.getVar('MLPREFIX')}gobject-introspection":
                 bb.note(" [deps-resolver] gobject-introspection requires cross compilation support")
                 g_ir_cc_support(d,recipe_sysroot,pkg_pn)
             if bb.data.inherits_class('useradd', d):
