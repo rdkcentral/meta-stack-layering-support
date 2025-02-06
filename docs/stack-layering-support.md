@@ -1,10 +1,10 @@
 ## custom-rootfs-creation
 
 Logic to handle both development and release layer IPKs within the same build.
-- update_opkg_config – pre rootfs function:
+- update_opkg_config – pre rootfs function
   - Added the support to customise the opkg configuration.
   - Set the layer feeds either to the local build folder or to the remote server depends on the release layer configurations.
-- update_install_pkgs_list – pre rootfs function:
+- update_install_pkgs_with_version – pre rootfs function
 
 Detailed logs will be available in log.do_rootfs<br> 
 Path:  [build directory]/[image folder]/[version]/temp/log.do_rootfs
@@ -35,18 +35,20 @@ Path:  [build directory]/[image folder]/[version]/temp/log.do_rootfs
   - This will inherit staging-ipk bbclass for installing the packages to resolve the ipk dependencies.
 #### kernel-devel.bbclass
   - This will generate the kernel devel package with the required build artifacts. These build artifacts help to compile kernel modules without using the Linux source. This class should inherit the Linux recipe to generate the kernel devel IPK.
-
+#### gir-ipk-qemuwrapper.bbclass
+  - This will provide qemu warpper functions for gobject introspection
+    
 ### Stages:
 #### Recipe parsing [base-deps-resolver]:
   - Identify the ipk packages using layer (ipk) extension and store the details in package metadata.
   - Insert the new package function after "read_shlibdeps" (PACKAGEFUNCS) to update the RDEPENDS data.
-  - Add the dependency to "staging-layer-deps" if there is an ipk dependency.
+  - Add the dependency to "staging-ipk-pkgs" if there is an ipk dependency.
   - Add a pre-function to do_prepare_recipe_sysroot to update the DEPENDS and RDEPENDS metadata to resolve the broken dependencies.
 
 #### do_populate_layer_sysroot [staging-ipk-pkgs]:
   - Before do_populate_sysroot
   - Set the cache directory.
-  - Install required ipk packages to the working directory using the options "--host-cache-dir --cache-dir <cache directory>".
+  - Install required ipk packages to the working directory using the options "--host-cache-dir --cache-dir [cache directory]".
   - Create the common layer sysroot directory with the required dirs (usr/lib, lib, usr/include, var/lib/opkg).
 
   Detailed logs will be available in log.do_populate_layer_sysroot (staging-ipk-pkgs package)<br> 
