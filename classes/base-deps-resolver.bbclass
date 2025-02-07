@@ -909,6 +909,11 @@ def get_rdeps_provider_ipk(d, rdep):
     reciepe_sysroot = d.getVar("RECIPE_SYSROOT")
     opkg_cmd = bb.utils.which(os.getenv('PATH'), "opkg")
 
+    if "/" in rdep:
+        rdep = rdep.split("/")[-1]
+    if rdep == "bash":
+        rdep = rdep + ".bash"
+
     opkg_conf = d.getVar("IPKGCONF_LAYERING")
     if not os.path.exists(opkg_conf):
         configure_opkg (d, opkg_conf)
