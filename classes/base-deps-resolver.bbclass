@@ -890,11 +890,12 @@ def update_dep_pkgs(e):
             if f == "read_shlibdeps":
                 e.data.appendVar('PACKAGEFUNCS'," do_update_rdeps_ipk")
 
-    if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
-        e.data.appendVar("DEPENDS", " ${MLPREFIX}staging-ipk-pkgs")
-
     if bb.data.inherits_class('multilib_global', d) and not d.getVar('MLPREFIX'):
         have_ipk_deps = False
+
+    if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
+        if have_ipk_deps:
+            e.data.appendVar("DEPENDS", " ${MLPREFIX}staging-ipk-pkgs")
 
     if have_ipk_deps:
         e.data.appendVar("DEPENDS", " ${MLPREFIX}staging-ipk-pkgs")
