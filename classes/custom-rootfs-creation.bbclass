@@ -209,4 +209,5 @@ python do_update_opkg_config () {
 
 do_rootfs[prefuncs] += "do_update_opkg_config"
 do_rootfs[depends] += "shadow-native:do_populate_sysroot"
+do_rootfs[depends] += "${MLPREFIX}staging-ipk-pkgs:do_populate_ipk_sysroot"
 do_rootfs[network] = "1"

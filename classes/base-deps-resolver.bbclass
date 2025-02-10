@@ -9,7 +9,7 @@
 # -----------------------------------------------------------------------
 
 STACK_LAYER_SYSROOT_DIRS = "${includedir} ${libdir} ${base_libdir} ${nonarch_base_libdir} ${datadir} "
-SYSROOT_DIRS_BIN_REQUIRED = "gobject-introspection"
+SYSROOT_DIRS_BIN_REQUIRED = "${MLPREFIX}gobject-introspection"
 
 # Pkgdata directory to store runtime IPK dependency details.
 IPK_PKGDATA_RUNTIME_DIR = "${WORKDIR}/pkgdata/ipk"
@@ -43,7 +43,13 @@ def decode(str):
 
 def is_excluded_pkg(d, pkg):
     is_excluded = False
-    if pkg and pkg.strip() in (d.getVar("IPK_EXCLUSION_LIST") or "").split():
+    if not pkg:
+        return is_excluded
+    pkg = pkg.strip()
+    prefix = d.getVar('MLPREFIX') or ""
+    if prefix and pkg.startswith(prefix):
+        pkg = pkg[len(prefix):]
+    if pkg in (d.getVar("IPK_EXCLUSION_LIST") or "").split():
         is_excluded = True
     return is_excluded
 
@@ -370,7 +376,7 @@ python do_install_ipk_recipe_sysroot () {
                             staging_copy_ipk_file(layer_sysroot+file,recipe_sysroot+file,seendirs)
                         break
 
-            if pkg == "gobject-introspection":
+            if pkg == f"{d.getVar('MLPREFIX')}gobject-introspection":
                 bb.note(" [deps-resolver] gobject-introspection requires cross compilation support")
                 g_ir_cc_support(d,recipe_sysroot,pkg_pn)
             if bb.data.inherits_class('useradd', d):
@@ -884,8 +890,13 @@ def update_dep_pkgs(e):
             if f == "read_shlibdeps":
                 e.data.appendVar('PACKAGEFUNCS'," do_update_rdeps_ipk")
 
+    if bb.data.inherits_class('multilib_global', d) and not d.getVar('MLPREFIX'):
+        have_ipk_deps = False
+
     if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
-        e.data.appendVar("DEPENDS", " ${MLPREFIX}staging-ipk-pkgs")
+        if have_ipk_deps:
+            e.data.appendVar("DEPENDS", " ${MLPREFIX}staging-ipk-pkgs")
+
     if have_ipk_deps:
         e.data.appendVar("DEPENDS", " ${MLPREFIX}staging-ipk-pkgs")
         create_ipk_deps_pkgdata(e,pkg_pn)
@@ -898,6 +909,11 @@ def get_rdeps_provider_ipk(d, rdep):
 
     reciepe_sysroot = d.getVar("RECIPE_SYSROOT")
     opkg_cmd = bb.utils.which(os.getenv('PATH'), "opkg")
+
+    if "/" in rdep:
+        rdep = rdep.split("/")[-1]
+    if rdep == "bash":
+        rdep = rdep + ".bash"
 
     opkg_conf = d.getVar("IPKGCONF_LAYERING")
     if not os.path.exists(opkg_conf):
