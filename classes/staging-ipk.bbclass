@@ -54,31 +54,6 @@ create_ipk_common_staging() {
 
 do_populate_ipk_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
-# Create the opkg configuration with remote feeds
-def configure_opkg (d, conf):
-    import re
-    archs = d.getVar("ALL_MULTILIB_PACKAGE_ARCHS")
-    feed_list = []
-    with open(conf, "w+") as file:
-        priority = 1
-        for arch in archs.split():
-            file.write("arch %s %d\n" % (arch, priority))
-            priority += 5
-
-        for line in (d.getVar('IPK_FEED_URIS') or "").split():
-            feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
-
-            if feed is not None:
-                arch_name = feed.group(1)
-                arch_uri = feed.group(2)
-                feed_list.append(arch_name)
-                bb.note("[staging-ipk] Add %s feed with URL %s" % (arch_name, arch_uri))
-
-                file.write("src/gz %s %s\n" % (arch_name, arch_uri))
-
-    bb.note("[staging-ipk] IPK feed list : %s"%feed_list)
-    return feed_list
-
 # Function reads indirect build and runtime dependencies
 # from the pkgdata directory
 def read_ipk_depends(d, pkg):
@@ -162,7 +137,7 @@ python do_populate_ipk_sysroot(){
 
     opkg_conf = d.getVar("IPKGCONF_LAYERING")
 
-    feed_name = configure_opkg (d, opkg_conf)
+    oe.sls-utils.configure_opkg (d, opkg_conf)
 
     info_file_path = os.path.join(d.getVar("D", True), "ipktemp/")
     bb.utils.mkdirhier(os.path.dirname(info_file_path))
