@@ -18,24 +18,6 @@ do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
 inherit gir-ipk-qemuwrapper
 
-# Create the opkg configuration with remote feeds
-def configure_opkg (d, conf):
-    import re
-    archs = d.getVar("ALL_MULTILIB_PACKAGE_ARCHS")
-    with open(conf, "w+") as file:
-        priority = 1
-        for arch in archs.split():
-            file.write("arch %s %d\n" % (arch, priority))
-            priority += 5
-
-        for line in (d.getVar('IPK_FEED_URIS') or "").split():
-            feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
-            if feed is not None:
-                arch_name = feed.group(1)
-                arch_uri = feed.group(2)
-                bb.note("[deps-resolver] Add %s feed with URL %s" % (arch_name, arch_uri))
-                file.write("src/gz %s %s\n" % (arch_name, arch_uri))
-
 def decode(str):
     import codecs
     c = codecs.getdecoder("unicode_escape")
@@ -917,7 +899,8 @@ def get_rdeps_provider_ipk(d, rdep):
 
     opkg_conf = d.getVar("IPKGCONF_LAYERING")
     if not os.path.exists(opkg_conf):
-        configure_opkg (d, opkg_conf)
+        import oe.sls_utils
+        oe.sls_utils.sls_opkg_conf (d, opkg_conf)
 
     info_file_path = os.path.join(d.getVar("WORKDIR", True), "temp/ipktemp/")
     if not os.path.exists(info_file_path):

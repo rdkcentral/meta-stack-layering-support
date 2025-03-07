@@ -51,3 +51,14 @@ package_qa_check_rdepends function in insane bbclass.
 # Requires the upstream patch "Add Requires.private field in process_pkgconfig".
 
 https://github.com/openembedded/openembedded-core/commit/4b5c8b7006aae2162614ba810ecf4418ca3f36b4
+
+# Add custom opkg configure function in meta/lib/oe/package_manager/ipk/__init__.py
+To set the priority for the feeds.
+
+>        self.from_feeds = (self.d.getVar('BUILD_IMAGES_FROM_FEEDS') or "") == "1"
+>        if bb.data.inherits_class('custom-rootfs-creation', d):
+>            from oe.sls_utils import sls_opkg_conf
+>            sls_opkg_conf (d, self.config_file)
+>        elif self.from_feeds:
+>             self._create_custom_config()
+
