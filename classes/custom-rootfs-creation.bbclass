@@ -5,6 +5,11 @@
 # Description : Create custom opkg configuration and generate version info 
 # for the packagegroups set in the IMAGE_INSTALL
 # ------------------------------------------------------------------------
+
+# This dependency is a work around. This pkg should be moved to 
+# docker as native tools.
+DEPENDS += "nss-native"
+
 def get_pkg_install_version(d,release_data_file, pkggrp):
     import re
     version = ""
