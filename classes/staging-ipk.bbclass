@@ -213,8 +213,10 @@ python do_populate_ipk_sysroot(){
             pkg = parts[0]
             pkg_ver = parts[1]
         if "virtual" in pkg:
-            bb.warn("PREFERRED_PROVIDER is not set for %s" %pkg)
-            continue
+            pkg = d.getVar('PREFERRED_PROVIDER_%s' % pkg, True)
+            if not pkg:
+                bb.warn("PREFERRED_PROVIDER is not set for %s" %pkg)
+                continue
 
         pkg = get_base_pkg_name(pkg)
         if pkg not in ipk_list:
