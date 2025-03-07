@@ -1,6 +1,6 @@
 
 # Create the opkg configuration with remote feeds
-def configure_opkg (d, conf):
+def sls_opkg_conf (d, conf):
     import re
     archs = d.getVar("ALL_MULTILIB_PACKAGE_ARCHS")
     with open(conf, "w") as file:
