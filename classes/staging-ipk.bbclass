@@ -136,8 +136,8 @@ python do_populate_ipk_sysroot(){
     opkg_cmd = bb.utils.which(os.getenv('PATH'), "opkg")
 
     opkg_conf = d.getVar("IPKGCONF_LAYERING")
-
-    oe.sls-utils.configure_opkg (d, opkg_conf)
+    import oe.sls_utils
+    oe.sls_utils.configure_opkg (d, opkg_conf)
 
     info_file_path = os.path.join(d.getVar("D", True), "ipktemp/")
     bb.utils.mkdirhier(os.path.dirname(info_file_path))

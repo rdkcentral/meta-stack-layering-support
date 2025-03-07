@@ -3,30 +3,28 @@
 def configure_opkg (d, conf):
     import re
     archs = d.getVar("ALL_MULTILIB_PACKAGE_ARCHS")
-    with open(conf, "w+") as file:
+    with open(conf, "w") as file:
         priority = 5
-        priority_list = []
         arch_priority = {}
         for arch in archs.split():
-            if self.d.getVar('OPKG_ARCH_PRIORITY:%s'%arch):
-                custom_priority = int(self.d.getVar('OPKG_ARCH_PRIORITY:%s'%arch))
+            if d.getVar('OPKG_ARCH_PRIORITY:%s'%arch):
+                custom_priority = int(d.getVar('OPKG_ARCH_PRIORITY:%s'%arch))
                 if custom_priority in arch_priority:
-                    bb.fatal("Archs %s and %s having same priority. Should provide unique priority for each archs"%(arch, arch_priority[custom_priority]))
+                    bb.fatal("Archs %s and %s having same priority %d. Should provide unique priority for each archs"%(arch, arch_priority[custom_priority],custom_priority))
                 else:
-                    arch_priority[custom_priority] = [arch]
+                    arch_priority[custom_priority] = arch
             else:
                 if priority in arch_priority:
-                    bb.fatal("Archs %s and %s having same priority. Should provide unique priority for each archs"%(arch, arch_priority[custom_priority]))
+                    bb.fatal("Archs %s and %s having same priorityi %d. Should provide unique priority for each archs"%(arch, arch_priority[custom_priority],priority))
                     # This is to store different archs have same priority
                 else:
-                    arch_priority[priority] = [arch]
+                    arch_priority[priority] = arch
                 priority += 5
 
         if arch_priority:
             sorted_arch = sorted(arch_priority.items())
-            for priority, archs in sorted_arch:
-                for arch in archs:
-                    config_file.write("arch %s %d\n" % (arch, priority))
+            for priority, arch in sorted_arch:
+                file.write("arch %s %d\n" % (arch, priority))
 
         for line in (d.getVar('IPK_FEED_URIS') or "").split():
             feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
