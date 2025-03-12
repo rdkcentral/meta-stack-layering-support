@@ -372,23 +372,6 @@ python do_install_ipk_recipe_sysroot () {
             bb.note("[deps-resolver] Skipped PKG - %s - from recipe sysroot"%pkg)
 }
 
-python do_kernel_devel_create(){
-    import shutil
-    kernel_src = d.getVar('SYSROOT_IPK')+"/kernel-source"
-    kernel_artifacts = d.getVar('SYSROOT_IPK')+"/kernel-build"
-    staging_shared_dir = d.getVar("STAGING_SHARED_DIR")
-    if os.path.exists(staging_shared_dir):
-        shutil.rmtree(staging_shared_dir)
-    bb.utils.mkdirhier(staging_shared_dir)
-    if os.path.exists(kernel_src):
-        os.symlink(kernel_src, d.getVar('STAGING_KERNEL_DIR'))
-    else:
-        bb.fatal("kernel devel is missing please check")
-    if os.path.exists(kernel_artifacts):
-        os.symlink(kernel_artifacts, d.getVar('STAGING_KERNEL_BUILDDIR'))
-}
-do_kernel_devel_create[depends] += "${MLPREFIX}staging-ipk-pkgs:do_populate_ipk_sysroot"
-
 python do_ipk_download(){
     import subprocess
     import shutil
@@ -460,8 +443,6 @@ def disable_build_tasks(d, task_name, arch):
             for ipk in ipk_list:
                 fp.write(os.path.join(pkg_path_ipk, ipk) + "\n")
     bb.build.addtask("do_ipk_download", "do_build", None, d)
-    if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', d):
-        bb.build.addtask("do_kernel_devel_create", "do_build", None, d)
 
 # Get the list of IPKs generated from a package
 def get_ipk_list(d, pkg_arch):
@@ -549,10 +530,6 @@ python () {
 
         if d.getVar("STACK_LAYER_EXTENSION") and bb.data.inherits_class('image', d):
             d.appendVarFlag('do_rootfs', 'recrdeptask', " do_ipk_download")
-
-        if d.getVar("STACK_LAYER_EXTENSION") and bb.data.inherits_class('linux-kernel-base', d):
-            d.appendVarFlag('do_configure', 'recrdeptask', " do_kernel_devel_create")
-            d.appendVarFlag('do_kernel_devel_create', 'recrdeptask', " do_populate_ipk_sysroot")
 
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, pn, False, version)
         if ipk_mode and not check_targets(d, pn):
