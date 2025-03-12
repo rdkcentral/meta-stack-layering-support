@@ -121,6 +121,29 @@ def get_base_pkg_name(pkg_name):
         tmp_pkg_name = pkg_name[:-7]
     return tmp_pkg_name
 
+def do_kernel_devel_create(d):
+    kernel_src = d.getVar('SYSROOT_IPK')+"/kernel-source"
+    kernel_artifacts = d.getVar('SYSROOT_IPK')+"/kernel-build"
+    kernel_src_staging = d.getVar('STAGING_KERNEL_DIR')
+    kernel_build_staging = d.getVar('STAGING_KERNEL_BUILDDIR')
+    if os.path.exists(kernel_src):
+        if not os.path.exists(kernel_src_staging):
+            parent_dir = os.path.dirname(kernel_src_staging)
+            if not os.path.exists(parent_dir):
+                bb.utils.mkdirhier(parent_dir)
+            os.symlink(kernel_src, d.getVar('STAGING_KERNEL_DIR'))
+    else:
+        bb.note("kernel devel source is not present in IPK feeds")
+
+    if os.path.exists(kernel_artifacts):
+        if not os.path.exists(kernel_build_staging):
+            parent_dir = os.path.dirname(kernel_build_staging)
+            if not os.path.exists(parent_dir):
+                bb.utils.mkdirhier(parent_dir)
+            os.symlink(kernel_artifacts, d.getVar('STAGING_KERNEL_BUILDDIR'))
+    else:
+        bb.note("kernel devel build artifacts is not present in IPK feeds")
+
 # Install the dependent ipks to the component sysroot
 python do_populate_ipk_sysroot(){
     import shutil
@@ -303,6 +326,7 @@ python do_populate_ipk_sysroot(){
                 shutil.copy(src,dest)
         # Generate the IPK staging directory for sysroot creation.
         bb.build.exec_func("create_ipk_common_staging", d)
+        do_kernel_devel_create(d)
 
     bb.note("[staging-ipk] Installed pkgs : %s"%inst_list)
 }
