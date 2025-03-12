@@ -133,7 +133,7 @@ def do_kernel_devel_create(d):
                 bb.utils.mkdirhier(parent_dir)
             os.symlink(kernel_src, d.getVar('STAGING_KERNEL_DIR'))
     else:
-        bb.note("kernel devel source is missing in IPK feeds")
+        bb.note("kernel devel source is not present in IPK feeds")
 
     if os.path.exists(kernel_artifacts):
         if not os.path.exists(kernel_build_staging):
@@ -142,7 +142,7 @@ def do_kernel_devel_create(d):
                 bb.utils.mkdirhier(parent_dir)
             os.symlink(kernel_artifacts, d.getVar('STAGING_KERNEL_BUILDDIR'))
     else:
-        bb.note("kernel devel build artifacts is missing in IPK feeds")
+        bb.note("kernel devel build artifacts is not present in IPK feeds")
 
 # Install the dependent ipks to the component sysroot
 python do_populate_ipk_sysroot(){
