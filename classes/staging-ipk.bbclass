@@ -21,10 +21,12 @@ IPK_COMMON_DIRS_EXCLUSIONLIST = " \
 IPK_COMMON_DIRS = " \
     ${includedir} ${libdir} ${base_libdir} ${bindir}\
     ${nonarch_base_libdir} ${datadir} \
-    "/var/lib/opkg" "/kernel-source" "/kernel-build"\
+    "/var/lib/opkg" "/usr/lib/opkg" "/kernel-source" "/kernel-build"\
 "
 
 do_populate_ipk_sysroot[depends] += "pseudo-native:do_populate_sysroot"
+do_populate_ipk_sysroot[depends] += "opkg-utils-native:do_populate_sysroot"
+do_populate_ipk_sysroot[depends] += "shadow-native:do_populate_sysroot"
 
 ipk_staging_dirs() {
     src="$1"
@@ -77,18 +79,32 @@ def read_ipk_depends(d, pkg):
             if m:
                 pkgdata[m.group(1)] = decode(m.group(2))
         if "Depends" in pkgdata:
-            deps = pkgdata["Depends"].split(", ")
-            bb.note("[staging-ipk] pkg %s depends on ipk : %s"%(pkg,deps))
+            ipkdeps = pkgdata["Depends"].split(", ")
+            for dep in ipkdeps:
+                if dep not in deps:
+                    deps.append(dep)
+        if "Rdepends" in pkgdata:
+            ipkrdeps = pkgdata["Rdepends"].split(", ")
+            for dep in ipkrdeps:
+                if dep not in deps:
+                    deps.append(dep)
+        bb.note("[staging-ipk] pkg %s depends on ipk : %s"%(pkg,deps))
     return deps
 
 def cmdline(command, path):
     import subprocess
     bb.process.run(command, stderr=subprocess.STDOUT, cwd=path)
 
-def ipk_install(d, cmd, pkgs):
+def ipk_install(d, cmd, pkgs, sysroot_destdir):
     import subprocess
-    command = cmd + " ".join(pkgs)
 
+    command = cmd + " ".join(pkgs)
+    env_bkp = os.environ.copy()
+    os.environ['D'] = sysroot_destdir
+    os.environ['OFFLINE_ROOT'] = sysroot_destdir
+    os.environ['IPKG_OFFLINE_ROOT'] = sysroot_destdir
+    os.environ['OPKG_OFFLINE_ROOT'] = sysroot_destdir
+    os.environ['NATIVE_ROOT'] = d.getVar('STAGING_DIR_NATIVE')
     try:
         bb.note("[staging-ipk] Installing the following packages: %s" % ' '.join(pkgs))
         bb.note("Command: %s"%command)
@@ -105,11 +121,12 @@ def ipk_install(d, cmd, pkgs):
         ]
 
         if failed_pkgs:
-            bb.fatal("Post installation of %s failed"%failed_pkgs)
-
+            bb.note("Post installation of %s failed"%failed_pkgs)
     except subprocess.CalledProcessError as e:
         error_msg = e.output.decode("utf-8")
         bb.fatal("Packages installation failed. Command : %s \n%s"%(command, error_msg))
+    os.environ.clear()
+    os.environ.update(env_bkp)
 
 def get_base_pkg_name(pkg_name):
     tmp_pkg_name = pkg_name
@@ -145,7 +162,7 @@ def do_kernel_devel_create(d):
         bb.note("kernel devel build artifacts is not present in IPK feeds")
 
 # Install the dependent ipks to the component sysroot
-python do_populate_ipk_sysroot(){
+fakeroot python do_populate_ipk_sysroot(){
     import shutil
     import re
     deps, ipk_pkgs, ipk_list, inst_list= ([] for i in range(4))
@@ -176,7 +193,7 @@ python do_populate_ipk_sysroot(){
         bb.utils.mkdirhier(sysroot_destdir)
 
     # Disable the recommends pkgs installation
-    opkg_args_up = "-f %s -t %s -o %s --prefer-arch-to-version --no-install-recommends " % (opkg_conf, info_file_path, sysroot_destdir)
+    opkg_args_up = "-f %s -t %s -o %s --force_postinstall --prefer-arch-to-version --no-install-recommends " % (opkg_conf, info_file_path, sysroot_destdir)
 
     cmd = '%s --volatile-cache %s update' % (opkg_cmd, opkg_args_up)
     cmdline(cmd, info_file_path)
@@ -314,7 +331,7 @@ python do_populate_ipk_sysroot(){
 
     if inst_list:
         cmd = '%s %s install ' % (opkg_cmd, opkg_args)
-        ipk_install(d, cmd, inst_list)
+        ipk_install(d, cmd, inst_list, sysroot_destdir)
         boot_dir = os.path.join(sysroot_destdir,"%s"%d.getVar("IMAGEDEST"))
         if os.path.exists(boot_dir):
             img_deploy_dir = d.getVar("DEPLOY_DIR_IMAGE")

@@ -866,13 +866,8 @@ def get_rdeps_provider_ipk(d, rdep):
     import re
     ipk_pkg = " "
 
-    reciepe_sysroot = d.getVar("RECIPE_SYSROOT")
+    reciepe_sysroot = d.getVar("SYSROOT_IPK")
     opkg_cmd = bb.utils.which(os.getenv('PATH'), "opkg")
-
-    if "/" in rdep:
-        rdep = rdep.split("/")[-1]
-    if rdep == "bash":
-        rdep = rdep + ".bash"
 
     opkg_conf = d.getVar("IPKGCONF_LAYERING")
     if not os.path.exists(opkg_conf):
@@ -901,6 +896,27 @@ def get_rdeps_provider_ipk(d, rdep):
         bb.note("[deps-resolver] rdep - %s - available in IPK pkg %s"%(rdep, ipk_pkg))
     return ipk_pkg
 
+def check_file_provider_ipk(d, file, rdeps):
+    ipk = ""
+    layer_sysroot = d.getVar("SYSROOT_IPK")
+    lpkgopkg_path = os.path.join(layer_sysroot,"usr/lib/opkg/alternatives")
+    alternatives_file_path = os.path.join(lpkgopkg_path,file.split("/")[-1])
+    if os.path.exists(alternatives_file_path):
+        with open(alternatives_file_path,"r", errors="ignore") as fd:
+            lines = fd.readlines()
+        for l in lines:
+            parts = l.split()
+            pkg = get_rdeps_provider_ipk(d, parts[0].split('/')[-1])
+            if pkg and pkg.split("(")[0].strip() in rdeps:
+                ipk = pkg.split("(")[0].strip()
+                break
+            else:
+                continue
+    else:
+        pkg = get_rdeps_provider_ipk(d, file.split("/")[-1])
+        if pkg and pkg.split("(")[0].strip() in rdeps:
+            ipk = pkg.split("(")[0].strip()
+    return ipk
 
 # Function returns the ipk pkg name which contains the run-time dependent shared lib.
 # This data is read from the metadata generated while executing the package_do_shlibs (do_package).
@@ -1343,3 +1359,4 @@ python get_pkgs_handler () {
 addhandler get_pkgs_handler
 get_pkgs_handler[eventmask] = "bb.event.DepTreeGenerated"
 
+do_build[recrdeptask] += "do_package_write_ipk"
