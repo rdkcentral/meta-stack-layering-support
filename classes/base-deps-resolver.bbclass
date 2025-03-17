@@ -1348,22 +1348,23 @@ python get_pkgs_handler () {
                 targetdeps.append(deps)
         ipk_mapping = e.data.getVar("IPK_DEPS_MAPPING_LIST") or {}
 
-        with open(pkg_path, "w") as f:
-             for deps in targetdeps:
-                 f.writelines(deps+"\n")
+        if pkg_path:
+            with open(pkg_path, "w") as f:
+                for deps in targetdeps:
+                    f.writelines(deps+"\n")
 
         for source, dependencies in ipk_mapping.items():
-             if os.path.exists(feed_info_dir+"src_mode/%s"%source):
-                 continue
+            if os.path.exists(feed_info_dir+"src_mode/%s"%source):
+                continue
 
-             if source not in targetdeps:
-                 continue
+            if source not in targetdeps:
+                continue
 
-             for dep in dependencies:
-                 if os.path.exists(feed_info_dir+"src_mode/%s.major"%dep):
-                     if not update_check:
-                         update_check = True
-                     bb.warn("%s version should update and rebuild. Dependency %s has changed with major version"%(source,dep))
+            for dep in dependencies:
+                if os.path.exists(feed_info_dir+"src_mode/%s.major"%dep):
+                    if not update_check:
+                        update_check = True
+                    bb.warn("%s version should update and rebuild. Dependency %s has changed with major version"%(source,dep))
     if update_check:
         index_check = os.path.join(e.data.getVar("TOPDIR")+"/index_created")
         if os.path.exists(index_check):

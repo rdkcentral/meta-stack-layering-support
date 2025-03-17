@@ -206,10 +206,16 @@ fakeroot python do_populate_ipk_sysroot(){
         return
 
     target_list_path = d.getVar("TARGET_DEPS_LIST")
-    with open(target_list_path,"r") as fd:
-        lines = fd.readlines()
-    for file in lines:
-        deps = read_ipk_depends(d,file[:-1])
+    if target_list_path and os.path.exists(target_list_path)
+        with open(target_list_path,"r") as fd:
+            files = fd.readlines()
+    else:
+        files = os.listdir(listpath)
+
+    for file in files:
+        if file.endswith("\n"):
+            file = file[:-1]
+        deps = read_ipk_depends(d,file)
         if deps != []:
             for dep in deps:
                 if dep == "" or dep == " " or dep in ipk_pkgs:
