@@ -210,6 +210,7 @@ fakeroot python do_populate_ipk_sysroot(){
         with open(target_list_path,"r") as fd:
             files = fd.readlines()
     else:
+        bb.note("ipk installation based on target build is not set")
         files = os.listdir(listpath)
 
     for file in files:
