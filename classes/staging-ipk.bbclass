@@ -206,7 +206,7 @@ fakeroot python do_populate_ipk_sysroot(){
         return
 
     target_list_path = d.getVar("TARGET_DEPS_LIST")
-    if target_list_path and os.path.exists(target_list_path)
+    if target_list_path and os.path.exists(target_list_path):
         with open(target_list_path,"r") as fd:
             files = fd.readlines()
     else:
