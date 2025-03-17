@@ -27,6 +27,7 @@ IPK_COMMON_DIRS = " \
 do_populate_ipk_sysroot[depends] += "pseudo-native:do_populate_sysroot"
 do_populate_ipk_sysroot[depends] += "opkg-utils-native:do_populate_sysroot"
 do_populate_ipk_sysroot[depends] += "shadow-native:do_populate_sysroot"
+do_populate_ipk_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
 ipk_staging_dirs() {
     src="$1"
@@ -54,8 +55,6 @@ create_ipk_common_staging() {
     rm -rf ${IPK_DESTDIR}
 }
 
-do_populate_ipk_sysroot[depends] += "opkg-native:do_populate_sysroot"
-
 # Function reads indirect build and runtime dependencies
 # from the pkgdata directory
 def read_ipk_depends(d, pkg):
@@ -81,11 +80,13 @@ def read_ipk_depends(d, pkg):
         if "Depends" in pkgdata:
             ipkdeps = pkgdata["Depends"].split(", ")
             for dep in ipkdeps:
+                dep = dep.split(" ")[0]
                 if dep not in deps:
                     deps.append(dep)
         if "Rdepends" in pkgdata:
             ipkrdeps = pkgdata["Rdepends"].split(", ")
             for dep in ipkrdeps:
+                dep = dep.split(" ")[0]
                 if dep not in deps:
                     deps.append(dep)
         bb.note("[staging-ipk] pkg %s depends on ipk : %s"%(pkg,deps))
@@ -204,8 +205,11 @@ fakeroot python do_populate_ipk_sysroot(){
     if not os.path.exists(feed_info_dir):
         return
 
-    for file in os.listdir(listpath):
-        deps = read_ipk_depends(d,file)
+    target_list_path = d.getVar("TARGET_DEPS_LIST")
+    with open(target_list_path,"r") as fd:
+        lines = fd.readlines()
+    for file in lines:
+        deps = read_ipk_depends(d,file[:-1])
         if deps != []:
             for dep in deps:
                 if dep == "" or dep == " " or dep in ipk_pkgs:
@@ -353,7 +357,7 @@ python(){
 do_populate_ipk_sysroot[umask] = "022"
 
 do_populate_ipk_sysroot[network] = "1"
-
+do_populate_ipk_sysroot[nostamp] = "1"
 deltask do_fetch
 deltask do_unpack
 deltask do_patch
