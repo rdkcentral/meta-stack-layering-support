@@ -212,7 +212,7 @@ fakeroot python do_populate_ipk_sysroot(){
         deps = read_ipk_depends(d,file[:-1])
         if deps != []:
             for dep in deps:
-                if dep == "" or dep == " " or dep in ipk_pkgs or dep == "mt7663":
+                if dep == "" or dep == " " or dep in ipk_pkgs:
                     continue
                 ipk_pkgs.append(dep)
 
