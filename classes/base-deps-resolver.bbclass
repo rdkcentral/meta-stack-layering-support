@@ -653,6 +653,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     version_mismatch = True
     same_arch = False
     pkg_arch = d.getVar("PACKAGE_ARCH")
+    prefix = d.getVar('MLPREFIX') or ""
     ipkmode = False
     if not dep_bpkg:
         return ipkmode
@@ -677,13 +678,17 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
 
     for arch in archs:
         pkg_path = feed_info_dir+"%s/"%arch
+        if prefix and dep_bpkg.startswith(prefix):
+            src_dep_bpkg = dep_bpkg[len(prefix):]
+        else:
+            src_dep_bpkg = dep_bpkg
         if version:
-            src_path = pkg_path + "source/%s_%s"%(dep_bpkg,version)
+            src_path = pkg_path + "source/%s_%s"%(src_dep_bpkg,version)
             if os.path.exists(src_path):
                 ipkmode = True
                 break
             # Check only the major version number
-            src_list = glob.glob(pkg_path + "source/%s_%s*"%(dep_bpkg,version.split(".")[0]))
+            src_list = glob.glob(pkg_path + "source/%s_%s*"%(src_dep_bpkg,version.split(".")[0]))
             if src_list:
                 src_path = src_list[0]
                 if os.path.exists(src_path):
@@ -691,8 +696,8 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
                     version_mismatch = False
                     break
         else:
-            src_path = pkg_path + "source/%s"%dep_bpkg
-            src_list = glob.glob(pkg_path + "source/%s_*"%dep_bpkg)
+            src_path = pkg_path + "source/%s"%src_dep_bpkg
+            src_list = glob.glob(pkg_path + "source/%s_*"%src_dep_bpkg)
             if src_list:
                src_path = src_list[0]
 
