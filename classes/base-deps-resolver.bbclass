@@ -455,6 +455,9 @@ def get_ipk_list(d, pkg_arch):
     version = version.replace("AUTOINC","0")
     pkg_ver = "%s:%s" % (d.getVar('PE'), version) if d.getVar('PE') else version
     feed_info_dir = d.getVar("FEED_INFO_DIR")
+    prefix = d.getVar('MLPREFIX') or ""
+    if prefix and pn.startswith(prefix):
+       pn = pn[len(prefix):]
     src_path = os.path.join(feed_info_dir, pkg_arch)
     recipe_info = glob.glob(src_path + "/source/%s_*"%(pn))
     if recipe_info:
