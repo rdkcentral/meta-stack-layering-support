@@ -207,10 +207,11 @@ fakeroot python do_populate_ipk_sysroot(){
 
     target_list_path = d.getVar("TARGET_DEPS_LIST")
     if target_list_path and os.path.exists(target_list_path):
+        bb.note("ipk installation based on target build only")
         with open(target_list_path,"r") as fd:
             files = fd.readlines()
     else:
-        bb.note("ipk installation based on target build is not set")
+        bb.note("ipk installation not based on target build. Installing depends ipk of all recipes")
         files = os.listdir(listpath)
 
     for file in files:
