@@ -1328,8 +1328,6 @@ addhandler feed_index_creation
 feed_index_creation[eventmask] = "bb.event.BuildCompleted"
 
 python get_pkgs_handler () {
-    if not d.getVar("STACK_LAYER_EXTENSION"):
-        return
 
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     update_check = False
@@ -1353,18 +1351,19 @@ python get_pkgs_handler () {
                 for deps in targetdeps:
                     f.writelines(deps+"\n")
 
-        for source, dependencies in ipk_mapping.items():
-            if os.path.exists(feed_info_dir+"src_mode/%s"%source):
-                continue
+        if d.getVar("STACK_LAYER_EXTENSION"):
+            for source, dependencies in ipk_mapping.items():
+                if os.path.exists(feed_info_dir+"src_mode/%s"%source):
+                    continue
 
-            if source not in targetdeps:
-                continue
+                if source not in targetdeps:
+                    continue
 
-            for dep in dependencies:
-                if os.path.exists(feed_info_dir+"src_mode/%s.major"%dep):
-                    if not update_check:
-                        update_check = True
-                    bb.warn("%s version should update and rebuild. Dependency %s has changed with major version"%(source,dep))
+                for dep in dependencies:
+                    if os.path.exists(feed_info_dir+"src_mode/%s.major"%dep):
+                        if not update_check:
+                            update_check = True
+                        bb.warn("%s version should update and rebuild. Dependency %s has changed with major version"%(source,dep))
     if update_check:
         index_check = os.path.join(e.data.getVar("TOPDIR")+"/index_created")
         if os.path.exists(index_check):
