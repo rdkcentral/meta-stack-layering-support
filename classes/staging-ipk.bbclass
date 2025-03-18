@@ -215,6 +215,8 @@ fakeroot python do_populate_ipk_sysroot(){
         files = os.listdir(listpath)
 
     for file in files:
+        if "packagegroup-" in file:
+            continue
         if file.endswith("\n"):
             file = file[:-1]
         deps = read_ipk_depends(d,file)
@@ -365,7 +367,6 @@ python(){
 do_populate_ipk_sysroot[umask] = "022"
 
 do_populate_ipk_sysroot[network] = "1"
-do_populate_ipk_sysroot[nostamp] = "1"
 deltask do_fetch
 deltask do_unpack
 deltask do_patch

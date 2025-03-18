@@ -1054,7 +1054,7 @@ python deps_taskhandler() {
 
     bbtasks = e.tasklist
     dep_list = ["depends","rdepends"]
-    staging_ipk_task = ("%sstaging-ipk-pkgs:do_populate_ipk_sysroot"%d.getVar("MLPREFIX"))
+    staging_ipk_task = ("%sstaging-ipk-pkgs:do_populate_sysroot"%d.getVar("MLPREFIX"))
     for task in bbtasks:
         for dep in dep_list:
             pkg_task_list = (e.data.getVarFlag(task, '%s'%dep)or"").split(" ")
