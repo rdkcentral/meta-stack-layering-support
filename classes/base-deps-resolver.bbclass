@@ -14,8 +14,6 @@ SYSROOT_DIRS_BIN_REQUIRED = "${MLPREFIX}gobject-introspection"
 # Pkgdata directory to store runtime IPK dependency details.
 IPK_PKGDATA_RUNTIME_DIR = "${WORKDIR}/pkgdata/ipk"
 
-do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
-
 inherit gir-ipk-qemuwrapper
 
 def decode(str):
@@ -218,6 +216,48 @@ def get_provider(d,pkg, archs):
         bb.note("[deps-resolver] PKG - %s , PROVIDER - %s "%(pkg,provides))
     return provides
 
+def staging_sls_processfixme( recipesysrootnative, d):
+    import subprocess
+    recipe_sysroot = d.getVar("RECIPE_SYSROOT")
+
+    cmd = "grep -Irl 'FIXMESTAGINGDIRHOST\|FIXMESTAGINGDIRTARGET' %s | xargs --no-run-if-empty sed -i -e 's:FIXMESTAGINGDIRHOST:%s:g' -e 's:FIXMESTAGINGDIRTARGET:%s:g'" % (recipesysrootnative, recipesysrootnative, recipesysrootnative)
+    for fixmevar in ['PSEUDO_SYSROOT', 'HOSTTOOLS_DIR', 'PKGDATA_DIR', 'PSEUDO_LOCALSTATEDIR', 'LOGFIFO']:
+        fixme_path = d.getVar(fixmevar)
+        cmd += " -e 's:FIXME_%s:%s:g'" % (fixmevar, fixme_path)
+    bb.warn("=%s="%cmd)
+    subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+
+python do_install_ipk_recipe_native_sysroot (){
+    seendirs = set()
+    recipe_docker_sysroot = os.path.join(d.getVar("COMPONENTS_DIR"),d.getVar("BUILD_ARCH"))
+    recipe_native_sysroot = d.getVar("RECIPE_SYSROOT_NATIVE")
+    for walkroot, dirs, files in os.walk(recipe_docker_sysroot, topdown=True):
+        if walkroot == recipe_docker_sysroot or "sysroot-providers" in walkroot:
+            continue
+        for dir in dirs:
+            if "sysroot-providers" == dir:
+                continue
+            orgdir = os.path.join(walkroot, dir)
+            srcdir = os.path.join(walkroot, dir)
+            if srcdir.startswith(recipe_docker_sysroot):
+                subfolder_part = srcdir[len(recipe_docker_sysroot)+1:]
+                subfolder_name = subfolder_part.split(os.sep, 1)[0]
+                srcdir = srcdir.replace("/%s"%subfolder_name, "")
+            dstdir = srcdir.replace(recipe_docker_sysroot, recipe_native_sysroot)
+            staging_copy_ipk_dir(orgdir,dstdir,seendirs)
+        for file in files:
+            if "fixmepath" in file:
+                continue
+            orgfile = os.path.join(walkroot, file)
+            srcfile = os.path.join(walkroot, file)
+            if srcfile.startswith(recipe_docker_sysroot):
+                subfolder_part = srcfile[len(recipe_docker_sysroot)+1:]
+                subfolder_name = subfolder_part.split(os.sep, 1)[0]
+                srcfile = srcfile.replace("/%s"%subfolder_name, "")
+            dstfile = srcfile.replace(recipe_docker_sysroot, recipe_native_sysroot)
+            staging_copy_ipk_file(orgfile,dstfile,seendirs)
+    staging_sls_processfixme(recipe_native_sysroot, d)
+}
 # Install the dev ipks to the component sysroot
 python do_install_ipk_recipe_sysroot () {
     import shutil
@@ -547,8 +587,8 @@ python () {
                 open(feed_info_dir+"src_mode/%s"%pn, 'w').close()
                 if version_check and not check_targets(d, pn):
                     open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
-            d.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',d)
+            bb.build.addtask('do_install_ipk_recipe_native_sysroot','do_patch','do_unpack',d)
             d.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
             # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
             postfuncs = (d.getVarFlag('do_prepare_recipe_sysroot', 'postfuncs') or "").split()
@@ -725,7 +765,9 @@ def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False, skip_depends=False):
         dep_ver = match[1].strip() if len(match) > 1 and match[1] else None
         dep_bpkg = get_base_pkg_name(dep)
 
-        if dep.endswith("-native") or dep_bpkg == get_base_pkg_name(pkg):
+        if dep.endswith("-native") or "-cross" in dep :
+            continue
+        elif dep_bpkg == get_base_pkg_name(pkg):
             if dep_ver:
                 pkgrdeps.append(dep +" " + dep_ver)
             else:
@@ -1033,8 +1075,8 @@ python do_update_rdeps_ipk () {
 python deps_update_handler () {
     pn = e.data.getVar('PN')
     # This needs to be updated once start using the prebuilt toolchain
-    if not bb.data.inherits_class('native', d):
-        update_dep_pkgs(e)
+    #if not bb.data.inherits_class('native', d):
+    update_dep_pkgs(e)
 }
 addhandler deps_update_handler
 deps_update_handler[eventmask] = "bb.event.RecipeParsed"
@@ -1068,6 +1110,8 @@ python deps_taskhandler() {
                 if preferred_provider is not None:
                     pkg = preferred_provider
                 (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pkg)
+                if pkg.endswith("-native") or "-cross" in pkg:
+                    continue
                 if ipk_mode:
                     if staging_ipk_task not in pkgs_list:
                         pkgs_list.append(staging_ipk_task)
@@ -1350,6 +1394,12 @@ python get_pkgs_handler () {
             with open(pkg_path, "w") as f:
                 for deps in targetdeps:
                     f.writelines(deps+"\n")
+
+        native_tools_docker_path = d.getVar("HOST_NATIVE_TOOL_DOCKER_PATH")
+        if native_tools_docker_path and os.path.exists(native_tools_docker_path):
+            import shutil
+            dst_folder = os.path.join(d.getVar("COMPONENTS_DIR"),d.getVar("BUILD_ARCH"))
+            shutil.copytree(native_tools_docker_path,dst_folder, dirs_exist_ok=True, symlinks=True)
 
         if d.getVar("STACK_LAYER_EXTENSION"):
             for source, dependencies in ipk_mapping.items():

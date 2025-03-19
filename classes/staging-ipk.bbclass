@@ -24,11 +24,6 @@ IPK_COMMON_DIRS = " \
     "/var/lib/opkg" "/usr/lib/opkg" "/kernel-source" "/kernel-build"\
 "
 
-do_populate_ipk_sysroot[depends] += "pseudo-native:do_populate_sysroot"
-do_populate_ipk_sysroot[depends] += "opkg-utils-native:do_populate_sysroot"
-do_populate_ipk_sysroot[depends] += "shadow-native:do_populate_sysroot"
-do_populate_ipk_sysroot[depends] += "opkg-native:do_populate_sysroot"
-
 ipk_staging_dirs() {
     src="$1"
     dest="$2"
