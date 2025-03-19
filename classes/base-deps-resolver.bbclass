@@ -870,7 +870,7 @@ def get_rdeps_provider_ipk(d, rdep):
     import re
     ipk_pkg = " "
 
-    reciepe_sysroot = d.getVar("SYSROOT_IPK")
+    reciepe_sysroot = d.getVar("RECIPE_SYSROOT")
     opkg_cmd = bb.utils.which(os.getenv('PATH'), "opkg")
 
     opkg_conf = d.getVar("IPKGCONF_LAYERING")
