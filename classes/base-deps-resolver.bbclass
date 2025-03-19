@@ -18,24 +18,6 @@ do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
 inherit gir-ipk-qemuwrapper
 
-# Create the opkg configuration with remote feeds
-def configure_opkg (d, conf):
-    import re
-    archs = d.getVar("ALL_MULTILIB_PACKAGE_ARCHS")
-    with open(conf, "w+") as file:
-        priority = 1
-        for arch in archs.split():
-            file.write("arch %s %d\n" % (arch, priority))
-            priority += 5
-
-        for line in (d.getVar('IPK_FEED_URIS') or "").split():
-            feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
-            if feed is not None:
-                arch_name = feed.group(1)
-                arch_uri = feed.group(2)
-                bb.note("[deps-resolver] Add %s feed with URL %s" % (arch_name, arch_uri))
-                file.write("src/gz %s %s\n" % (arch_name, arch_uri))
-
 def decode(str):
     import codecs
     c = codecs.getdecoder("unicode_escape")
@@ -390,23 +372,6 @@ python do_install_ipk_recipe_sysroot () {
             bb.note("[deps-resolver] Skipped PKG - %s - from recipe sysroot"%pkg)
 }
 
-python do_kernel_devel_create(){
-    import shutil
-    kernel_src = d.getVar('SYSROOT_IPK')+"/kernel-source"
-    kernel_artifacts = d.getVar('SYSROOT_IPK')+"/kernel-build"
-    staging_shared_dir = d.getVar("STAGING_SHARED_DIR")
-    if os.path.exists(staging_shared_dir):
-        shutil.rmtree(staging_shared_dir)
-    bb.utils.mkdirhier(staging_shared_dir)
-    if os.path.exists(kernel_src):
-        os.symlink(kernel_src, d.getVar('STAGING_KERNEL_DIR'))
-    else:
-        bb.fatal("kernel devel is missing please check")
-    if os.path.exists(kernel_artifacts):
-        os.symlink(kernel_artifacts, d.getVar('STAGING_KERNEL_BUILDDIR'))
-}
-do_kernel_devel_create[depends] += "${MLPREFIX}staging-ipk-pkgs:do_populate_ipk_sysroot"
-
 python do_ipk_download(){
     import subprocess
     import shutil
@@ -478,8 +443,6 @@ def disable_build_tasks(d, task_name, arch):
             for ipk in ipk_list:
                 fp.write(os.path.join(pkg_path_ipk, ipk) + "\n")
     bb.build.addtask("do_ipk_download", "do_build", None, d)
-    if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', d):
-        bb.build.addtask("do_kernel_devel_create", "do_build", None, d)
 
 # Get the list of IPKs generated from a package
 def get_ipk_list(d, pkg_arch):
@@ -492,6 +455,9 @@ def get_ipk_list(d, pkg_arch):
     version = version.replace("AUTOINC","0")
     pkg_ver = "%s:%s" % (d.getVar('PE'), version) if d.getVar('PE') else version
     feed_info_dir = d.getVar("FEED_INFO_DIR")
+    prefix = d.getVar('MLPREFIX') or ""
+    if prefix and pn.startswith(prefix):
+       pn = pn[len(prefix):]
     src_path = os.path.join(feed_info_dir, pkg_arch)
     recipe_info = glob.glob(src_path + "/source/%s_*"%(pn))
     if recipe_info:
@@ -551,11 +517,6 @@ python () {
 
     if not bb.data.inherits_class('native', d):
         # Skipping unrequired version of recipes
-        if d.getVar("STACK_LAYER_EXTENSION") and pref_version and not pv_overrides and not is_excluded_pkg(d, pn):
-            pref_version = pref_version.split("%")[0]
-            if pref_version not in version :
-                raise bb.parse.SkipRecipe("Skipped different version of recipe %s"%pn)
-
         if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
             d.appendVarFlag('do_package_write_ipk', 'prefuncs', ' do_clean_deploy')
             d.appendVarFlag('do_package_write_ipk_setscene', 'prefuncs', ' do_clean_deploy')
@@ -567,10 +528,6 @@ python () {
 
         if d.getVar("STACK_LAYER_EXTENSION") and bb.data.inherits_class('image', d):
             d.appendVarFlag('do_rootfs', 'recrdeptask', " do_ipk_download")
-
-        if d.getVar("STACK_LAYER_EXTENSION") and bb.data.inherits_class('linux-kernel-base', d):
-            d.appendVarFlag('do_configure', 'recrdeptask', " do_kernel_devel_create")
-            d.appendVarFlag('do_kernel_devel_create', 'recrdeptask', " do_populate_ipk_sysroot")
 
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, pn, False, version)
         if ipk_mode and not check_targets(d, pn):
@@ -699,8 +656,10 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     version_mismatch = True
     same_arch = False
     pkg_arch = d.getVar("PACKAGE_ARCH")
+    prefix = d.getVar('MLPREFIX') or ""
     ipkmode = False
-
+    if not dep_bpkg:
+        return ipkmode
     # Check dep package is in IPK mode
     ipkmode = True if d.getVar('IPK_MODE:pn-%s' %dep_bpkg) == "1" else False
     if ipkmode:
@@ -722,13 +681,17 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
 
     for arch in archs:
         pkg_path = feed_info_dir+"%s/"%arch
+        if prefix and dep_bpkg.startswith(prefix):
+            src_dep_bpkg = dep_bpkg[len(prefix):]
+        else:
+            src_dep_bpkg = dep_bpkg
         if version:
-            src_path = pkg_path + "source/%s_%s"%(dep_bpkg,version)
+            src_path = pkg_path + "source/%s_%s"%(src_dep_bpkg,version)
             if os.path.exists(src_path):
                 ipkmode = True
                 break
             # Check only the major version number
-            src_list = glob.glob(pkg_path + "source/%s_%s*"%(dep_bpkg,version.split(".")[0]))
+            src_list = glob.glob(pkg_path + "source/%s_%s*"%(src_dep_bpkg,version.split(".")[0]))
             if src_list:
                 src_path = src_list[0]
                 if os.path.exists(src_path):
@@ -736,8 +699,8 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
                     version_mismatch = False
                     break
         else:
-            src_path = pkg_path + "source/%s"%dep_bpkg
-            src_list = glob.glob(pkg_path + "source/%s_*"%dep_bpkg)
+            src_path = pkg_path + "source/%s"%src_dep_bpkg
+            src_list = glob.glob(pkg_path + "source/%s_*"%src_dep_bpkg)
             if src_list:
                src_path = src_list[0]
 
@@ -910,14 +873,10 @@ def get_rdeps_provider_ipk(d, rdep):
     reciepe_sysroot = d.getVar("RECIPE_SYSROOT")
     opkg_cmd = bb.utils.which(os.getenv('PATH'), "opkg")
 
-    if "/" in rdep:
-        rdep = rdep.split("/")[-1]
-    if rdep == "bash":
-        rdep = rdep + ".bash"
-
     opkg_conf = d.getVar("IPKGCONF_LAYERING")
     if not os.path.exists(opkg_conf):
-        configure_opkg (d, opkg_conf)
+        import oe.sls_utils
+        oe.sls_utils.sls_opkg_conf (d, opkg_conf)
 
     info_file_path = os.path.join(d.getVar("WORKDIR", True), "temp/ipktemp/")
     if not os.path.exists(info_file_path):
@@ -941,6 +900,27 @@ def get_rdeps_provider_ipk(d, rdep):
         bb.note("[deps-resolver] rdep - %s - available in IPK pkg %s"%(rdep, ipk_pkg))
     return ipk_pkg
 
+def check_file_provider_ipk(d, file, rdeps):
+    ipk = ""
+    layer_sysroot = d.getVar("SYSROOT_IPK")
+    lpkgopkg_path = os.path.join(layer_sysroot,"usr/lib/opkg/alternatives")
+    alternatives_file_path = os.path.join(lpkgopkg_path,file.split("/")[-1])
+    if os.path.exists(alternatives_file_path):
+        with open(alternatives_file_path,"r", errors="ignore") as fd:
+            lines = fd.readlines()
+        for l in lines:
+            parts = l.split()
+            pkg = get_rdeps_provider_ipk(d, parts[0].split('/')[-1])
+            if pkg and pkg.split("(")[0].strip() in rdeps:
+                ipk = pkg.split("(")[0].strip()
+                break
+            else:
+                continue
+    else:
+        pkg = get_rdeps_provider_ipk(d, file.split("/")[-1])
+        if pkg and pkg.split("(")[0].strip() in rdeps:
+            ipk = pkg.split("(")[0].strip()
+    return ipk
 
 # Function returns the ipk pkg name which contains the run-time dependent shared lib.
 # This data is read from the metadata generated while executing the package_do_shlibs (do_package).
@@ -1074,18 +1054,23 @@ python deps_taskhandler() {
 
     bbtasks = e.tasklist
     dep_list = ["depends","rdepends"]
+    staging_ipk_task = ("%sstaging-ipk-pkgs:do_populate_sysroot"%d.getVar("MLPREFIX"))
     for task in bbtasks:
         for dep in dep_list:
             pkg_task_list = (e.data.getVarFlag(task, '%s'%dep)or"").split(" ")
             pkgs_list = []
             for pkg_task in pkg_task_list:
                 dep_task = pkg_task
+                if not pkg_task:
+                    continue
                 pkg = pkg_task.split(":")[0]
                 preferred_provider = e.data.getVar('PREFERRED_PROVIDER_%s' % pkg, True)
                 if preferred_provider is not None:
                     pkg = preferred_provider
                 (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pkg)
                 if ipk_mode:
+                    if staging_ipk_task not in pkgs_list:
+                        pkgs_list.append(staging_ipk_task)
                     continue
                 if skip_depends:
                     if arch_check:
@@ -1343,12 +1328,11 @@ addhandler feed_index_creation
 feed_index_creation[eventmask] = "bb.event.BuildCompleted"
 
 python get_pkgs_handler () {
-    if not d.getVar("STACK_LAYER_EXTENSION"):
-        return
 
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     update_check = False
     if isinstance(e,bb.event.DepTreeGenerated):
+        pkg_path = d.getVar("TARGET_DEPS_LIST")
         targetdeps = []
         for deps in e._depgraph['depends']:
             if deps.endswith("-native"):
@@ -1362,18 +1346,24 @@ python get_pkgs_handler () {
                 targetdeps.append(deps)
         ipk_mapping = e.data.getVar("IPK_DEPS_MAPPING_LIST") or {}
 
-        for source, dependencies in ipk_mapping.items():
-             if os.path.exists(feed_info_dir+"src_mode/%s"%source):
-                 continue
+        if pkg_path:
+            with open(pkg_path, "w") as f:
+                for deps in targetdeps:
+                    f.writelines(deps+"\n")
 
-             if source not in targetdeps:
-                 continue
+        if d.getVar("STACK_LAYER_EXTENSION"):
+            for source, dependencies in ipk_mapping.items():
+                if os.path.exists(feed_info_dir+"src_mode/%s"%source):
+                    continue
 
-             for dep in dependencies:
-                 if os.path.exists(feed_info_dir+"src_mode/%s.major"%dep):
-                     if not update_check:
-                         update_check = True
-                     bb.warn("%s version should update and rebuild. Dependency %s has changed with major version"%(source,dep))
+                if source not in targetdeps:
+                    continue
+
+                for dep in dependencies:
+                    if os.path.exists(feed_info_dir+"src_mode/%s.major"%dep):
+                        if not update_check:
+                            update_check = True
+                        bb.warn("%s version should update and rebuild. Dependency %s has changed with major version"%(source,dep))
     if update_check:
         index_check = os.path.join(e.data.getVar("TOPDIR")+"/index_created")
         if os.path.exists(index_check):
@@ -1383,3 +1373,4 @@ python get_pkgs_handler () {
 addhandler get_pkgs_handler
 get_pkgs_handler[eventmask] = "bb.event.DepTreeGenerated"
 
+do_build[recrdeptask] += "do_package_write_ipk"

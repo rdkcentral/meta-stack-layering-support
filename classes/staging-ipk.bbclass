@@ -21,10 +21,13 @@ IPK_COMMON_DIRS_EXCLUSIONLIST = " \
 IPK_COMMON_DIRS = " \
     ${includedir} ${libdir} ${base_libdir} ${bindir}\
     ${nonarch_base_libdir} ${datadir} \
-    "/var/lib/opkg" "/kernel-source" "/kernel-build"\
+    "/var/lib/opkg" "/usr/lib/opkg" "/kernel-source" "/kernel-build"\
 "
 
 do_populate_ipk_sysroot[depends] += "pseudo-native:do_populate_sysroot"
+do_populate_ipk_sysroot[depends] += "opkg-utils-native:do_populate_sysroot"
+do_populate_ipk_sysroot[depends] += "shadow-native:do_populate_sysroot"
+do_populate_ipk_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
 ipk_staging_dirs() {
     src="$1"
@@ -52,33 +55,6 @@ create_ipk_common_staging() {
     rm -rf ${IPK_DESTDIR}
 }
 
-do_populate_ipk_sysroot[depends] += "opkg-native:do_populate_sysroot"
-
-# Create the opkg configuration with remote feeds
-def configure_opkg (d, conf):
-    import re
-    archs = d.getVar("ALL_MULTILIB_PACKAGE_ARCHS")
-    feed_list = []
-    with open(conf, "w+") as file:
-        priority = 1
-        for arch in archs.split():
-            file.write("arch %s %d\n" % (arch, priority))
-            priority += 5
-
-        for line in (d.getVar('IPK_FEED_URIS') or "").split():
-            feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
-
-            if feed is not None:
-                arch_name = feed.group(1)
-                arch_uri = feed.group(2)
-                feed_list.append(arch_name)
-                bb.note("[staging-ipk] Add %s feed with URL %s" % (arch_name, arch_uri))
-
-                file.write("src/gz %s %s\n" % (arch_name, arch_uri))
-
-    bb.note("[staging-ipk] IPK feed list : %s"%feed_list)
-    return feed_list
-
 # Function reads indirect build and runtime dependencies
 # from the pkgdata directory
 def read_ipk_depends(d, pkg):
@@ -102,18 +78,34 @@ def read_ipk_depends(d, pkg):
             if m:
                 pkgdata[m.group(1)] = decode(m.group(2))
         if "Depends" in pkgdata:
-            deps = pkgdata["Depends"].split(", ")
-            bb.note("[staging-ipk] pkg %s depends on ipk : %s"%(pkg,deps))
+            ipkdeps = pkgdata["Depends"].split(", ")
+            for dep in ipkdeps:
+                dep = dep.split(" ")[0]
+                if dep not in deps:
+                    deps.append(dep)
+        if "Rdepends" in pkgdata:
+            ipkrdeps = pkgdata["Rdepends"].split(", ")
+            for dep in ipkrdeps:
+                dep = dep.split(" ")[0]
+                if dep not in deps:
+                    deps.append(dep)
+        bb.note("[staging-ipk] pkg %s depends on ipk : %s"%(pkg,deps))
     return deps
 
 def cmdline(command, path):
     import subprocess
     bb.process.run(command, stderr=subprocess.STDOUT, cwd=path)
 
-def ipk_install(d, cmd, pkgs):
+def ipk_install(d, cmd, pkgs, sysroot_destdir):
     import subprocess
-    command = cmd + " ".join(pkgs)
 
+    command = cmd + " ".join(pkgs)
+    env_bkp = os.environ.copy()
+    os.environ['D'] = sysroot_destdir
+    os.environ['OFFLINE_ROOT'] = sysroot_destdir
+    os.environ['IPKG_OFFLINE_ROOT'] = sysroot_destdir
+    os.environ['OPKG_OFFLINE_ROOT'] = sysroot_destdir
+    os.environ['NATIVE_ROOT'] = d.getVar('STAGING_DIR_NATIVE')
     try:
         bb.note("[staging-ipk] Installing the following packages: %s" % ' '.join(pkgs))
         bb.note("Command: %s"%command)
@@ -130,11 +122,12 @@ def ipk_install(d, cmd, pkgs):
         ]
 
         if failed_pkgs:
-            bb.fatal("Post installation of %s failed"%failed_pkgs)
-
+            bb.note("Post installation of %s failed"%failed_pkgs)
     except subprocess.CalledProcessError as e:
         error_msg = e.output.decode("utf-8")
         bb.fatal("Packages installation failed. Command : %s \n%s"%(command, error_msg))
+    os.environ.clear()
+    os.environ.update(env_bkp)
 
 def get_base_pkg_name(pkg_name):
     tmp_pkg_name = pkg_name
@@ -146,8 +139,31 @@ def get_base_pkg_name(pkg_name):
         tmp_pkg_name = pkg_name[:-7]
     return tmp_pkg_name
 
+def do_kernel_devel_create(d):
+    kernel_src = d.getVar('SYSROOT_IPK')+"/kernel-source"
+    kernel_artifacts = d.getVar('SYSROOT_IPK')+"/kernel-build"
+    kernel_src_staging = d.getVar('STAGING_KERNEL_DIR')
+    kernel_build_staging = d.getVar('STAGING_KERNEL_BUILDDIR')
+    if os.path.exists(kernel_src):
+        if not os.path.exists(kernel_src_staging):
+            parent_dir = os.path.dirname(kernel_src_staging)
+            if not os.path.exists(parent_dir):
+                bb.utils.mkdirhier(parent_dir)
+            os.symlink(kernel_src, d.getVar('STAGING_KERNEL_DIR'))
+    else:
+        bb.note("kernel devel source is not present in IPK feeds")
+
+    if os.path.exists(kernel_artifacts):
+        if not os.path.exists(kernel_build_staging):
+            parent_dir = os.path.dirname(kernel_build_staging)
+            if not os.path.exists(parent_dir):
+                bb.utils.mkdirhier(parent_dir)
+            os.symlink(kernel_artifacts, d.getVar('STAGING_KERNEL_BUILDDIR'))
+    else:
+        bb.note("kernel devel build artifacts is not present in IPK feeds")
+
 # Install the dependent ipks to the component sysroot
-python do_populate_ipk_sysroot(){
+fakeroot python do_populate_ipk_sysroot(){
     import shutil
     import re
     deps, ipk_pkgs, ipk_list, inst_list= ([] for i in range(4))
@@ -161,8 +177,8 @@ python do_populate_ipk_sysroot(){
     opkg_cmd = bb.utils.which(os.getenv('PATH'), "opkg")
 
     opkg_conf = d.getVar("IPKGCONF_LAYERING")
-
-    feed_name = configure_opkg (d, opkg_conf)
+    import oe.sls_utils
+    oe.sls_utils.sls_opkg_conf (d, opkg_conf)
 
     info_file_path = os.path.join(d.getVar("D", True), "ipktemp/")
     bb.utils.mkdirhier(os.path.dirname(info_file_path))
@@ -178,7 +194,7 @@ python do_populate_ipk_sysroot(){
         bb.utils.mkdirhier(sysroot_destdir)
 
     # Disable the recommends pkgs installation
-    opkg_args_up = "-f %s -t %s -o %s --prefer-arch-to-version --no-install-recommends " % (opkg_conf, info_file_path, sysroot_destdir)
+    opkg_args_up = "-f %s -t %s -o %s --force_postinstall --prefer-arch-to-version --no-install-recommends " % (opkg_conf, info_file_path, sysroot_destdir)
 
     cmd = '%s --volatile-cache %s update' % (opkg_cmd, opkg_args_up)
     cmdline(cmd, info_file_path)
@@ -189,7 +205,20 @@ python do_populate_ipk_sysroot(){
     if not os.path.exists(feed_info_dir):
         return
 
-    for file in os.listdir(listpath):
+    target_list_path = d.getVar("TARGET_DEPS_LIST")
+    if target_list_path and os.path.exists(target_list_path):
+        bb.note("ipk installation based on target build only")
+        with open(target_list_path,"r") as fd:
+            files = fd.readlines()
+    else:
+        bb.note("ipk installation not based on target build. Installing depends ipk of all recipes")
+        files = os.listdir(listpath)
+
+    for file in files:
+        if "packagegroup-" in file:
+            continue
+        if file.endswith("\n"):
+            file = file[:-1]
         deps = read_ipk_depends(d,file)
         if deps != []:
             for dep in deps:
@@ -213,8 +242,10 @@ python do_populate_ipk_sysroot(){
             pkg = parts[0]
             pkg_ver = parts[1]
         if "virtual" in pkg:
-            bb.warn("PREFERRED_PROVIDER is not set for %s" %pkg)
-            continue
+            pkg = d.getVar('PREFERRED_PROVIDER_%s' % pkg, True)
+            if not pkg:
+                bb.warn("PREFERRED_PROVIDER is not set for %s" %pkg)
+                continue
 
         pkg = get_base_pkg_name(pkg)
         if pkg not in ipk_list:
@@ -314,7 +345,7 @@ python do_populate_ipk_sysroot(){
 
     if inst_list:
         cmd = '%s %s install ' % (opkg_cmd, opkg_args)
-        ipk_install(d, cmd, inst_list)
+        ipk_install(d, cmd, inst_list, sysroot_destdir)
         boot_dir = os.path.join(sysroot_destdir,"%s"%d.getVar("IMAGEDEST"))
         if os.path.exists(boot_dir):
             img_deploy_dir = d.getVar("DEPLOY_DIR_IMAGE")
@@ -326,6 +357,7 @@ python do_populate_ipk_sysroot(){
                 shutil.copy(src,dest)
         # Generate the IPK staging directory for sysroot creation.
         bb.build.exec_func("create_ipk_common_staging", d)
+        do_kernel_devel_create(d)
 
     bb.note("[staging-ipk] Installed pkgs : %s"%inst_list)
 }
@@ -335,7 +367,6 @@ python(){
 do_populate_ipk_sysroot[umask] = "022"
 
 do_populate_ipk_sysroot[network] = "1"
-
 deltask do_fetch
 deltask do_unpack
 deltask do_patch

@@ -18,3 +18,6 @@ opkg configuration for stack layering support
 
 - IPK_EXCLUSION_LIST <br>
 List of packages to be excluded from IPK consumption.
+
+- OPKG_ARCH_PRIORITY <br>
+configure the priority of the IPK feed. Ex. OPKG_ARCH_PRIORITY:<arch> = "<priority>".
