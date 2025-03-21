@@ -220,7 +220,7 @@ def staging_sls_processfixme( recipesysrootnative, d):
     import subprocess
     recipe_sysroot = d.getVar("RECIPE_SYSROOT")
 
-    cmd = "grep -Irl 'FIXMESTAGINGDIRHOST\|FIXMESTAGINGDIRTARGET' %s | xargs --no-run-if-empty sed -i -e 's:FIXMESTAGINGDIRHOST:%s:g' -e 's:FIXMESTAGINGDIRTARGET:%s:g'" % (recipesysrootnative, recipesysrootnative, recipesysrootnative)
+    cmd = "grep -Irl 'FIXMESTAGINGDIRHOST\|FIXMESTAGINGDIRTARGET' %s | xargs --no-run-if-empty sed -i -e 's:FIXMESTAGINGDIRHOST:%s:g' -e 's:FIXMESTAGINGDIRTARGET:%s:g'" % (recipesysrootnative, recipesysrootnative, recipe_sysroot)
     for fixmevar in ['PSEUDO_SYSROOT', 'HOSTTOOLS_DIR', 'PKGDATA_DIR', 'PSEUDO_LOCALSTATEDIR', 'LOGFIFO']:
         fixme_path = d.getVar(fixmevar)
         cmd += " -e 's:FIXME_%s:%s:g'" % (fixmevar, fixme_path)
@@ -555,7 +555,7 @@ python () {
     pv_overrides = d.getVar("PV_pn-%s"%pn)
     version = version.replace("AUTOINC","0")
 
-    if not bb.data.inherits_class('native', d):
+    if not bb.data.inherits_class('native', d) and not bb.data.inherits_class('cross', d):
         # Skipping unrequired version of recipes
         if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
             d.appendVarFlag('do_package_write_ipk', 'prefuncs', ' do_clean_deploy')
@@ -588,7 +588,7 @@ python () {
                 if version_check and not check_targets(d, pn):
                     open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',d)
-            bb.build.addtask('do_install_ipk_recipe_native_sysroot','do_patch','do_unpack',d)
+            bb.build.addtask('do_install_ipk_recipe_native_sysroot','do_patch do_package_write_ipk','do_unpack',d)
             d.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
             # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
             postfuncs = (d.getVarFlag('do_prepare_recipe_sysroot', 'postfuncs') or "").split()
@@ -765,7 +765,7 @@ def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False, skip_depends=False):
         dep_ver = match[1].strip() if len(match) > 1 and match[1] else None
         dep_bpkg = get_base_pkg_name(dep)
 
-        if dep.endswith("-native") or "-cross" in dep :
+        if dep.endswith("-native") or "-cross" in dep or "binutils" in dep or "-gcc" in dep:
             continue
         elif dep_bpkg == get_base_pkg_name(pkg):
             if dep_ver:
@@ -1110,7 +1110,7 @@ python deps_taskhandler() {
                 if preferred_provider is not None:
                     pkg = preferred_provider
                 (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pkg)
-                if pkg.endswith("-native") or "-cross" in pkg:
+                if pkg.endswith("-native") or "-cross" in pkg or "binutils" in pkg or "-gcc" in pkg:
                     continue
                 if ipk_mode:
                     if staging_ipk_task not in pkgs_list:
@@ -1379,12 +1379,12 @@ python get_pkgs_handler () {
         pkg_path = d.getVar("TARGET_DEPS_LIST")
         targetdeps = []
         for deps in e._depgraph['depends']:
-            if deps.endswith("-native"):
+            if deps.endswith("-native") or "-cross" in deps:
                 continue
             if deps not in targetdeps:
                 targetdeps.append(deps)
         for deps in e._depgraph['rdepends-pn']:
-            if deps.endswith("-native"):
+            if deps.endswith("-native") or "-cross" in deps:
                 continue
             if deps not in targetdeps:
                 targetdeps.append(deps)

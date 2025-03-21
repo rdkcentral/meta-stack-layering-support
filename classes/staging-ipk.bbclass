@@ -373,4 +373,4 @@ deltask do_packagedata
 deltask do_package_qa
 deltask do_package_write_ipk
 
-addtask do_populate_ipk_sysroot before do_populate_sysroot
+addtask do_populate_ipk_sysroot before do_populate_sysroot after do_install_ipk_recipe_native_sysroot
