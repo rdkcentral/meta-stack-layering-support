@@ -218,6 +218,88 @@ def get_provider(d,pkg, archs):
         bb.note("[deps-resolver] PKG - %s , PROVIDER - %s "%(pkg,provides))
     return provides
 
+def enable_task(d, task):
+     if d.getVarFlag(task, "noexec", False) != None:
+         d.delVarFlag(task, "noexec")
+
+def create_native_build_task(d):
+     # First, disable all of the tasks
+     for e in bb.data.keys(d):
+         if d.getVarFlag(e, 'task', False):
+             d.setVarFlag(e, "noexec", "1")
+
+     # Then enable the only required tasks.
+     enable_task(d, "do_build")
+     enable_task(d, "extract_stashed_builddir")
+     enable_task(d, "do_gcc_stash_builddir")
+
+     enable_task(d, "do_prepare_recipe_sysroot")
+     enable_task(d, "do_cleansstate")
+     enable_task(d, "do_clean")
+     enable_task(d, "do_cleanall")
+
+     enable_task(d, "do_populate_sysroot")
+     enable_task(d, "do_sls_sdk")
+     d.setVarFlag("do_populate_sysroot", "prefuncs", " ")
+     d.setVarFlag("do_populate_sysroot", "postfuncs", " ")
+     d.setVarFlag("do_populate_sysroot_setscene", "prefuncs", " ")
+     d.setVarFlag("do_populate_sysroot_setscene", "postfuncs", " ")
+     sstate_tasks = d.getVar('SSTATETASKS', True)
+     sstate_tasks = sstate_tasks.replace("do_populate_sysroot", "")
+     sstate_tasks = sstate_tasks.replace("do_populate_sysroot_setscene", "")
+     d.setVar('SSTATETASKS', sstate_tasks)
+
+
+python do_sls_sdk(){
+     import os
+     import shutil
+     pn = d.getVar("PN", True)
+     staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
+     docker_native_pkg_path = os.path.join(staging_native_docker_path, pn)
+     if not os.path.exists(docker_native_pkg_path) or pn.startswith("gcc-source-") :
+         return
+     if pn.startswith("gcc-source-"):
+         destination_dir = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True))
+         for item in os.listdir(staging_native_docker_path):
+             item_path = os.path.join(source_dir, item)
+             if os.path.isdir(item_path) and item.startswith("gcc-stashed-builddir"):
+                 dest_path = os.path.join(destination_dir, item)
+                 shutil.copytree(item_path, dest_path)
+     else:
+         sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
+         if os.path.exists(sysroot_components_dir_dst):
+             shutil.rmtree(sysroot_components_dir_dst)
+         shutil.copytree(docker_native_pkg_path, sysroot_components_dir_dst, symlinks=True)
+
+     manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".populate_sysroot"
+     bb.utils.mkdirhier(os.path.dirname(manifest_name))
+     with open(manifest_name, "w") as manifest:
+         for (dir_path, dir_names, file_names) in os.walk(sysroot_components_dir_dst):
+             for file in file_names:
+                 manifest.write(os.path.join(dir_path, file) + "\n")
+}
+
+do_populate_sysroot:prepend() {
+    pn = d.getVar('PN', True)
+    native_pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
+    if os.path.exists(native_pkg_dst) or pn.startswith("gcc-source-"):
+        bb.note("Skipping do_populate_sysroot")
+        return
+}
+
+do_gcc_stash_builddir:prepend() {
+    return
+}
+do_populate_sysroot_setscene:prepend() {
+    pn = d.getVar('PN', True)
+    native_pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
+    if os.path.exists(native_pkg_dst) or pn.startswith("gcc-source-"):
+        bb.note("Skipping do_populate_sysroot_setscene")
+        return
+}
+
+addtask do_sls_sdk before do_populate_sysroot
+
 # Install the dev ipks to the component sysroot
 python do_install_ipk_recipe_sysroot () {
     import shutil
@@ -258,6 +340,8 @@ python do_install_ipk_recipe_sysroot () {
         if feed is not None:
             archs.append(feed.group(1))
 
+    ldeps.append("libgcc")
+    ldeps.append("gcc-runtime")
     dev_list = ["-dev","-staticdev"]
     for ldep in ldeps:
         if ldep == " " or ldep == "":
@@ -515,7 +599,12 @@ python () {
     pv_overrides = d.getVar("PV_pn-%s"%pn)
     version = version.replace("AUTOINC","0")
 
-    if not bb.data.inherits_class('native', d):
+    if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d) or pn.startswith("gcc-source-"):
+        staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
+        docker_native_pkg_path = os.path.join(staging_native_docker_path, d.getVar("PN", True))
+        if os.path.exists(docker_native_pkg_path) or pn.startswith("gcc-source-"):
+            create_native_build_task(d)
+    else:
         # Skipping unrequired version of recipes
         if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
             d.appendVarFlag('do_package_write_ipk', 'prefuncs', ' do_clean_deploy')
