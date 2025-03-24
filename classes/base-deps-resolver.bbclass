@@ -230,21 +230,18 @@ def update_build_tasks(d, arch, machine):
 
      # Then enable the only required tasks.
     enable_task(d, "do_build")
-    enable_task(d, "extract_stashed_builddir")
-    enable_task(d, "do_gcc_stash_builddir")
-
-    enable_task(d, "do_prepare_recipe_sysroot")
     enable_task(d, "do_cleansstate")
     enable_task(d, "do_clean")
     enable_task(d, "do_cleanall")
-
     enable_task(d, "do_populate_sysroot")
     if machine == "native":
         enable_task(d, "do_sls_generate_native_sysroot")
+
     d.setVarFlag("do_populate_sysroot", "prefuncs", " ")
     d.setVarFlag("do_populate_sysroot", "postfuncs", " ")
     d.setVarFlag("do_populate_sysroot_setscene", "prefuncs", " ")
     d.setVarFlag("do_populate_sysroot_setscene", "postfuncs", " ")
+
     sstate_tasks = d.getVar('SSTATETASKS', True)
     sstate_tasks = sstate_tasks.replace("do_populate_sysroot", "")
     sstate_tasks = sstate_tasks.replace("do_populate_sysroot_setscene", "")
@@ -276,7 +273,7 @@ python do_sls_generate_native_sysroot(){
      pn = d.getVar("PN", True)
      staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
      docker_native_pkg_path = os.path.join(staging_native_docker_path, pn)
-     if not os.path.exists(docker_native_pkg_path) or pn.startswith("gcc-source-") :
+     if not os.path.exists(docker_native_pkg_path):
          return
      if pn.startswith("gcc-source-"):
          destination_dir = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True))
@@ -302,7 +299,7 @@ python do_sls_generate_native_sysroot(){
 do_populate_sysroot:prepend() {
     pn = d.getVar('PN', True)
     native_pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
-    if os.path.exists(native_pkg_dst) or pn.startswith("gcc-source-"):
+    if os.path.exists(native_pkg_dst):
         bb.note("Skipping do_populate_sysroot")
         return
 }
@@ -313,7 +310,7 @@ do_gcc_stash_builddir:prepend() {
 do_populate_sysroot_setscene:prepend() {
     pn = d.getVar('PN', True)
     native_pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
-    if os.path.exists(native_pkg_dst) or pn.startswith("gcc-source-"):
+    if os.path.exists(native_pkg_dst):
         bb.note("Skipping do_populate_sysroot_setscene")
         return
 }
@@ -582,10 +579,10 @@ python () {
     pv_overrides = d.getVar("PV_pn-%s"%pn)
     version = version.replace("AUTOINC","0")
 
-    if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d) or pn.startswith("gcc-source-"):
+    if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
         staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
         docker_native_pkg_path = os.path.join(staging_native_docker_path, d.getVar("PN", True))
-        if os.path.exists(docker_native_pkg_path) or pn.startswith("gcc-source-"):
+        if os.path.exists(docker_native_pkg_path):
             update_build_tasks(d, arch, "native")
     else:
         # Skipping unrequired version of recipes
