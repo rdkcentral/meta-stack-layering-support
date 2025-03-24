@@ -219,38 +219,58 @@ def get_provider(d,pkg, archs):
     return provides
 
 def enable_task(d, task):
-     if d.getVarFlag(task, "noexec", False) != None:
-         d.delVarFlag(task, "noexec")
+    if d.getVarFlag(task, "noexec", False) != None:
+        d.delVarFlag(task, "noexec")
 
-def create_native_build_task(d):
-     # First, disable all of the tasks
-     for e in bb.data.keys(d):
-         if d.getVarFlag(e, 'task', False):
-             d.setVarFlag(e, "noexec", "1")
+def update_build_tasks(d, arch, machine):
+    # First, disable all of the tasks
+    for e in bb.data.keys(d):
+        if d.getVarFlag(e, 'task', False):
+            d.setVarFlag(e, "noexec", "1")
 
      # Then enable the only required tasks.
-     enable_task(d, "do_build")
-     enable_task(d, "extract_stashed_builddir")
-     enable_task(d, "do_gcc_stash_builddir")
+    enable_task(d, "do_build")
+    enable_task(d, "extract_stashed_builddir")
+    enable_task(d, "do_gcc_stash_builddir")
 
-     enable_task(d, "do_prepare_recipe_sysroot")
-     enable_task(d, "do_cleansstate")
-     enable_task(d, "do_clean")
-     enable_task(d, "do_cleanall")
+    enable_task(d, "do_prepare_recipe_sysroot")
+    enable_task(d, "do_cleansstate")
+    enable_task(d, "do_clean")
+    enable_task(d, "do_cleanall")
 
-     enable_task(d, "do_populate_sysroot")
-     enable_task(d, "do_sls_sdk")
-     d.setVarFlag("do_populate_sysroot", "prefuncs", " ")
-     d.setVarFlag("do_populate_sysroot", "postfuncs", " ")
-     d.setVarFlag("do_populate_sysroot_setscene", "prefuncs", " ")
-     d.setVarFlag("do_populate_sysroot_setscene", "postfuncs", " ")
-     sstate_tasks = d.getVar('SSTATETASKS', True)
-     sstate_tasks = sstate_tasks.replace("do_populate_sysroot", "")
-     sstate_tasks = sstate_tasks.replace("do_populate_sysroot_setscene", "")
-     d.setVar('SSTATETASKS', sstate_tasks)
+    enable_task(d, "do_populate_sysroot")
+    if machine == "native":
+        enable_task(d, "do_sls_generate_native_sysroot")
+    d.setVarFlag("do_populate_sysroot", "prefuncs", " ")
+    d.setVarFlag("do_populate_sysroot", "postfuncs", " ")
+    d.setVarFlag("do_populate_sysroot_setscene", "prefuncs", " ")
+    d.setVarFlag("do_populate_sysroot_setscene", "postfuncs", " ")
+    sstate_tasks = d.getVar('SSTATETASKS', True)
+    sstate_tasks = sstate_tasks.replace("do_populate_sysroot", "")
+    sstate_tasks = sstate_tasks.replace("do_populate_sysroot_setscene", "")
+    d.setVar('SSTATETASKS', sstate_tasks)
 
+    if machine == "target":
+        manifest_path = d.getVar("SSTATE_MANIFESTS", True)
+        if not os.path.exists(manifest_path):
+            bb.utils.mkdirhier(manifest_path)
 
-python do_sls_sdk(){
+        manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".populate_sysroot"
+        open(manifest_name, 'w').close()
+        manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".packagedata"
+        open(manifest_name, 'w').close()
+        manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".package_write_ipk"
+        open(manifest_name, 'w').close()
+        ipk_list = get_ipk_list(d,arch)
+        if ipk_list and arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
+            deploy_dir = d.getVar("DEPLOY_DIR_IPK")
+            pkg_path_ipk = os.path.join(deploy_dir, arch)
+            with open(manifest_name, "w") as fp:
+                for ipk in ipk_list:
+                    fp.write(os.path.join(pkg_path_ipk, ipk) + "\n")
+        bb.build.addtask("do_ipk_download", "do_build", None, d)
+
+python do_sls_generate_native_sysroot(){
      import os
      import shutil
      pn = d.getVar("PN", True)
@@ -298,7 +318,7 @@ do_populate_sysroot_setscene:prepend() {
         return
 }
 
-addtask do_sls_sdk before do_populate_sysroot
+addtask do_sls_generate_native_sysroot before do_populate_sysroot
 
 # Install the dev ipks to the component sysroot
 python do_install_ipk_recipe_sysroot () {
@@ -491,44 +511,7 @@ python do_ipk_download(){
                 os.unlink(ipk_deploy_path+"/%s"%ipk)
             os.link(ipk_dl_path, ipk_deploy_path+"/%s"%ipk)
 }
-def disable_build_tasks(d, task_name, arch):
-    pn = d.getVar('PN', True)
-    task_stack = []
-    task_stack.append(task_name)
-    processed_tasks = []
-    while task_stack:
-        cur_task = task_stack.pop()
-        deps = d.getVarFlag(cur_task, 'deps', False)
-        if cur_task != "do_build":
-            d.setVarFlag(cur_task,'noexec',"1")
-        processed_tasks.append(cur_task)
-        if deps != None:
-            for dep in deps:
-                if not (dep in task_stack or dep in processed_tasks):
-                    task_stack.append(dep)
-    d.setVarFlag('do_package_write_ipk','noexec',"1")
-    d.setVarFlag('do_packagedata','noexec',"1")
-    d.setVarFlag('do_deploy','noexec',"1")
-    manifest_path = d.getVar("SSTATE_MANIFESTS", True)
-    if not os.path.exists(manifest_path):
-        bb.utils.mkdirhier(manifest_path)
 
-    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".populate_sysroot"
-    open(manifest_name, 'w').close()
-    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".packagedata"
-    open(manifest_name, 'w').close()
-    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".package_write_ipk"
-    open(manifest_name, 'w').close()
-    ipk_list = get_ipk_list(d,arch)
-    if ipk_list and arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
-        deploy_dir = d.getVar("DEPLOY_DIR_IPK")
-        pkg_path_ipk = os.path.join(deploy_dir, arch)
-        with open(manifest_name, "w") as fp:
-            for ipk in ipk_list:
-                fp.write(os.path.join(pkg_path_ipk, ipk) + "\n")
-    bb.build.addtask("do_ipk_download", "do_build", None, d)
-
-# Get the list of IPKs generated from a package
 def get_ipk_list(d, pkg_arch):
     import glob
     import shutil
@@ -603,7 +586,7 @@ python () {
         staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
         docker_native_pkg_path = os.path.join(staging_native_docker_path, d.getVar("PN", True))
         if os.path.exists(docker_native_pkg_path) or pn.startswith("gcc-source-"):
-            create_native_build_task(d)
+            update_build_tasks(d, arch, "native")
     else:
         # Skipping unrequired version of recipes
         if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
@@ -625,7 +608,7 @@ python () {
                 bb.utils.mkdirhier(skipped_pkg_dir)
 
             open(skipped_pkg_dir+pn, 'w').close()
-            disable_build_tasks(d,'do_build', arch)
+            update_build_tasks(d, arch, "target")
         else:
             if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', d):
                 d.appendVarFlag('do_packagedata', 'prefuncs', ' do_clean_pkgdata')

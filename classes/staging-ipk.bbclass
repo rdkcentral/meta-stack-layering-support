@@ -226,6 +226,8 @@ fakeroot python do_populate_ipk_sysroot(){
                     continue
                 ipk_pkgs.append(dep)
 
+    ipk_pkgs.append("libgcc")
+    ipk_pkgs.append("gcc-runtime")
     archs = []
     for line in (d.getVar('IPK_FEED_URIS') or "").split():
         feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
