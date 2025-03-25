@@ -272,21 +272,17 @@ python do_sls_generate_native_sysroot(){
      import shutil
      pn = d.getVar("PN", True)
      staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
+     if not staging_native_docker_path:
+         return
+
      docker_native_pkg_path = os.path.join(staging_native_docker_path, pn)
      if not os.path.exists(docker_native_pkg_path):
          return
-     if pn.startswith("gcc-source-"):
-         destination_dir = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True))
-         for item in os.listdir(staging_native_docker_path):
-             item_path = os.path.join(source_dir, item)
-             if os.path.isdir(item_path) and item.startswith("gcc-stashed-builddir"):
-                 dest_path = os.path.join(destination_dir, item)
-                 shutil.copytree(item_path, dest_path)
-     else:
-         sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
-         if os.path.exists(sysroot_components_dir_dst):
-             shutil.rmtree(sysroot_components_dir_dst)
-         shutil.copytree(docker_native_pkg_path, sysroot_components_dir_dst, symlinks=True)
+
+     sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
+     if os.path.exists(sysroot_components_dir_dst):
+         shutil.rmtree(sysroot_components_dir_dst)
+     shutil.copytree(docker_native_pkg_path, sysroot_components_dir_dst, symlinks=True)
 
      manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".populate_sysroot"
      bb.utils.mkdirhier(os.path.dirname(manifest_name))
@@ -578,9 +574,10 @@ python () {
 
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
         staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
-        docker_native_pkg_path = os.path.join(staging_native_docker_path, d.getVar("PN", True))
-        if os.path.exists(docker_native_pkg_path):
-            update_build_tasks(d, arch, "native")
+        if staging_native_docker_path:
+            docker_native_pkg_path = os.path.join(staging_native_docker_path, d.getVar("PN", True))
+            if os.path.exists(docker_native_pkg_path):
+                update_build_tasks(d, arch, "native")
     else:
         # Skipping unrequired version of recipes
         if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
