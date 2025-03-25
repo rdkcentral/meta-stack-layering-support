@@ -304,9 +304,6 @@ do_populate_sysroot:prepend() {
         return
 }
 
-do_gcc_stash_builddir:prepend() {
-    return
-}
 do_populate_sysroot_setscene:prepend() {
     pn = d.getVar('PN', True)
     native_pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
