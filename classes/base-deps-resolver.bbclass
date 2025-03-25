@@ -256,15 +256,6 @@ def update_build_tasks(d, arch, machine):
         open(manifest_name, 'w').close()
         manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".packagedata"
         open(manifest_name, 'w').close()
-        manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".package_write_ipk"
-        open(manifest_name, 'w').close()
-        ipk_list = get_ipk_list(d,arch)
-        if ipk_list and arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
-            deploy_dir = d.getVar("DEPLOY_DIR_IPK")
-            pkg_path_ipk = os.path.join(deploy_dir, arch)
-            with open(manifest_name, "w") as fp:
-                for ipk in ipk_list:
-                    fp.write(os.path.join(pkg_path_ipk, ipk) + "\n")
         bb.build.addtask("do_ipk_download", "do_build", None, d)
 
 python do_sls_generate_native_sysroot(){
@@ -501,6 +492,10 @@ python do_ipk_download(){
             if arch == arch_name:
                 server_path = arch_uri
 
+    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".package_write_ipk"
+    bb.utils.mkdirhier(os.path.dirname(manifest_name))
+    manifest_file = open(manifest_name, "w")
+
     if server_path:
         for ipk in ipk_list:
             ipk_dl_path = os.path.join(download_dir,ipk)
@@ -512,6 +507,8 @@ python do_ipk_download(){
             if os.path.exists(ipk_deploy_path+"/%s"%ipk):
                 os.unlink(ipk_deploy_path+"/%s"%ipk)
             os.link(ipk_dl_path, ipk_deploy_path+"/%s"%ipk)
+            manifest_file.write(os.path.join(ipk_deploy_path, ipk) + "\n")
+    manifest_file.close()
 }
 
 def get_ipk_list(d, pkg_arch):
@@ -640,15 +637,26 @@ python do_clean_pkgdata(){
         os.remove(kernel_abi_ver_file)
 }
 
-python do_clean_deploy(){
-    deploy_dir = d.getVar("DEPLOY_DIR_IPK")
-    pkg_arch = d.getVar("PACKAGE_ARCH")
-    pkg_path_ipk = os.path.join(deploy_dir, pkg_arch)
-    ipk_list = get_ipk_list(d, pkg_arch)
-    if ipk_list:
-        for ipk in ipk_list:
-            if os.path.exists(pkg_path_ipk + "/%s"%ipk):
-                os.unlink(pkg_path_ipk + "/%s"%ipk)
+def unlink_file(file_path):
+    if os.path.exists(file_path):
+        try:
+            os.unlink(file_path)
+        except OSError as err:
+            if err.errno == errno.ENOENT:
+                bb.warn("Link already removed.." + file_path + "\n")
+            else:
+                raise
+
+python do_clean_deploy() {
+    # Get the ipk file list from the ipk write manifest file
+    ipk_manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".package_write_ipk"
+    if os.path.exists(ipk_manifest_name):
+        with open(ipk_manifest_name, "r") as ipk_list:
+            ipk_list = ipk_list.readlines()
+            for line in ipk_list:
+                ipk_file = line.strip("\n")
+                if ipk_file.endswith(".ipk"):
+                    unlink_file(ipk_file)
 }
 
 python do_clean_deploy_images(){
