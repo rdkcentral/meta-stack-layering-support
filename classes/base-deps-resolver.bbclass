@@ -223,12 +223,12 @@ def enable_task(d, task):
         d.delVarFlag(task, "noexec")
 
 def update_build_tasks(d, arch, machine):
-    # First, disable all of the tasks
+    # Disable all tasks
     for e in bb.data.keys(d):
         if d.getVarFlag(e, 'task', False):
             d.setVarFlag(e, "noexec", "1")
 
-     # Then enable the only required tasks.
+    # Enable only required tasks.
     enable_task(d, "do_build")
     enable_task(d, "do_cleansstate")
     enable_task(d, "do_clean")
@@ -268,44 +268,56 @@ def update_build_tasks(d, arch, machine):
         bb.build.addtask("do_ipk_download", "do_build", None, d)
 
 python do_sls_generate_native_sysroot(){
-     import os
-     import shutil
-     pn = d.getVar("PN", True)
-     staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
-     if not staging_native_docker_path:
-         return
+    import os
+    import shutil
+    pn = d.getVar("PN", True)
+    staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
+    if not staging_native_docker_path:
+        return
 
-     docker_native_pkg_path = os.path.join(staging_native_docker_path, pn)
-     if not os.path.exists(docker_native_pkg_path):
-         return
+    docker_native_pkg_path = os.path.join(staging_native_docker_path, pn)
+    if not os.path.exists(docker_native_pkg_path):
+        return
 
-     sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
-     if os.path.exists(sysroot_components_dir_dst):
-         shutil.rmtree(sysroot_components_dir_dst)
-     shutil.copytree(docker_native_pkg_path, sysroot_components_dir_dst, symlinks=True)
+    sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
+    if os.path.exists(sysroot_components_dir_dst):
+        shutil.rmtree(sysroot_components_dir_dst)
+    shutil.copytree(docker_native_pkg_path, sysroot_components_dir_dst, symlinks=True)
 
-     manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".populate_sysroot"
-     bb.utils.mkdirhier(os.path.dirname(manifest_name))
-     with open(manifest_name, "w") as manifest:
-         for (dir_path, dir_names, file_names) in os.walk(sysroot_components_dir_dst):
-             for file in file_names:
-                 manifest.write(os.path.join(dir_path, file) + "\n")
+    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".populate_sysroot"
+    bb.utils.mkdirhier(os.path.dirname(manifest_name))
+    with open(manifest_name, "w") as manifest:
+        for (dir_path, dir_names, file_names) in os.walk(sysroot_components_dir_dst):
+            for file in file_names:
+                manifest.write(os.path.join(dir_path, file) + "\n")
 }
 
 do_populate_sysroot:prepend() {
     pn = d.getVar('PN', True)
+    staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
+    if staging_native_docker_path:
+        native_pkg_dst = os.path.join(staging_native_docker_path, pn)
+        if os.path.exists(native_pkg_dst):
+            bb.note("Skipping do_populate_sysroot")
+            return
     native_pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
     if os.path.exists(native_pkg_dst):
-        bb.note("Skipping do_populate_sysroot")
-        return
+        import shutil
+        shutil.rmtree(native_pkg_dst)
 }
 
 do_populate_sysroot_setscene:prepend() {
     pn = d.getVar('PN', True)
+    staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
+    if staging_native_docker_path:
+        native_pkg_dst = os.path.join(staging_native_docker_path, pn)
+        if os.path.exists(native_pkg_dst):
+            bb.note("Skipping do_populate_sysroot_setscene")
+            return
     native_pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
     if os.path.exists(native_pkg_dst):
-        bb.note("Skipping do_populate_sysroot_setscene")
-        return
+        import shutil
+        shutil.rmtree(native_pkg_dst)
 }
 
 addtask do_sls_generate_native_sysroot before do_populate_sysroot
