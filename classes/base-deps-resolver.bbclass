@@ -263,12 +263,14 @@ def update_build_tasks(d, arch, machine):
 do_package_write_ipk:prepend() {
     manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
     if os.path.exists(manifest_name):
+        bb.note("Running ipk_download custom task and skipping do_package_write_ipk")
         ipk_download(d)
         return
 }
 do_package_write_ipk_setscene:prepend() {
     manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
     if os.path.exists(manifest_name):
+        bb.note("Running ipk_download custom task and skipping do_package_write_ipk_setscene")
         ipk_download(d)
         return
 }
@@ -303,8 +305,11 @@ do_populate_sysroot:prepend() {
     if staging_native_docker_path:
         native_pkg_dst = os.path.join(staging_native_docker_path, pn)
         if os.path.exists(native_pkg_dst):
-            bb.note("Skipping do_populate_sysroot")
-            return
+            if "gcc-" in pn and  not os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
+                bb.note("GCC is source mode. Not skipping do_populate_sysroot")
+            else:
+                bb.note("Skipping do_populate_sysroot")
+                return
     native_pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
     if os.path.exists(native_pkg_dst):
         import shutil
@@ -316,9 +321,12 @@ do_populate_sysroot_setscene:prepend() {
     staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
     if staging_native_docker_path:
         native_pkg_dst = os.path.join(staging_native_docker_path, pn)
-        if os.path.exists(native_pkg_dst):
-            bb.note("Skipping do_populate_sysroot_setscene")
-            return
+        if os.path.exists(native_pkg_dst) and os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
+            if "gcc-" in pn and  not os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
+                bb.note("GCC is source mode. Not skipping do_populate_sysroot")
+            else:
+                bb.note("Skipping do_populate_sysroot_setscene")
+                return
     native_pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
     if os.path.exists(native_pkg_dst):
         import shutil
@@ -578,27 +586,46 @@ def check_targets(d, pkg):
             break
     return is_target
 
-python () {
-    pn = d.getVar('PN')
+def get_version_info(d):
     pe = d.getVar('PE')
     pv = d.getVar('PV')
     pr = d.getVar('PR')
-    arch = d.getVar('PACKAGE_ARCH')
     version = "%s:%s-%s"%(pe,pv,pr) if pe else "%s-%s"%(pv,pr)
-    feed_info_dir = d.getVar("FEED_INFO_DIR")
+    version = version.replace("AUTOINC","0")
+    return version
 
+def gcc_source_mode_check(d, pn):
+    gcc_source_mode = True
+    if "gcc-" in pn:
+        version = get_version_info(d)
+        (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, "libgcc", False, version)
+        if ipk_mode and not check_targets(d, pn):
+            gcc_source_mode = False
+        (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, "gcc-runtime", False, version)
+        if ipk_mode and not check_targets(d, pn):
+            gcc_source_mode = False
+        else:
+            gcc_source_mode = True
+        if not gcc_source_mode:
+            manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"
+            open(manifest_name, 'w').close()
+    else:
+        gcc_source_mode = False
+    return gcc_source_mode
+
+python () {
+    pn = d.getVar('PN')
+    arch = d.getVar('PACKAGE_ARCH')
+    feed_info_dir = d.getVar("FEED_INFO_DIR")
     if d.getVar('IPK_MODE') == "1":
         raise bb.parse.SkipRecipe("SKIPPED %s"%pn)
-
-    pref_version = d.getVar("PREFERRED_VERSION_%s"%pn)
-    pv_overrides = d.getVar("PV_pn-%s"%pn)
-    version = version.replace("AUTOINC","0")
+    version = get_version_info(d)
 
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
         staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
         if staging_native_docker_path:
             docker_native_pkg_path = os.path.join(staging_native_docker_path, d.getVar("PN", True))
-            if os.path.exists(docker_native_pkg_path):
+            if os.path.exists(docker_native_pkg_path) and not gcc_source_mode_check(d, pn):
                 update_build_tasks(d, arch, "native")
     else:
         # Skipping unrequired version of recipes
