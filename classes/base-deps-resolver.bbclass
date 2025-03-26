@@ -234,6 +234,7 @@ def update_build_tasks(d, arch, machine):
     enable_task(d, "do_clean")
     enable_task(d, "do_cleanall")
     enable_task(d, "do_populate_sysroot")
+    enable_task(d, "do_package_write_ipk")
     if machine == "native":
         enable_task(d, "do_sls_generate_native_sysroot")
 
@@ -245,6 +246,8 @@ def update_build_tasks(d, arch, machine):
     sstate_tasks = d.getVar('SSTATETASKS', True)
     sstate_tasks = sstate_tasks.replace("do_populate_sysroot", "")
     sstate_tasks = sstate_tasks.replace("do_populate_sysroot_setscene", "")
+    sstate_tasks = sstate_tasks.replace("do_package_write_ipk", "")
+    sstate_tasks = sstate_tasks.replace("do_package_write_ipk_setscene", "")
     d.setVar('SSTATETASKS', sstate_tasks)
 
     if machine == "target":
@@ -256,8 +259,19 @@ def update_build_tasks(d, arch, machine):
         open(manifest_name, 'w').close()
         manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".packagedata"
         open(manifest_name, 'w').close()
-        bb.build.addtask("do_ipk_download", "do_build", None, d)
 
+do_package_write_ipk:prepend() {
+    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
+    if os.path.exists(manifest_name):
+        ipk_download(d)
+        return
+}
+do_package_write_ipk_setscene:prepend() {
+    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
+    if os.path.exists(manifest_name):
+        ipk_download(d)
+        return
+}
 python do_sls_generate_native_sysroot(){
     import os
     import shutil
@@ -469,7 +483,7 @@ python do_install_ipk_recipe_sysroot () {
             bb.note("[deps-resolver] Skipped PKG - %s - from recipe sysroot"%pkg)
 }
 
-python do_ipk_download(){
+def ipk_download(d):
     import subprocess
     import shutil
     import re
@@ -509,7 +523,6 @@ python do_ipk_download(){
             os.link(ipk_dl_path, ipk_deploy_path+"/%s"%ipk)
             manifest_file.write(os.path.join(ipk_deploy_path, ipk) + "\n")
     manifest_file.close()
-}
 
 def get_ipk_list(d, pkg_arch):
     import glob
@@ -595,12 +608,6 @@ python () {
             d.appendVarFlag('do_deploy', 'prefuncs', ' do_clean_deploy_images')
             d.appendVarFlag('do_deploy_setscene', 'prefuncs', ' do_clean_deploy_images')
 
-        if d.getVar("STACK_LAYER_EXTENSION") and check_targets(d, pn):
-            d.appendVarFlag('do_build', 'recrdeptask', " do_ipk_download")
-
-        if d.getVar("STACK_LAYER_EXTENSION") and bb.data.inherits_class('image', d):
-            d.appendVarFlag('do_rootfs', 'recrdeptask', " do_ipk_download")
-
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, pn, False, version)
         if ipk_mode and not check_targets(d, pn):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
@@ -609,7 +616,12 @@ python () {
 
             open(skipped_pkg_dir+pn, 'w').close()
             update_build_tasks(d, arch, "target")
+            manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
+            open(manifest_name, 'w').close()
         else:
+            manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
+            if os.path.exists(manifest_name):
+                os.remove(manifest_name)
             if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', d):
                 d.appendVarFlag('do_packagedata', 'prefuncs', ' do_clean_pkgdata')
                 d.appendVarFlag('do_packagedata_setscene', 'prefuncs', ' do_clean_pkgdata')
