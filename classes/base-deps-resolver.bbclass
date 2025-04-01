@@ -634,6 +634,7 @@ python () {
             d.appendVarFlag('do_package_write_ipk_setscene', 'prefuncs', ' do_clean_deploy')
             d.appendVarFlag('do_deploy', 'prefuncs', ' do_clean_deploy_images')
             d.appendVarFlag('do_deploy_setscene', 'prefuncs', ' do_clean_deploy_images')
+        d.appendVar("DEPENDS", " pseudo-native")
 
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, pn, False, version)
         if ipk_mode and not check_targets(d, pn):
