@@ -162,6 +162,31 @@ def do_kernel_devel_create(d):
     else:
         bb.note("kernel devel build artifacts is not present in IPK feeds")
 
+def check_staging_exclusion(d, pkg, pkg_path):
+    is_excluded = False
+    skip_pkgs = []
+    if not pkg or not d.getVar("IPK_STAGING_EXCLUSION_LIST"):
+        return is_excluded
+    pkg = pkg.strip()
+    prefix = d.getVar('MLPREFIX') or ""
+    if prefix and pkg.startswith(prefix):
+        pkg = pkg[len(prefix):]
+    if pkg in (d.getVar("IPK_STAGING_EXCLUSION_LIST") or "").split():
+        is_excluded = True
+    else:
+        import glob
+        for skip_pkg in (d.getVar("IPK_STAGING_EXCLUSION_LIST") or "").split():
+            recipe_info = glob.glob(pkg_path + "/source/%s_*"%(skip_pkg))
+            if recipe_info:
+                recipe_info = recipe_info[0]
+                with open(recipe_info, 'r') as file:
+                    lines = file.readlines()
+                for line in lines:
+                    skip_pkgs.append(line[:-1])
+        if pkg in skip_pkgs:
+            is_excluded = True
+    return is_excluded
+
 # Install the dependent ipks to the component sysroot
 fakeroot python do_populate_ipk_sysroot(){
     import shutil
@@ -200,11 +225,10 @@ fakeroot python do_populate_ipk_sysroot(){
     cmdline(cmd, info_file_path)
 
     # Enable cache option for opkg install
-    opkg_args = "--host-cache-dir --cache-dir %s %s " % (ipk_cache_dir, opkg_args_up)
+    opkg_args = "--host-cache-dir --cache-dir %s %s %s" %(ipk_cache_dir, opkg_args_up, (d.getVar("IPK_EXTRA_CONF_OPTIONS") or ""))
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     if not os.path.exists(feed_info_dir):
         return
-
     target_list_path = d.getVar("TARGET_DEPS_LIST")
     if target_list_path and os.path.exists(target_list_path):
         bb.note("ipk installation based on target build only")
@@ -226,12 +250,15 @@ fakeroot python do_populate_ipk_sysroot(){
                     continue
                 ipk_pkgs.append(dep)
 
+    ipk_pkgs.append("libgcc")
+    ipk_pkgs.append("gcc-runtime")
     archs = []
     for line in (d.getVar('IPK_FEED_URIS') or "").split():
         feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
         if feed is not None:
             archs.append(feed.group(1))
     for pkg in ipk_pkgs:
+        is_excluded = False
         dev_pkgs, staticdev_pkgs, rel_pkgs = ([] for i in range(3))
         pkg_ver = ""
         recipe_info = ""
@@ -298,6 +325,8 @@ fakeroot python do_populate_ipk_sysroot(){
                             arch_check =  True
                 if arch_check:
                     break
+            if check_staging_exclusion(d,pkg, pkg_path):
+                is_excluded = True
 
             if recipe_info:
                 with open(recipe_info, 'r') as file:
@@ -317,19 +346,22 @@ fakeroot python do_populate_ipk_sysroot(){
                     if pkg_ver:
                         dev_pkg = dev_pkg+pkg_ver.strip("()")
                     if dev_pkg not in inst_list:
-                        inst_list.append(dev_pkg)
+                        if not is_excluded:
+                            inst_list.append(dev_pkg)
             if staticdev_pkgs :
                 for staticdev_pkg in staticdev_pkgs:
                     if pkg_ver:
                         staticdev_pkg = staticdev_pkg+pkg_ver.strip("()")
                     if staticdev_pkg not in inst_list:
-                        inst_list.append(staticdev_pkg)
+                        if not is_excluded:
+                            inst_list.append(staticdev_pkg)
             if rel_pkgs:
                 for rel_pkg in rel_pkgs:
                     if pkg_ver:
                         rel_pkg = rel_pkg+pkg_ver.strip("()")
                     if rel_pkg not in inst_list:
-                        inst_list.append(rel_pkg)
+                        if not is_excluded:
+                            inst_list.append(rel_pkg)
 
     #Check and Install kernel and device tree
     for arch in archs:

@@ -218,6 +218,123 @@ def get_provider(d,pkg, archs):
         bb.note("[deps-resolver] PKG - %s , PROVIDER - %s "%(pkg,provides))
     return provides
 
+def enable_task(d, task):
+    if d.getVarFlag(task, "noexec", False) != None:
+        d.delVarFlag(task, "noexec")
+
+def update_build_tasks(d, arch, machine):
+    # Disable all tasks
+    for e in bb.data.keys(d):
+        if d.getVarFlag(e, 'task', False):
+            d.setVarFlag(e, "noexec", "1")
+
+    # Enable only required tasks.
+    enable_task(d, "do_build")
+    enable_task(d, "do_cleansstate")
+    enable_task(d, "do_clean")
+    enable_task(d, "do_cleanall")
+    enable_task(d, "do_populate_sysroot")
+    enable_task(d, "do_package_write_ipk")
+    if machine == "native":
+        enable_task(d, "do_sls_generate_native_sysroot")
+
+    d.setVarFlag("do_populate_sysroot", "prefuncs", " ")
+    d.setVarFlag("do_populate_sysroot", "postfuncs", " ")
+    d.setVarFlag("do_populate_sysroot_setscene", "prefuncs", " ")
+    d.setVarFlag("do_populate_sysroot_setscene", "postfuncs", " ")
+
+    sstate_tasks = d.getVar('SSTATETASKS', True)
+    sstate_tasks = sstate_tasks.replace("do_populate_sysroot", "")
+    sstate_tasks = sstate_tasks.replace("do_populate_sysroot_setscene", "")
+    sstate_tasks = sstate_tasks.replace("do_package_write_ipk", "")
+    sstate_tasks = sstate_tasks.replace("do_package_write_ipk_setscene", "")
+    d.setVar('SSTATETASKS', sstate_tasks)
+
+    if machine == "target":
+        manifest_path = d.getVar("SSTATE_MANIFESTS", True)
+        if not os.path.exists(manifest_path):
+            bb.utils.mkdirhier(manifest_path)
+
+        manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".populate_sysroot"
+        open(manifest_name, 'w').close()
+        manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".packagedata"
+        open(manifest_name, 'w').close()
+
+do_package_write_ipk:prepend() {
+    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
+    if os.path.exists(manifest_name):
+        bb.note("Running ipk_download custom task and skipping do_package_write_ipk")
+        ipk_download(d)
+        return
+}
+do_package_write_ipk_setscene:prepend() {
+    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
+    if os.path.exists(manifest_name):
+        bb.note("Running ipk_download custom task and skipping do_package_write_ipk_setscene")
+        ipk_download(d)
+        return
+}
+python do_sls_generate_native_sysroot(){
+    import os
+    import shutil
+    pn = d.getVar("PN", True)
+    staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
+    if not staging_native_docker_path:
+        return
+
+    docker_native_pkg_path = os.path.join(staging_native_docker_path, pn)
+    if not os.path.exists(docker_native_pkg_path):
+        return
+
+    sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
+    if os.path.exists(sysroot_components_dir_dst):
+        shutil.rmtree(sysroot_components_dir_dst)
+    shutil.copytree(docker_native_pkg_path, sysroot_components_dir_dst, symlinks=True)
+
+    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".populate_sysroot"
+    bb.utils.mkdirhier(os.path.dirname(manifest_name))
+    with open(manifest_name, "w") as manifest:
+        for (dir_path, dir_names, file_names) in os.walk(sysroot_components_dir_dst):
+            for file in file_names:
+                manifest.write(os.path.join(dir_path, file) + "\n")
+}
+
+do_populate_sysroot:prepend() {
+    pn = d.getVar('PN', True)
+    staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
+    if staging_native_docker_path:
+        native_pkg_dst = os.path.join(staging_native_docker_path, pn)
+        if os.path.exists(native_pkg_dst):
+            if "gcc-" in pn and  not os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
+                bb.note("GCC is source mode. Not skipping do_populate_sysroot")
+            else:
+                bb.note("Skipping do_populate_sysroot")
+                return
+    native_pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
+    if os.path.exists(native_pkg_dst):
+        import shutil
+        shutil.rmtree(native_pkg_dst)
+}
+
+do_populate_sysroot_setscene:prepend() {
+    pn = d.getVar('PN', True)
+    staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
+    if staging_native_docker_path:
+        native_pkg_dst = os.path.join(staging_native_docker_path, pn)
+        if os.path.exists(native_pkg_dst) and os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
+            if "gcc-" in pn and  not os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
+                bb.note("GCC is source mode. Not skipping do_populate_sysroot")
+            else:
+                bb.note("Skipping do_populate_sysroot_setscene")
+                return
+    native_pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
+    if os.path.exists(native_pkg_dst):
+        import shutil
+        shutil.rmtree(native_pkg_dst)
+}
+
+addtask do_sls_generate_native_sysroot before do_populate_sysroot
+
 # Install the dev ipks to the component sysroot
 python do_install_ipk_recipe_sysroot () {
     import shutil
@@ -258,6 +375,8 @@ python do_install_ipk_recipe_sysroot () {
         if feed is not None:
             archs.append(feed.group(1))
 
+    ldeps.append("libgcc")
+    ldeps.append("gcc-runtime")
     dev_list = ["-dev","-staticdev"]
     for ldep in ldeps:
         if ldep == " " or ldep == "":
@@ -372,7 +491,7 @@ python do_install_ipk_recipe_sysroot () {
             bb.note("[deps-resolver] Skipped PKG - %s - from recipe sysroot"%pkg)
 }
 
-python do_ipk_download(){
+def ipk_download(d):
     import subprocess
     import shutil
     import re
@@ -395,6 +514,10 @@ python do_ipk_download(){
             if arch == arch_name:
                 server_path = arch_uri
 
+    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".package_write_ipk"
+    bb.utils.mkdirhier(os.path.dirname(manifest_name))
+    manifest_file = open(manifest_name, "w")
+
     if server_path:
         for ipk in ipk_list:
             ipk_dl_path = os.path.join(download_dir,ipk)
@@ -406,45 +529,9 @@ python do_ipk_download(){
             if os.path.exists(ipk_deploy_path+"/%s"%ipk):
                 os.unlink(ipk_deploy_path+"/%s"%ipk)
             os.link(ipk_dl_path, ipk_deploy_path+"/%s"%ipk)
-}
-def disable_build_tasks(d, task_name, arch):
-    pn = d.getVar('PN', True)
-    task_stack = []
-    task_stack.append(task_name)
-    processed_tasks = []
-    while task_stack:
-        cur_task = task_stack.pop()
-        deps = d.getVarFlag(cur_task, 'deps', False)
-        if cur_task != "do_build":
-            d.setVarFlag(cur_task,'noexec',"1")
-        processed_tasks.append(cur_task)
-        if deps != None:
-            for dep in deps:
-                if not (dep in task_stack or dep in processed_tasks):
-                    task_stack.append(dep)
-    d.setVarFlag('do_package_write_ipk','noexec',"1")
-    d.setVarFlag('do_packagedata','noexec',"1")
-    d.setVarFlag('do_deploy','noexec',"1")
-    manifest_path = d.getVar("SSTATE_MANIFESTS", True)
-    if not os.path.exists(manifest_path):
-        bb.utils.mkdirhier(manifest_path)
+            manifest_file.write(os.path.join(ipk_deploy_path, ipk) + "\n")
+    manifest_file.close()
 
-    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".populate_sysroot"
-    open(manifest_name, 'w').close()
-    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".packagedata"
-    open(manifest_name, 'w').close()
-    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".package_write_ipk"
-    open(manifest_name, 'w').close()
-    ipk_list = get_ipk_list(d,arch)
-    if ipk_list and arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
-        deploy_dir = d.getVar("DEPLOY_DIR_IPK")
-        pkg_path_ipk = os.path.join(deploy_dir, arch)
-        with open(manifest_name, "w") as fp:
-            for ipk in ipk_list:
-                fp.write(os.path.join(pkg_path_ipk, ipk) + "\n")
-    bb.build.addtask("do_ipk_download", "do_build", None, d)
-
-# Get the list of IPKs generated from a package
 def get_ipk_list(d, pkg_arch):
     import glob
     import shutil
@@ -499,35 +586,55 @@ def check_targets(d, pkg):
             break
     return is_target
 
-python () {
-    pn = d.getVar('PN')
+def get_version_info(d):
     pe = d.getVar('PE')
     pv = d.getVar('PV')
     pr = d.getVar('PR')
-    arch = d.getVar('PACKAGE_ARCH')
     version = "%s:%s-%s"%(pe,pv,pr) if pe else "%s-%s"%(pv,pr)
-    feed_info_dir = d.getVar("FEED_INFO_DIR")
+    version = version.replace("AUTOINC","0")
+    return version
 
+def gcc_source_mode_check(d, pn):
+    gcc_source_mode = True
+    if "gcc-" in pn:
+        version = get_version_info(d)
+        (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, "libgcc", False, version)
+        if ipk_mode and not check_targets(d, pn):
+            gcc_source_mode = False
+        (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, "gcc-runtime", False, version)
+        if ipk_mode and not check_targets(d, pn):
+            gcc_source_mode = False
+        else:
+            gcc_source_mode = True
+        if not gcc_source_mode:
+            manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"
+            open(manifest_name, 'w').close()
+    else:
+        gcc_source_mode = False
+    return gcc_source_mode
+
+python () {
+    pn = d.getVar('PN')
+    arch = d.getVar('PACKAGE_ARCH')
+    feed_info_dir = d.getVar("FEED_INFO_DIR")
     if d.getVar('IPK_MODE') == "1":
         raise bb.parse.SkipRecipe("SKIPPED %s"%pn)
+    version = get_version_info(d)
 
-    pref_version = d.getVar("PREFERRED_VERSION_%s"%pn)
-    pv_overrides = d.getVar("PV_pn-%s"%pn)
-    version = version.replace("AUTOINC","0")
-
-    if not bb.data.inherits_class('native', d):
+    if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
+        staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
+        if staging_native_docker_path:
+            docker_native_pkg_path = os.path.join(staging_native_docker_path, d.getVar("PN", True))
+            if os.path.exists(docker_native_pkg_path) and not gcc_source_mode_check(d, pn):
+                update_build_tasks(d, arch, "native")
+    else:
         # Skipping unrequired version of recipes
         if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
             d.appendVarFlag('do_package_write_ipk', 'prefuncs', ' do_clean_deploy')
             d.appendVarFlag('do_package_write_ipk_setscene', 'prefuncs', ' do_clean_deploy')
             d.appendVarFlag('do_deploy', 'prefuncs', ' do_clean_deploy_images')
             d.appendVarFlag('do_deploy_setscene', 'prefuncs', ' do_clean_deploy_images')
-
-        if d.getVar("STACK_LAYER_EXTENSION") and check_targets(d, pn):
-            d.appendVarFlag('do_build', 'recrdeptask', " do_ipk_download")
-
-        if d.getVar("STACK_LAYER_EXTENSION") and bb.data.inherits_class('image', d):
-            d.appendVarFlag('do_rootfs', 'recrdeptask', " do_ipk_download")
+        d.appendVar("DEPENDS", " pseudo-native")
 
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, pn, False, version)
         if ipk_mode and not check_targets(d, pn):
@@ -536,8 +643,13 @@ python () {
                 bb.utils.mkdirhier(skipped_pkg_dir)
 
             open(skipped_pkg_dir+pn, 'w').close()
-            disable_build_tasks(d,'do_build', arch)
+            update_build_tasks(d, arch, "target")
+            manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
+            open(manifest_name, 'w').close()
         else:
+            manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
+            if os.path.exists(manifest_name):
+                os.remove(manifest_name)
             if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', d):
                 d.appendVarFlag('do_packagedata', 'prefuncs', ' do_clean_pkgdata')
                 d.appendVarFlag('do_packagedata_setscene', 'prefuncs', ' do_clean_pkgdata')
@@ -565,15 +677,26 @@ python do_clean_pkgdata(){
         os.remove(kernel_abi_ver_file)
 }
 
-python do_clean_deploy(){
-    deploy_dir = d.getVar("DEPLOY_DIR_IPK")
-    pkg_arch = d.getVar("PACKAGE_ARCH")
-    pkg_path_ipk = os.path.join(deploy_dir, pkg_arch)
-    ipk_list = get_ipk_list(d, pkg_arch)
-    if ipk_list:
-        for ipk in ipk_list:
-            if os.path.exists(pkg_path_ipk + "/%s"%ipk):
-                os.unlink(pkg_path_ipk + "/%s"%ipk)
+def unlink_file(file_path):
+    if os.path.exists(file_path):
+        try:
+            os.unlink(file_path)
+        except OSError as err:
+            if err.errno == errno.ENOENT:
+                bb.warn("Link already removed.." + file_path + "\n")
+            else:
+                raise
+
+python do_clean_deploy() {
+    # Get the ipk file list from the ipk write manifest file
+    ipk_manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".package_write_ipk"
+    if os.path.exists(ipk_manifest_name):
+        with open(ipk_manifest_name, "r") as ipk_list:
+            ipk_list = ipk_list.readlines()
+            for line in ipk_list:
+                ipk_file = line.strip("\n")
+                if ipk_file.endswith(".ipk"):
+                    unlink_file(ipk_file)
 }
 
 python do_clean_deploy_images(){
