@@ -301,6 +301,7 @@ fakeroot python do_populate_ipk_sysroot(){
                     recipe_info = pkg_path + "package/%s-staticdev"%pkg
                     arch_check =  True
                 if not dev_pkgs:
+                    import glob
                     if os.path.exists(pkg_path + "rprovides/%s"%pkg):
                         recipe_info = pkg_path + "rprovides/%s"%pkg
                         if pkg not in rel_pkgs:
@@ -311,8 +312,8 @@ fakeroot python do_populate_ipk_sysroot(){
                         if pkg not in rel_pkgs:
                             rel_pkgs.append(pkg )
                         arch_check =  True
-                    elif os.path.exists(pkg_path + "source/%s"%pkg):
-                        recipe_info = pkg_path + "source/%s"%pkg
+                    elif glob.glob(pkg_path + "source/%s_*"%pkg):
+                        recipe_info = glob.glob(pkg_path + "source/%s_*"%pkg)[0]
                         arch_check =  True
                     else:
                         prefix = d.getVar('MLPREFIX') or ""

@@ -539,8 +539,7 @@ def get_ipk_list(d, pkg_arch):
     pn = d.getVar("PN")
     pkg_arch = d.getVar("PACKAGE_ARCH")
     version = "%s-%s" % (d.getVar('PV'), d.getVar('PR'))
-    version = version.replace("AUTOINC","0")
-    pkg_ver = "%s:%s" % (d.getVar('PE'), version) if d.getVar('PE') else version
+    pkg_ver = version.replace("AUTOINC","0")
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     prefix = d.getVar('MLPREFIX') or ""
     if prefix and pn.startswith(prefix):
