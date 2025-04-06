@@ -259,6 +259,8 @@ def update_build_tasks(d, arch, machine):
         open(manifest_name, 'w').close()
         manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".packagedata"
         open(manifest_name, 'w').close()
+        manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"
+        open(manifest_name, 'w').close()
 
 do_package_write_ipk:prepend() {
     manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
@@ -314,6 +316,10 @@ do_populate_sysroot:prepend() {
     if os.path.exists(native_pkg_dst):
         import shutil
         shutil.rmtree(native_pkg_dst)
+    if os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"):
+        bb.note("Skipping do_populate_sysroot")
+        return
+
 }
 
 do_populate_sysroot_setscene:prepend() {
@@ -331,6 +337,9 @@ do_populate_sysroot_setscene:prepend() {
     if os.path.exists(native_pkg_dst):
         import shutil
         shutil.rmtree(native_pkg_dst)
+    if os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"):
+        bb.note("Skipping do_populate_sysroot")
+        return
 }
 
 addtask do_sls_generate_native_sysroot before do_populate_sysroot
@@ -375,8 +384,9 @@ python do_install_ipk_recipe_sysroot () {
         if feed is not None:
             archs.append(feed.group(1))
 
-    ldeps.append("libgcc")
-    ldeps.append("gcc-runtime")
+    for ipk in (d.getVar("IPK_INCLUSION_LIST") or "").split():
+        ldeps.append(ipk)
+
     dev_list = ["-dev","-staticdev"]
     for ldep in ldeps:
         if ldep == " " or ldep == "":
@@ -647,6 +657,9 @@ python () {
             open(manifest_name, 'w').close()
         else:
             manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
+            if os.path.exists(manifest_name):
+                os.remove(manifest_name)
+            manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"
             if os.path.exists(manifest_name):
                 os.remove(manifest_name)
             if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', d):
