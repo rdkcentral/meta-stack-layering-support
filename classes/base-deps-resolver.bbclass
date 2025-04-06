@@ -490,15 +490,15 @@ python do_install_ipk_recipe_sysroot () {
             if pkg == f"{d.getVar('MLPREFIX')}gobject-introspection":
                 bb.note(" [deps-resolver] gobject-introspection requires cross compilation support")
                 g_ir_cc_support(d,recipe_sysroot,pkg_pn)
-            if bb.data.inherits_class('useradd', d):
-                p =  d.getVar('SYSROOT_IPK')+"/var/lib/opkg/info/base-passwd.preinst"
-                if os.path.exists(p):
-                    bb.note(" [deps-resolver] base-passwd files requires for useradd support")
-                    import subprocess
-                    os.environ['D'] = d.getVar('RECIPE_SYSROOT')
-                    subprocess.check_output(p, shell=True, stderr=subprocess.STDOUT)
         else:
             bb.note("[deps-resolver] Skipped PKG - %s - from recipe sysroot"%pkg)
+    if bb.data.inherits_class('useradd', d):
+        p =  d.getVar('SYSROOT_IPK')+f"/var/lib/opkg/info/{d.getVar('MLPREFIX')}base-passwd.preinst"
+        if os.path.exists(p):
+            bb.note(" [deps-resolver] base-passwd files requires for useradd support")
+            import subprocess
+            os.environ['D'] = d.getVar('RECIPE_SYSROOT')
+            subprocess.check_output(p, shell=True, stderr=subprocess.STDOUT)
 }
 
 def ipk_download(d):
