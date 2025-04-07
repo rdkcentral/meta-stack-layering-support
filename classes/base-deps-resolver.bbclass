@@ -353,6 +353,7 @@ python do_install_ipk_recipe_sysroot () {
     counts, devpkgcount = ({} for i in range(2))
 
     pkg_pn = d.getVar('PN')
+    prefix = d.getVar('MLPREFIX') or ""
     staging_bin_pkgs = d.getVar('SYSROOT_DIRS_BIN_REQUIRED').split(" ")
     layer_sysroot = d.getVar("SYSROOT_IPK")
     recipe_sysroot = d.getVar("RECIPE_SYSROOT")
@@ -412,11 +413,16 @@ python do_install_ipk_recipe_sysroot () {
                 else :
                     break
         recipe_info = ""
+        if prefix and ldep.startswith(prefix):
+            src_name = ldep[len(prefix):]
+        else:
+            src_name = ldep
+
         feed_info_dir = d.getVar("FEED_INFO_DIR")
         for arch in archs:
             pkg_path = feed_info_dir+"%s/"%arch
-            if os.path.exists(pkg_path + "source/%s.customised"%ldep):
-                recipe_info = pkg_path + "source/%s.customised"%ldep
+            if os.path.exists(pkg_path + "source/%s.customised"%src_name):
+                recipe_info = pkg_path + "source/%s.customised"%src_name
                 break;
         if recipe_info:
             with open(recipe_info, 'r') as file:
