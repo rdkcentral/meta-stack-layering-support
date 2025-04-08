@@ -8,7 +8,7 @@
 # recipe sysroot.
 # -----------------------------------------------------------------------
 
-STACK_LAYER_SYSROOT_DIRS = "${includedir} ${libdir} ${base_libdir} ${nonarch_base_libdir} ${datadir} "
+STACK_LAYER_SYSROOT_DIRS = "${includedir} ${exec_prefix}/${baselib} ${base_libdir} ${nonarch_base_libdir} ${datadir} "
 SYSROOT_DIRS_BIN_REQUIRED = "${MLPREFIX}gobject-introspection"
 
 # Pkgdata directory to store runtime IPK dependency details.
@@ -623,6 +623,7 @@ def gcc_source_mode_check(d, pn):
             gcc_source_mode = True
         if not gcc_source_mode:
             manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"
+            bb.utils.mkdirhier(os.path.dirname(manifest_name))
             open(manifest_name, 'w').close()
     else:
         gcc_source_mode = False
@@ -632,8 +633,6 @@ python () {
     pn = d.getVar('PN')
     arch = d.getVar('PACKAGE_ARCH')
     feed_info_dir = d.getVar("FEED_INFO_DIR")
-    if d.getVar('IPK_MODE') == "1":
-        raise bb.parse.SkipRecipe("SKIPPED %s"%pn)
     version = get_version_info(d)
 
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
@@ -802,7 +801,11 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     if not dep_bpkg:
         return ipkmode
     # Check dep package is in IPK mode
-    ipkmode = True if d.getVar('IPK_MODE:pn-%s' %dep_bpkg) == "1" else False
+    if prefix and dep_bpkg.startswith(prefix):
+        src_dep_bpkg = dep_bpkg[len(prefix):]
+    else:
+        src_dep_bpkg = dep_bpkg
+    ipkmode = True if d.getVar('IPK_MODE:pn-%s' %src_dep_bpkg) == "1" else False
     if ipkmode:
         return (ipkmode, version_mismatch, same_arch)
 
@@ -996,11 +999,6 @@ def update_dep_pkgs(e):
 
     if bb.data.inherits_class('multilib_global', d) and not d.getVar('MLPREFIX'):
         have_ipk_deps = False
-
-    if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
-        if have_ipk_deps:
-            e.data.appendVar("DEPENDS", " ${MLPREFIX}staging-ipk-pkgs")
-
     if have_ipk_deps:
         e.data.appendVar("DEPENDS", " ${MLPREFIX}staging-ipk-pkgs")
         create_ipk_deps_pkgdata(e,pkg_pn)
@@ -1174,7 +1172,7 @@ python do_update_rdeps_ipk () {
 python deps_update_handler () {
     pn = e.data.getVar('PN')
     # This needs to be updated once start using the prebuilt toolchain
-    if not bb.data.inherits_class('native', d):
+    if not bb.data.inherits_class('native', d) and not bb.data.inherits_class('cross', d):
         update_dep_pkgs(e)
 }
 addhandler deps_update_handler
