@@ -533,6 +533,7 @@ def ipk_download(d):
     manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".package_write_ipk"
     bb.utils.mkdirhier(os.path.dirname(manifest_name))
     manifest_file = open(manifest_name, "w")
+    prefix = d.getVar('MLPREFIX') or ""
 
     if server_path:
         for ipk in ipk_list:
@@ -545,6 +546,10 @@ def ipk_download(d):
             if os.path.exists(ipk_deploy_path+"/%s"%ipk):
                 os.unlink(ipk_deploy_path+"/%s"%ipk)
             os.link(ipk_dl_path, ipk_deploy_path+"/%s"%ipk)
+
+            if bb.data.inherits_class('multilib_global', d):
+                if not prefix:
+                    continue
             manifest_file.write(os.path.join(ipk_deploy_path, ipk) + "\n")
     manifest_file.close()
 
@@ -805,16 +810,14 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
         src_dep_bpkg = dep_bpkg[len(prefix):]
     else:
         src_dep_bpkg = dep_bpkg
-    ipkmode = True if d.getVar('IPK_MODE:pn-%s' %src_dep_bpkg) == "1" else False
-    if ipkmode:
-        return (ipkmode, version_mismatch, same_arch)
+    ipkmode = True if src_dep_bpkg in d.getVar("TOOLCHAIN_DEPS_PKGS").split(" ") or src_dep_bpkg in d.getVar("GLIBC_PKGS").split(" ") else False
 
     if is_excluded_pkg(d, dep_bpkg):
         return (ipkmode, version_mismatch, same_arch)
 
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     archs = []
-    oss_ipk_mode = True if "1" == d.getVar('OSS_IPK_MODE') or d.getVar("STACK_LAYER_EXTENSION") else False
+    oss_ipk_mode = True if "1" == d.getVar('OSS_IPK_MODE') or d.getVar("STACK_LAYER_EXTENSION") or ipkmode else False
     for line in (d.getVar('IPK_FEED_URIS') or "").split():
         feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
         if feed is not None:
