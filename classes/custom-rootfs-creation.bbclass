@@ -8,7 +8,7 @@
 
 # This dependency is a work around. This pkg should be moved to 
 # docker as native tools.
-DEPENDS += "nss-native"
+DEPENDS += "nss-native qemuwrapper-cross systemd-systemctl-native"
 
 def get_pkg_install_version(d,release_data_file, pkggrp):
     import re
@@ -158,10 +158,11 @@ python do_update_opkg_config () {
 
     availabe_archs = []
     deploy_dir = d.getVar("DEPLOY_DIR_IPK")
-    entries = os.listdir(deploy_dir)
-    for entry in entries:
-        if os.path.isdir(os.path.join(deploy_dir, entry)):
-            availabe_archs.append(entry)
+    if os.path.exists(deploy_dir):
+        entries = os.listdir(deploy_dir)
+        for entry in entries:
+            if os.path.isdir(os.path.join(deploy_dir, entry)):
+                availabe_archs.append(entry)
 
     feed_arch_list = []
     for dep in sorted(deps_list):
