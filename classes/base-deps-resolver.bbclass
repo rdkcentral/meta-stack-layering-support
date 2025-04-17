@@ -385,8 +385,12 @@ python do_install_ipk_recipe_sysroot () {
         if feed is not None:
             archs.append(feed.group(1))
 
-    for ipk in (d.getVar("IPK_INCLUSION_LIST") or "").split():
-        ldeps.append(ipk)
+    have_ipk_inclusion = True
+    if bb.data.inherits_class('multilib_global', d) and not d.getVar('MLPREFIX'):
+        have_ipk_inclusion = False
+    if have_ipk_inclusion:
+        for ipk in (d.getVar("IPK_INCLUSION_LIST") or "").split():
+            ldeps.append(ipk)
 
     dev_list = ["-dev","-staticdev"]
     for ldep in ldeps:
