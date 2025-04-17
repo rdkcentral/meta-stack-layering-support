@@ -1189,6 +1189,7 @@ python deps_taskhandler() {
     pv = d.getVar('PV')
     pr = d.getVar('PR')
     skip_depends = False
+    have_ipk_deps = True
     version = "%s:%s-%s"%(pe,pv,pr) if pe else "%s-%s"%(pv,pr)
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     version = version.replace("AUTOINC","0")
@@ -1213,7 +1214,9 @@ python deps_taskhandler() {
                     pkg = preferred_provider
                 (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pkg)
                 if ipk_mode:
-                    if staging_ipk_task not in pkgs_list:
+                    if bb.data.inherits_class('multilib_global', d) and not e.data.getVar('MLPREFIX'):
+                        have_ipk_deps = False
+                    if have_ipk_deps and staging_ipk_task not in pkgs_list:
                         pkgs_list.append(staging_ipk_task)
                     continue
                 if skip_depends:
