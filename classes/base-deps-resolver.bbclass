@@ -385,8 +385,12 @@ python do_install_ipk_recipe_sysroot () {
         if feed is not None:
             archs.append(feed.group(1))
 
-    for ipk in (d.getVar("IPK_INCLUSION_LIST") or "").split():
-        ldeps.append(ipk)
+    have_ipk_inclusion = True
+    if bb.data.inherits_class('multilib_global', d) and not d.getVar('MLPREFIX'):
+        have_ipk_inclusion = False
+    if have_ipk_inclusion:
+        for ipk in (d.getVar("IPK_INCLUSION_LIST") or "").split():
+            ldeps.append(ipk)
 
     dev_list = ["-dev","-staticdev"]
     for ldep in ldeps:
@@ -810,7 +814,9 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
         src_dep_bpkg = dep_bpkg[len(prefix):]
     else:
         src_dep_bpkg = dep_bpkg
-    ipkmode = True if src_dep_bpkg in d.getVar("TOOLCHAIN_DEPS_PKGS").split(" ") or src_dep_bpkg in d.getVar("GLIBC_PKGS").split(" ") else False
+    staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
+    if staging_native_docker_path and os.path.exists(staging_native_docker_path):
+        ipkmode = True if src_dep_bpkg in d.getVar("TOOLCHAIN_DEPS_PKGS").split(" ") or src_dep_bpkg in d.getVar("GLIBC_PKGS").split(" ") else False
 
     if is_excluded_pkg(d, dep_bpkg):
         return (ipkmode, version_mismatch, same_arch)
