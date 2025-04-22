@@ -237,6 +237,8 @@ def update_build_tasks(d, arch, machine):
     enable_task(d, "do_package_write_ipk")
     if machine == "native":
         enable_task(d, "do_sls_generate_native_sysroot")
+    if machine == "target":
+        enable_task(d, "do_sls_generate_target_sysroot")
 
     d.setVarFlag("do_populate_sysroot", "prefuncs", " ")
     d.setVarFlag("do_populate_sysroot", "postfuncs", " ")
@@ -266,14 +268,12 @@ do_package_write_ipk:prepend() {
     manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
     if os.path.exists(manifest_name):
         bb.note("Running ipk_download custom task and skipping do_package_write_ipk")
-        ipk_download(d)
         return
 }
 do_package_write_ipk_setscene:prepend() {
     manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
     if os.path.exists(manifest_name):
         bb.note("Running ipk_download custom task and skipping do_package_write_ipk_setscene")
-        ipk_download(d)
         return
 }
 python do_sls_generate_native_sysroot(){
@@ -343,6 +343,7 @@ do_populate_sysroot_setscene:prepend() {
 }
 
 addtask do_sls_generate_native_sysroot before do_populate_sysroot
+addtask do_sls_generate_target_sysroot before do_populate_sysroot
 
 # Install the dev ipks to the component sysroot
 python do_install_ipk_recipe_sysroot () {
@@ -511,16 +512,14 @@ python do_install_ipk_recipe_sysroot () {
             subprocess.check_output(p, shell=True, stderr=subprocess.STDOUT)
 }
 
-def ipk_download(d):
+def ipk_download(d, ipk_list, arch):
     import subprocess
     import shutil
     import re
-    arch = d.getVar('PACKAGE_ARCH')
     deploy_dir = d.getVar("DEPLOY_DIR_IPK")
     ipk_deploy_path = os.path.join(deploy_dir, arch)
     if not os.path.exists(ipk_deploy_path):
         bb.utils.mkdirhier(ipk_deploy_path)
-    ipk_list = get_ipk_list(d,arch)
 
     download_dir = d.getVar("IPK_CACHE_DIR", True)
     if not os.path.exists(download_dir):
@@ -551,11 +550,38 @@ def ipk_download(d):
                 os.unlink(ipk_deploy_path+"/%s"%ipk)
             os.link(ipk_dl_path, ipk_deploy_path+"/%s"%ipk)
 
-            if bb.data.inherits_class('multilib_global', d):
-                if not prefix:
-                    continue
+            #if bb.data.inherits_class('multilib_global', d):
+                #if not prefix:
+                    #continue
             manifest_file.write(os.path.join(ipk_deploy_path, ipk) + "\n")
     manifest_file.close()
+
+def sls_cmdline(command):
+    from subprocess import PIPE, Popen
+    process = Popen(args=command, stdout=PIPE, shell=True)
+    return process.communicate()[0]
+
+def sls_install_ipk(d, ipk_list, arch):
+    import shutil
+    import os
+
+    source_path = d.getVar("IPK_CACHE_DIR", True)
+    install_dir = d.getVar("D", True)
+    ipk_dest_dir = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), d.getVar("PN", True))
+    bb.utils.mkdirhier(ipk_dest_dir)
+
+    for ipk in ipk_list:
+        source_name = os.path.join(source_path, ipk)
+        if ".ipk" in ipk:
+            cmd = "ar x %s && tar -C %s --no-same-owner -xpf data.tar.xz && rm data.tar.xz && rm -rf control.tar.gz && rm -rf debian-binary"%(source_name, ipk_dest_dir)
+            sls_cmdline(cmd)
+
+python do_sls_generate_target_sysroot(){
+    arch = d.getVar('PACKAGE_ARCH')
+    ipk_list = get_ipk_list(d,arch)
+    ipk_download(d, ipk_list, arch)
+    sls_install_ipk(d, ipk_list, arch)
+}
 
 def get_ipk_list(d, pkg_arch):
     import glob
@@ -823,6 +849,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
 
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     archs = []
+    OSS_IPK_MODE = "1"
     oss_ipk_mode = True if "1" == d.getVar('OSS_IPK_MODE') or d.getVar("STACK_LAYER_EXTENSION") or ipkmode else False
     for line in (d.getVar('IPK_FEED_URIS') or "").split():
         feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
