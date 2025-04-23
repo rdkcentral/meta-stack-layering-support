@@ -1427,6 +1427,38 @@ def create_feed_index(arg):
     if result:
         bb.note(result)
 
+def generate_packages_and_versions_md(pkgs_file, pkgs_dir):
+    import os
+    import re
+
+    bb.note("Generate PackagesAndVersions.md file with list of packages and their versions excluding dbg and dev packages.")
+    output_md_file = os.path.join(pkgs_dir, "PackagesAndVersions.md")
+
+    if os.path.exists(output_md_file):
+        os.remove(output_md_file)
+
+    table = ["# Package List", "", "| Package Name | Version |", "|--------------|---------|"]
+
+    with open(pkgs_file, "r") as f:
+        package_name = None
+        version = None
+        for line in f:
+            if line.startswith("Package:"):
+                package_name = line.split(":")[1].strip()
+            elif line.startswith("Version:"):
+                version = line.split(":")[1].strip()
+
+            if package_name and version:
+                if not re.search(r"-(dbg|dev)$", package_name):
+                    table.append(f"| {package_name} | {version} |")
+                package_name = None
+                version = None
+
+    with open(output_md_file, "w") as f:
+        f.write("\n".join(table))
+
+    bb.note(f"PackagesAndVersions.md file created at: {output_md_file}")
+
 # This is temporary. Once opkg-utils is part of Docker, we can remove it.
 # Also, need to check if the recipe-native can be generated for the default package.
 OPKG_UTILS_SYSROOT = "${COMPONENTS_DIR}/${BUILD_ARCH}/opkg-utils-native"
@@ -1473,6 +1505,12 @@ python feed_index_creation () {
         return
 
     oe.utils.multiprocess_launch(create_feed_index, cmds, e.data)
+
+    for arch in archs.split():
+        pkgs_dir = os.path.join(deploy_dir, arch)
+        pkgs_file = os.path.join(pkgs_dir, "Packages")
+        if os.path.exists(pkgs_file):
+            generate_packages_and_versions_md(pkgs_file, pkgs_dir)
 }
 
 addhandler feed_index_creation
