@@ -1431,9 +1431,9 @@ def generate_packages_and_versions_md(pkgs_file, pkgs_dir):
     import os
     import re
 
-    bb.note("Generate PackagesAndVersions.md file with list of packages and their versions excluding dbg and dev packages.")
-    output_md_file = os.path.join(pkgs_dir, "PackagesAndVersions.md")
+    bb.note("Generating PackagesAndVersions.md file with a list of packages and their versions, excluding dbg and dev packages.")
 
+    output_md_file = os.path.join(pkgs_dir, "PackagesAndVersions.md")
     if os.path.exists(output_md_file):
         os.remove(output_md_file)
 
@@ -1449,8 +1449,14 @@ def generate_packages_and_versions_md(pkgs_file, pkgs_dir):
                 version = line.split(":")[1].strip()
 
             if package_name and version:
+                # Remove MLPREFIX dynamically if present
+                mlprefix_match = re.match(r"^(lib32-|lib64-|multilib-)", package_name)
+                if mlprefix_match:
+                    package_name = package_name[len(mlprefix_match.group(0)):]
+
                 if not re.search(r"-(dbg|dev)$", package_name):
                     table.append(f"| {package_name} | {version} |")
+
                 package_name = None
                 version = None
 
