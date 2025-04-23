@@ -1454,7 +1454,7 @@ def generate_packages_and_versions_md(pkgs_file, pkgs_dir):
                 if mlprefix_match:
                     package_name = package_name[len(mlprefix_match.group(0)):]
 
-                if not re.search(r"-(dbg|dev)$", package_name):
+                if not re.search(r"-(dbg|dev|src)$", package_name):
                     table.append(f"| {package_name} | {version} |")
 
                 package_name = None
