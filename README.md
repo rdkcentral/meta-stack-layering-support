@@ -1,19 +1,50 @@
 # meta-stack-layering-support
 
-*Stack layering support with IPK package management system.*
+*Stack layering module with IPK package management system.*
 
 **Maintainer:**  
 Sreejith Ravi
 
 ---
+## Directory Layout Sketch
 
+```bash
+├── CHANGELOG.md
+├── classes
+│   ├── base-deps-resolver.bbclass
+│   ├── custom-rootfs-creation.bbclass
+│   ├── gir-ipk-qemuwrapper.bbclass
+│   ├── kernel-devel.bbclass
+│   ├── staging-ipk.bbclass
+│   └── update-base-files-hostname.bbclass
+├── conf
+│   ├── include
+│   │   └── pkg-resolver.conf
+│   └── layer.conf
+├── CONTRIBUTING.md
+├── COPYING -> LICENSE
+├── docs
+│   ├── ipk-mode-support.md
+│   ├── native-toolchain-support.md
+│   ├── prerequisite.md
+│   ├── stack-layering-support.md
+│   └── variables.md
+├── lib
+│   └── oe
+│       └── sls_utils.py
+├── LICENSE
+├── NOTICE
+├── README.md
+└── recipes-core
+    └── staging-ipk-pkgs.bb
+```
 ## Introduction
 
 The **meta-stack-layering-support** layer enhances our Yocto-based (`yotco`) build process by enabling a modular, IPK-driven workflow. Instead of rebuilding every component from source in a monolithic fashion, this layer allows you to:
 
-- **Consume prebuilt IPKs** when versions match, speeding up builds and saving disk space.  
-- **Rebuild from source** only on version changes, ensuring traceability and consistency.  
-- **Assemble custom rootfs images** by staging IPKs into both final images and per-recipe sysroots.
+- **Consume prebuilt IPKs** from other stack layers without using package recipes. It also helps with IPK consumption within the same stack layer when versions match — speeding up builds and saving disk space.  
+- **Rebuild from source** based on version changes, ensuring traceability and consistency.  
+- **Assemble custom rootfs images** by using both in IPK mode and source mode packages.
 
 Central to this functionality are several BBClasses that automate dependency resolution, metadata generation, and sysroot population. The sections below explain their roles and how to configure and use them.
 
@@ -38,12 +69,13 @@ These classes drive the IPK-based layering logic. They are globally inherited or
 
 - **base-deps-resolver**  
   Parses `DEPENDS` and `RDEPENDS` in each recipe, generates IPK metadata files (`.pcdeps`, `.shlibdeps`), and creates hardlinks for required files in the recipe sysroot. This ensures broken or missing dependencies are captured and later resolved.
+  It is globally inherited.
 
 - **staging-ipk**  
   Installs IPKs identified by `base-deps-resolver` into a shared staging directory. It uses caching flags (`--no-install-recommends`, `--host-cache-dir`) to minimize disk usage and speed up repeated operations.
 
 - **custom-rootfs-creation**  
-  Manages installation of layer-provided IPKs into the final rootfs. Hooks (`update_opkg_config`, `update_install_pkgs_with_version`) customize `opkg.conf` and pin versions for development vs. release workflows.
+  Manages installation of layer-provided IPKs into the final rootfs. 
 
 - **gir-ipk-qemuwrapper**  
   Provides QEMU wrapper functions to support GObject Introspection tools when cross-staging IPKs.
@@ -64,7 +96,7 @@ These classes drive the IPK-based layering logic. They are globally inherited or
 
 ---
 
-## IPK Mode Support
+## IPK Mode Support experimental
 
 **Purpose:** Dynamically switch between source builds and IPK consumption based on version continuity.
 
@@ -77,11 +109,11 @@ _For detailed steps and examples, see [IPK Mode Support](https://github.com/rdkc
 
 ## Native Toolchain Support
 
-**Purpose:** Prebuild and reuse native packages (e.g., `opkg-native`, `kernel-devel`) within VM/Docker workflows.
+**Purpose:** Prebuild and reuse native packages within VM/Docker workflows.
 
-1. Run `bitbake <native-recipe>` (e.g., `bitbake opkg-native`).  
-2. Copy native IPKs from `${COMPONENTS_DIR}/${BUILD_ARCH}` to a staging path (default `/opt/staging-native/x86_64`), or set a custom path via `DOCKER_NATIVE_SYSROOT`.  
-3. Inherit `kernel-devel` to generate kernel development IPKs for module compilation.
+In the stack layering model, we have separate build projects for each layer, along with an additional IA Assembler project for creating the full stack image. However, in all projects, the toolchain and native packages are built from source, which is a drawback of our layered model approach.<br/>
+
+To address this, we have designed and integrated a new feature that allows consuming native packages and the toolchain from Docker/VM as prebuilts. This feature helps avoid building the toolchain and packages from source.
 
 This approach standardizes the host toolchain and dramatically reduces rebuild times in containerized builds.
 
@@ -91,13 +123,7 @@ _For a full walkthrough, see [Native Toolchain Support](https://github.com/rdkce
 
 ## Custom Rootfs Creation & IPK Dependency Resolution
 
-**Purpose:** Integrate IPK-only components into rootfs images and recipe sysroots without corresponding BitBake recipes.
-
-- **`custom-rootfs-creation.bbclass`**: Adjusts `opkg.conf` and enforces versioned IPK installation for final images.  
-- **`base-deps-resolver.bbclass`**: Captures missing dependencies during parsing, updates metadata, and injects `staging-ipk-pkgs` as a dependency.  
-- **`staging-ipk.bbclass` & `staging-ipk-pkgs.bb`**: Populate a shared staging directory, then hardlink files into each recipe sysroot to satisfy `DEPENDS`/`RDEPENDS`.
-
-This design ensures that only the minimal required files are staged, avoiding full installs and preserving build efficiency.
+**Purpose:** Create custom opkg configuration and generate version info for the packagegroups set in the IMAGE_INSTALL. This will support rootfs genration using both in IPK mode and source mode packages
 
 _For design details and log locations, see [Stack Layering Support](https://github.com/rdkcentral/meta-stack-layering-support/blob/main/docs/stack-layering-support.md)._
 
@@ -107,7 +133,7 @@ _For design details and log locations, see [Stack Layering Support](https://gith
 
 Add these settings to `local.conf` or your layer’s `conf/layer.conf` under an “IPK Layering” section:
 
-| Variable                  | Purpose                                                                             | Example                                                           |
+  | Variable                  | Purpose                                                                             | Usage/path                                                           |
 |---------------------------|-------------------------------------------------------------------------------------|-------------------------------------------------------------------|
 | `DEPLOY_IPK_FEED`         | Generate a local IPK feed (set to `"1"`).                                           | `DEPLOY_IPK_FEED = "1"`                                           |
 | `FEED_INFO_DIR`           | Directory for generated IPK feed metadata.                                          | `FEED_INFO_DIR = "${TMPDIR}/ipk-feed-info"`                      |
@@ -124,12 +150,7 @@ _Refer to the full variable guide: [Variables](https://github.com/rdkcentral/met
 
 ## Prerequisites
 
-Before enabling stack layering, verify:
-
-- **Yocto/OE-core** with patch `4b5c8b7` applied (`Requires.private` support).  
-- `meta-stack-layering-support` at **v2.0.0** or later.  
-- Artifactory feed URIs set via `STACK_LAYER_EXTENSION` and `IPK_FEED_URIS`.  
-- BitBake environment sourced (`oe-init-build-env`) and variables like `${COMPONENTS_DIR}` defined.
+Before enabling stack layering, verify with prerequisites checklist:
 
 _See the detailed prerequisites checklist: [Prerequisite](https://github.com/rdkcentral/meta-stack-layering-support/blob/main/docs/prerequisite.md)._
 
