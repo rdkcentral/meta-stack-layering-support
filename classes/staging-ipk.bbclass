@@ -238,6 +238,8 @@ fakeroot python do_populate_ipk_sysroot(){
         bb.note("ipk installation not based on target build. Installing depends ipk of all recipes")
         files = os.listdir(listpath)
 
+    prefix = d.getVar('MLPREFIX') or ""
+
     for file in files:
         if "packagegroup-" in file:
             continue
@@ -258,6 +260,9 @@ fakeroot python do_populate_ipk_sysroot(){
         feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
         if feed is not None:
             archs.append(feed.group(1))
+    if not archs:
+        return
+
     for pkg in ipk_pkgs:
         is_excluded = False
         dev_pkgs, staticdev_pkgs, rel_pkgs = ([] for i in range(3))
@@ -317,7 +322,6 @@ fakeroot python do_populate_ipk_sysroot(){
                         recipe_info = glob.glob(pkg_path + "source/%s_*"%pkg)[0]
                         arch_check =  True
                     else:
-                        prefix = d.getVar('MLPREFIX') or ""
                         if prefix and pkg.startswith(prefix):
                             ml_pkg = "%slib%s"%(prefix,pkg[len(prefix):])
                         else:
@@ -347,6 +351,8 @@ fakeroot python do_populate_ipk_sysroot(){
                 for dev_pkg in dev_pkgs:
                     if pkg_ver:
                         dev_pkg = dev_pkg+pkg_ver.strip("()")
+                    if prefix and not dev_pkg.startswith(prefix):
+                        continue
                     if dev_pkg not in inst_list:
                         if not is_excluded:
                             inst_list.append(dev_pkg)
@@ -354,6 +360,8 @@ fakeroot python do_populate_ipk_sysroot(){
                 for staticdev_pkg in staticdev_pkgs:
                     if pkg_ver:
                         staticdev_pkg = staticdev_pkg+pkg_ver.strip("()")
+                    if prefix and not staticdev_pkg.startswith(prefix):
+                        continue
                     if staticdev_pkg not in inst_list:
                         if not is_excluded:
                             inst_list.append(staticdev_pkg)
@@ -361,6 +369,8 @@ fakeroot python do_populate_ipk_sysroot(){
                 for rel_pkg in rel_pkgs:
                     if pkg_ver:
                         rel_pkg = rel_pkg+pkg_ver.strip("()")
+                    if prefix and not rel_pkg.startswith(prefix):
+                        continue
                     if rel_pkg not in inst_list:
                         if not is_excluded:
                             inst_list.append(rel_pkg)
