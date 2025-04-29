@@ -146,6 +146,8 @@ _For detailed steps and examples, see [IPK Mode Support](https://github.com/rdkc
 | `KERNEL_IMAGEDEST`        | Kernel image destination folder which is required for prebuilt consumption.        |
 | `FIRMWARE_IMAGEDEST`      | Firmware destination folder which is required for prebuilt consumption.            |
 
+
+_Refer to the full variable guide: [Variables](https://github.com/rdkcentral/meta-stack-layering-support/blob/main/docs/variables.md)._
 ---
 
 ## Prerequisites
