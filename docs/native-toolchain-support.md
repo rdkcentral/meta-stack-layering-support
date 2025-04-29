@@ -1,8 +1,8 @@
 ### Steps to generate the prebuilt native packages support in VM/docker:
-- Build the required native packages using bitbake command
-- Copy the native package prebuilts from ${COMPONENTS_DIR}/${BUILD_ARCH}/ to the Docker or VM path. <br />
-     The default path is set to /opt/staging-native/x86_64. <br /> 
-     If you need to copy to a different path, you should update the path using DOCKER_NATIVE_SYSROOT. <br />
+- Build the required native packages using bitbake command. Example "bitbake opkg-native"
+- Copy the native package prebuilts from build directory "${COMPONENTS_DIR}/${BUILD_ARCH}" to the Docker or VM path. <br />
+     The default path is set to "/opt/staging-native/x86_64". <br /> 
+     If we need to copy to a different path, we should update the path variable "DOCKER_NATIVE_SYSROOT" using new path. <br />
 - Use the meta-stack-layering-support tag 2.0.0 or higher
 
 ### Standardize the TARGET_VENDOR variable
