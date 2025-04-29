@@ -21,3 +21,12 @@ List of packages to be excluded from IPK consumption.
 
 - OPKG_ARCH_PRIORITY <br>
 configure the priority of the IPK feed. Ex. OPKG_ARCH_PRIORITY:<arch> = "<priority>".
+
+- DOCKER_NATIVE_SYSROOT <br>   
+Path to the prebuilt toolchain and native packages.
+
+- KERNEL_IMAGEDEST <br>
+Kernel image destination folder which is required for prebuilt consumption.
+
+- FIRMWARE_IMAGEDEST <br> 
+Firmware destination folder which is required for prebuilt consumption.
