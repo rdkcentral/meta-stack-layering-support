@@ -162,12 +162,12 @@ _See the detailed prerequisites checklist: [Prerequisite](https://github.com/rdk
 ## Further Reading
 
 - **IPK Mode Support**: Version-based source vs. IPK builds.  
-  https://github.com/rdkcentral/meta-stack-layering-support/blob/main/docs/ipk-mode-support.md  
+  https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/ipk-mode-support.md  
 - **Native Toolchain Support**: VM/Docker native package staging.  
-  https://github.com/rdkcentral/meta-stack-layering-support/blob/main/docs/native-toolchain-support.md  
+  https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/native-toolchain-support.md  
 - **Prerequisite**: Yocto version and layer setup.  
-  https://github.com/rdkcentral/meta-stack-layering-support/blob/main/docs/prerequisite.md  
+  https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/prerequisite.md  
 - **Stack Layering Support**: Core bbclass extensions and flow.  
-  https://github.com/rdkcentral/meta-stack-layering-support/blob/main/docs/stack-layering-support.md  
+  https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/stack-layering-support.md  
 - **Variables**: Complete list of config variables.  
-  https://github.com/rdkcentral/meta-stack-layering-support/blob/main/docs/variables.md
+  https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/variables.md
