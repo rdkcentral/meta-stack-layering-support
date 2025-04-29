@@ -106,7 +106,7 @@ To address this, we have designed and integrated a new feature that allows consu
 
 This approach standardizes the host toolchain and dramatically reduces rebuild times in containerized builds.
 
-_For a full walkthrough, see [Native Toolchain Support](https://github.com/rdkcentral/meta-stack-layering-support/blob/main/docs/native-toolchain-support.md)._
+_For a full walkthrough, see [Native Toolchain Support](https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/native-toolchain-support.md)._
 
 ---
 
