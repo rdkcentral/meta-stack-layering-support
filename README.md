@@ -131,20 +131,20 @@ _For detailed steps and examples, see [IPK Mode Support](https://github.com/rdkc
 
 ## Configuration Variables
 
-Add these settings to `local.conf` or your layer’s `conf/layer.conf` under an “IPK Layering” section:
-
-  | Variable                  | Purpose                                                                             | Usage/path                                                           |
-|---------------------------|-------------------------------------------------------------------------------------|-------------------------------------------------------------------|
-| `DEPLOY_IPK_FEED`         | Generate a local IPK feed (set to `"1"`).                                           | `DEPLOY_IPK_FEED = "1"`                                           |
-| `FEED_INFO_DIR`           | Directory for generated IPK feed metadata.                                          | `FEED_INFO_DIR = "${TMPDIR}/ipk-feed-info"`                      |
-| `IPK_PKGGROUP_VER_INFO`   | Store packagegroup version details for final image metadata.                        | `IPK_PKGGROUP_VER_INFO = "${WORKDIR}/pkggroup-versions"`         |
-| `SYSROOT_IPK`             | Path to the common staging directory for IPK files.                                 | `SYSROOT_IPK = "${TOPDIR}/staging-ipk"`                          |
-| `IPK_CACHE_DIR`           | Directory to cache downloaded IPKs before staging.                                  | `IPK_CACHE_DIR = "${DL_DIR}/ipk-cache"`                          |
-| `IPKGCONF_LAYERING`       | Path to a custom `opkg.conf` used for stack-layering operations.                    | `IPKGCONF_LAYERING = "${LAYERDIR}/conf/opkg-layering.conf"`      |
-| `IPK_EXCLUSION_LIST`      | Space-separated list of recipes to force source builds.                             | `IPK_EXCLUSION_LIST = "busybox libssl"`                          |
-| `OPKG_ARCH_PRIORITY`      | Define IPK feed priority per architecture (format: `<arch> = "<prio>"`).           | `OPKG_ARCH_PRIORITY:x86_64 = "5"`                                |
-
-_Refer to the full variable guide: [Variables](https://github.com/rdkcentral/meta-stack-layering-support/blob/main/docs/variables.md)._
+| Variable                  | Purpose                                                                            |
+|---------------------------|------------------------------------------------------------------------------------|
+| `DEPLOY_IPK_FEED`         | Generate a local IPK feed (set to `"1"`).                                          |
+| `FEED_INFO_DIR`           | Directory for generated IPK feed metadata.                                         |
+| `IPK_PKGGROUP_VER_INFO`   | Store packagegroup version details for final image metadata.                       |
+| `SYSROOT_IPK`             | Path to the common staging directory for IPK files.                                |
+| `IPK_CACHE_DIR`           | Directory to cache downloaded IPKs before staging.                                 |
+| `IPKGCONF_LAYERING`       | Path to a custom `opkg.conf` used for stack-layering operations.                   |
+| `IPK_EXCLUSION_LIST`      | Space-separated list of packages to force source builds.                           |
+| `IPK_INCLUSION_LIST`      | Space-separated list of IPK packages to force install.                             |
+| `OPKG_ARCH_PRIORITY`      | Define IPK feed priority per architecture (format: `<arch> = "<prio>"`).           |
+| `DOCKER_NATIVE_SYSROOT`   | Path to the prebuilt toolchain and native packages.                                |
+| `KERNEL_IMAGEDEST`        | Kernel image destination folder which is required for prebuilt consumption.        |
+| `FIRMWARE_IMAGEDEST`      | Firmware destination folder which is required for prebuilt consumption.            |
 
 ---
 
