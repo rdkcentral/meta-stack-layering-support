@@ -42,9 +42,9 @@ Sreejith Ravi
 
 The **meta-stack-layering-support** layer enhances our Yocto-based (`yotco`) build process by enabling a modular, IPK-driven workflow. Instead of rebuilding every component from source in a monolithic fashion, this layer allows you to:
 
-- **Consume prebuilt IPKs** from other stack layers without using package recipes. It also helps with IPK consumption within the same stack layer when versions match — speeding up builds and saving disk space.  
+- **Consume prebuilt IPKs** from other stack layers without using package recipes. It also helps IPK consumption within the same stack layer when versions match — speeding up builds and saving disk space.  
 - **Rebuild from source** based on version changes, ensuring traceability and consistency.  
-- **Assemble custom rootfs images** by using both in IPK mode and source mode packages.
+- **Assemble custom rootfs images** by using both IPK mode and source mode packages.
 
 Central to this functionality are several BBClasses that automate dependency resolution, metadata generation, and sysroot population. The sections below explain their roles and how to configure and use them.
 
