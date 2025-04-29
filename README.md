@@ -96,17 +96,6 @@ These classes drive the IPK-based layering logic. They are globally inherited or
 
 ---
 
-## IPK Mode Support experimental
-
-**Purpose:** Dynamically switch between source builds and IPK consumption based on version continuity.
-
-- Skip BitBake tasks and fetch prebuilt `.ipk` feeds when package versions align with previous releases.  
-- Trigger a rebuild from source if a package or any dependency experiences a major version bump, providing clear parse-time errors with guidance for resolution.
-
-_For detailed steps and examples, see [IPK Mode Support](https://github.com/rdkcentral/meta-stack-layering-support/blob/main/docs/ipk-mode-support.md)._
-
----
-
 ## Native Toolchain Support
 
 **Purpose:** Prebuild and reuse native packages within VM/Docker workflows.
@@ -126,6 +115,17 @@ _For a full walkthrough, see [Native Toolchain Support](https://github.com/rdkce
 **Purpose:** Create custom opkg configuration and generate version info for the packagegroups set in the IMAGE_INSTALL. This will support rootfs genration using both in IPK mode and source mode packages
 
 _For design details and log locations, see [Stack Layering Support](https://github.com/rdkcentral/meta-stack-layering-support/blob/main/docs/stack-layering-support.md)._
+
+---
+
+## IPK Mode Support - experimental
+
+**Purpose:** Dynamically switch between source builds and IPK consumption based on version continuity.
+
+- Skip BitBake tasks and fetch prebuilt `.ipk` feeds when package versions align with previous releases.  
+- Trigger a rebuild from source if a package or any dependency experiences a major version bump, providing clear parse-time errors with guidance for resolution.
+
+_For detailed steps and examples, see [IPK Mode Support](https://github.com/rdkcentral/meta-stack-layering-support/blob/main/docs/ipk-mode-support.md)._
 
 ---
 
