@@ -1427,75 +1427,76 @@ def create_feed_index(arg):
     if result:
         bb.note(result)
 
+# Helper function to create a markup document with a list of IPKs in the respective deploy directory.
+# Set the variable 'GENERATE_IPK_VERSION_DOC' to enable this feature.
+def generate_packages_and_versions_md(d):
+    import os
+
+    machine = d.getVar('MACHINE')
+    deploy_dir_ipk = d.getVar('DEPLOY_DIR_IPK')
+    if not os.path.exists(deploy_dir_ipk):
+        return
+
+    archs = d.getVar("ALL_MULTILIB_PACKAGE_ARCHS").split()
+    for arch in archs:
+        target_dir = os.path.join(deploy_dir_ipk, arch)
+        output_file = os.path.join(target_dir, "PackagesAndVersions.md")
+
+        if not os.path.exists(target_dir):
+            continue
+
+        # Collect and filter package names and versions
+        packages = []
+        for file in os.listdir(target_dir):
+            # Filter out unwanted packages and process only valid .ipk files
+            if file.endswith(".ipk") and not any(
+                suffix in file for suffix in ("-dbg", "-dev", "-static", "-staticdev", "-src")
+            ):
+                # Split the filename at the first "_" for package name and the rest for version
+                split_index = file.find("_")
+                if split_index != -1:
+                    pkg_name = file[:split_index]
+                    pkg_version = file[split_index + 1:].rsplit(".ipk", 1)[0]
+
+                    # Remove architecture suffix from version
+                    if "_" in pkg_version:
+                        pkg_version = pkg_version.rsplit("_", 1)[0]
+
+                    packages.append((pkg_name, pkg_version))
+
+        # Separate and sort packages
+        priority_entries = sorted(
+            [pkg for pkg in packages if "packagegroup-" in pkg[0]],
+            key=lambda x: x[0]
+        )
+        other_entries = sorted(
+            [pkg for pkg in packages if "packagegroup-" not in pkg[0]],
+            key=lambda x: x[0]
+        )
+
+        # Combine priority packages at the top
+        sorted_packages = priority_entries + other_entries
+
+        # Write to PackagesAndVersions.md
+        with open(output_file, "w") as f:
+            f.write("# Packages and Versions\n\n")
+            f.write("| Package Name | Package Version |\n")
+            f.write("|--------------|-----------------|\n")
+            for pkg_name, pkg_version in sorted_packages:
+                f.write(f"| {pkg_name} | {pkg_version} |\n")
+
+        bb.note(f"Generated {output_file}")
+
 # This is temporary. Once opkg-utils is part of Docker, we can remove it.
 # Also, need to check if the recipe-native can be generated for the default package.
 OPKG_UTILS_SYSROOT = "${COMPONENTS_DIR}/${BUILD_ARCH}/opkg-utils-native"
 OPKG_INDEX_FILE = "${OPKG_UTILS_SYSROOT}${bindir_native}/opkg-make-index"
 
-# Helper task to create markup document with list of IPKs in respective deploy directory.
-# Set the variable 'GENERATE_IPK_VERSION_DOC' to enable this feature.
-python generate_packages_and_versions_md() {
-    import os
-    import re
-
-    # Get the MACHINE and IPK deployment directory
-    machine = d.getVar('MACHINE')
-    deploy_dir_ipk = d.getVar('DEPLOY_DIR_IPK')
-    target_dir = os.path.join(deploy_dir_ipk, machine)
-
-    # Path to the PackagesAndVersions.md file
-    output_file = os.path.join(target_dir, "PackagesAndVersions.md")
-
-    # Ensure the target directory exists
-    if not os.path.exists(target_dir):
-        bb.warn(f"Target directory {target_dir} does not exist. Skipping PackagesAndVersions.md generation.")
-        return
-
-    # Get MLPREFIX (e.g., "lib32-")
-    mlprefix = d.getVar('MLPREFIX') or ""
-
-    # Collect package names and versions
-    packages = []
-    for file in os.listdir(target_dir):
-        if file.endswith(".ipk"):
-            # Extract package name and version
-            pkg_name, pkg_version = file.rsplit("_", 1)
-            pkg_version = pkg_version.split(".ipk")[0]
-
-            # Skip dbg/dev/src/staticdev packages
-            if re.search(r"-(dbg|dev|staticdev|src)$", pkg_name):
-                continue
-
-            # Remove MLPREFIX (e.g., "lib32-") from the package name
-            if pkg_name.startswith(mlprefix):
-                pkg_name = pkg_name[len(mlprefix):]
-
-            packages.append((pkg_name, pkg_version))
-
-    # Sort packages alphabetically by name
-    packages.sort(key=lambda x: x[0])
-
-    # Separate priority packages (matching "packagegroup-*-layer") and others
-    priority_entries = [pkg for pkg in packages if re.match(r"packagegroup-.*-layer", pkg[0])]
-    other_entries = [pkg for pkg in packages if not re.match(r"packagegroup-.*-layer", pkg[0])]
-
-    # Combine priority packages at the top
-    sorted_packages = priority_entries + other_entries
-
-    # Write to PackagesAndVersions.md
-    with open(output_file, "w") as f:
-        f.write("# Packages and Versions\n\n")
-        f.write("| Package Name | Package Version |\n")
-        f.write("|--------------|-----------------|\n")
-        for pkg_name, pkg_version in sorted_packages:
-            f.write(f"| {pkg_name} | {pkg_version} |\n")
-
-    bb.note(f"Generated {output_file}")
-}
-
 python feed_index_creation () {
-    if d.getVar('GENERATE_IPK_VERSION_DOC') == "1":
-        generate_packages_and_versions_md()
+    if e:
+        d = e.data
+        if d.getVar('GENERATE_IPK_VERSION_DOC') == "1":
+            generate_packages_and_versions_md(d)
 
     if e.data.getVar("DEPLOY_IPK_FEED") == "0":
         return
@@ -1543,7 +1544,6 @@ addhandler feed_index_creation
 feed_index_creation[eventmask] = "bb.event.BuildCompleted"
 
 python get_pkgs_handler () {
-
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     update_check = False
     if isinstance(e,bb.event.DepTreeGenerated):
