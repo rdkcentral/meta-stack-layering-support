@@ -351,8 +351,7 @@ fakeroot python do_populate_ipk_sysroot(){
                 for dev_pkg in dev_pkgs:
                     if pkg_ver:
                         dev_pkg = dev_pkg+pkg_ver.strip("()")
-                    if prefix and not dev_pkg.startswith(prefix):
-                        if (prefix+dev_pkg) in dev_pkgs:
+                    if prefix and not dev_pkg.startswith(prefix) and "firmware" not in dev_pkg:
                             continue
                     if dev_pkg not in inst_list:
                         if not is_excluded:
@@ -361,10 +360,8 @@ fakeroot python do_populate_ipk_sysroot(){
                 for staticdev_pkg in staticdev_pkgs:
                     if pkg_ver:
                         staticdev_pkg = staticdev_pkg+pkg_ver.strip("()")
-                    if prefix and not staticdev_pkg.startswith(prefix):
-                        if (prefix+staticdev_pkg) in staticdev_pkgs:
+                    if prefix and not staticdev_pkg.startswith(prefix) and "firmware" not in staticdev_pkg:
                             continue
-                        continue
                     if staticdev_pkg not in inst_list:
                         if not is_excluded:
                             inst_list.append(staticdev_pkg)
@@ -372,10 +369,8 @@ fakeroot python do_populate_ipk_sysroot(){
                 for rel_pkg in rel_pkgs:
                     if pkg_ver:
                         rel_pkg = rel_pkg+pkg_ver.strip("()")
-                    if prefix and not rel_pkg.startswith(prefix):
-                        if (prefix+rel_pkg) in rel_pkgs:
+                    if prefix and not rel_pkg.startswith(prefix) and "firmware" not in rel_pkg:
                             continue
-                        continue
                     if rel_pkg not in inst_list:
                         if not is_excluded:
                             inst_list.append(rel_pkg)
