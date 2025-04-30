@@ -1,6 +1,9 @@
 - DEPLOY_IPK_FEED <br>
 DEPLOY_IPK_FEED to "1", which will generate local deploy ipk feed
 
+- GENERATE_IPK_VERSION_DOC <br>
+GENERATE_IPK_VERSION_DOC to "1" to generate ipk feed specific version information documentation of respective packages.
+
 - FEED_INFO_DIR <br>
 Pkgdata directory to store all the ipk feed information
 

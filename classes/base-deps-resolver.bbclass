@@ -1437,7 +1437,12 @@ def generate_packages_and_versions_md(pkgs_file, pkgs_dir):
     if os.path.exists(output_md_file):
         os.remove(output_md_file)
 
+    # Table header
     table = ["# Package List", "", "| Package Name | Version |", "|--------------|---------|"]
+
+    # Lists to separate packagegroup* and other packages
+    packagegroup_entries = []
+    other_entries = []
 
     with open(pkgs_file, "r") as f:
         package_name = None
@@ -1449,16 +1454,24 @@ def generate_packages_and_versions_md(pkgs_file, pkgs_dir):
                 version = line.split(":")[1].strip()
 
             if package_name and version:
-                # Remove MLPREFIX dynamically if present
                 mlprefix_match = re.match(r"^(lib32-|lib64-|multilib-)", package_name)
                 if mlprefix_match:
                     package_name = package_name[len(mlprefix_match.group(0)):]
 
+                # Exclude dbg, dev, and src packages
                 if not re.search(r"-(dbg|dev|src)$", package_name):
-                    table.append(f"| {package_name} | {version} |")
+                    entry = f"| {package_name} | {version} |"
+                    if package_name.startswith("packagegroup"):
+                        packagegroup_entries.append(entry)
+                    else:
+                        other_entries.append(entry)
 
                 package_name = None
                 version = None
+
+    # Combine packagegroup* entries first, followed by other entries
+    table.extend(sorted(packagegroup_entries))
+    table.extend(sorted(other_entries))
 
     with open(output_md_file, "w") as f:
         f.write("\n".join(table))
@@ -1511,12 +1524,14 @@ python feed_index_creation () {
         return
 
     oe.utils.multiprocess_launch(create_feed_index, cmds, e.data)
-
-    for arch in archs.split():
-        pkgs_dir = os.path.join(deploy_dir, arch)
-        pkgs_file = os.path.join(pkgs_dir, "Packages")
-        if os.path.exists(pkgs_file):
-            generate_packages_and_versions_md(pkgs_file, pkgs_dir)
+    if d.getVar("GENERATE_IPK_VERSION_DOC") == "1":
+        for arch in archs.split():
+            pkgs_dir = os.path.join(deploy_dir, arch)
+            pkgs_file = os.path.join(pkgs_dir, "Packages")
+            if os.path.exists(pkgs_file):
+                generate_packages_and_versions_md(pkgs_file, pkgs_dir)
+    else:
+        bb.note("Skipping IPK documentation generation as GENERATE_IPK_VERSION_DOC is not set.")
 }
 
 addhandler feed_index_creation
