@@ -384,6 +384,8 @@ python do_install_ipk_recipe_sysroot () {
         feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
         if feed is not None:
             archs.append(feed.group(1))
+    if not archs:
+        return
 
     have_ipk_inclusion = True
     if bb.data.inherits_class('multilib_global', d) and not d.getVar('MLPREFIX'):
@@ -815,8 +817,6 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     else:
         src_dep_bpkg = dep_bpkg
     staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
-    if staging_native_docker_path and os.path.exists(staging_native_docker_path):
-        ipkmode = True if src_dep_bpkg in d.getVar("TOOLCHAIN_DEPS_PKGS").split(" ") or src_dep_bpkg in d.getVar("GLIBC_PKGS").split(" ") else False
 
     if is_excluded_pkg(d, dep_bpkg):
         return (ipkmode, version_mismatch, same_arch)
@@ -831,6 +831,11 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
                 if "oss" in feed.group(1):
                     continue
             archs.append(feed.group(1))
+    if not archs:
+        return (ipkmode, version_mismatch, same_arch)
+
+    if staging_native_docker_path and os.path.exists(staging_native_docker_path):
+        ipkmode = True if src_dep_bpkg in d.getVar("TOOLCHAIN_DEPS_PKGS").split(" ") or src_dep_bpkg in d.getVar("GLIBC_PKGS").split(" ") else False
 
     for arch in archs:
         pkg_path = feed_info_dir+"%s/"%arch
@@ -1559,7 +1564,7 @@ python get_pkgs_handler () {
                 targetdeps.append(deps)
         ipk_mapping = e.data.getVar("IPK_DEPS_MAPPING_LIST") or {}
 
-        if pkg_path:
+        if pkg_path and e.data.getVar("TARGET_BASED_IPK_INSTALL") == "1":
             with open(pkg_path, "w") as f:
                 for deps in targetdeps:
                     f.writelines(deps+"\n")
