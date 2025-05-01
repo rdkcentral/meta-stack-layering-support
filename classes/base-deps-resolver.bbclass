@@ -1445,10 +1445,10 @@ def generate_packages_and_versions_md(d):
     archs = d.getVar("ALL_MULTILIB_PACKAGE_ARCHS").split()
     for arch in archs:
         target_dir = os.path.join(deploy_dir_ipk, arch)
-        output_file = os.path.join(target_dir, "PackagesAndVersions.md")
-
         if not os.path.exists(target_dir):
             continue
+
+        output_file = os.path.join(target_dir, "PackagesAndVersions.md")
 
         # Collect and filter package names and versions
         packages = []
