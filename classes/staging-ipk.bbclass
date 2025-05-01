@@ -230,7 +230,7 @@ fakeroot python do_populate_ipk_sysroot(){
     if not os.path.exists(feed_info_dir):
         return
     target_list_path = d.getVar("TARGET_DEPS_LIST")
-    if target_list_path and os.path.exists(target_list_path):
+    if target_list_path and os.path.exists(target_list_path) and d.getVar("TARGET_BASED_IPK_INSTALL") == "1":
         bb.note("ipk installation based on target build only")
         with open(target_list_path,"r") as fd:
             files = fd.readlines()
