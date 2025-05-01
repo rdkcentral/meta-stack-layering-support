@@ -1566,7 +1566,7 @@ python get_pkgs_handler () {
                 targetdeps.append(deps)
         ipk_mapping = e.data.getVar("IPK_DEPS_MAPPING_LIST") or {}
 
-        if pkg_path:
+        if pkg_path and e.data.getVar("TARGET_BASED_IPK_INSTALL") == "1":
             with open(pkg_path, "w") as f:
                 for deps in targetdeps:
                     f.writelines(deps+"\n")
