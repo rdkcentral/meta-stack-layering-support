@@ -1493,10 +1493,8 @@ OPKG_UTILS_SYSROOT = "${COMPONENTS_DIR}/${BUILD_ARCH}/opkg-utils-native"
 OPKG_INDEX_FILE = "${OPKG_UTILS_SYSROOT}${bindir_native}/opkg-make-index"
 
 python feed_index_creation () {
-    if e:
-        d = e.data
-        if d.getVar('GENERATE_IPK_VERSION_DOC') == "1":
-            generate_packages_and_versions_md(d)
+    if e.data.getVar('GENERATE_IPK_VERSION_DOC') == "1":
+        generate_packages_and_versions_md(d)
 
     if e.data.getVar("DEPLOY_IPK_FEED") == "0":
         return
