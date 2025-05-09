@@ -1499,12 +1499,21 @@ def create_feed_index(arg):
 def print_pkgs_in_src_mode(d):
     pkgs_native_list = d.getVar("SRC_NATIVE_PKGS_LIST")
     pkgs_list = d.getVar("SRC_PKGS_LIST")
-    bb.warn("===NATIVE PKGS in SRC mode")
+    list_pkgs = []
+    bb.note("NATIVE PKGS in SRC mode")
     for file in os.listdir(pkgs_native_list):
-        bb.warn("%s"%file)
-    bb.warn("===TARGET PKGS in SRC mode")
+        list_pkgs.append(file)
+
+    for i in range(0, len(list_pkgs), 5):
+        bb.note(' '.join(list_pkgs[i:i+5]))
+
+    list_pkgs = []
+    bb.note("TARGET PKGS in SRC mode")
     for file in os.listdir(pkgs_list):
-        bb.warn("%s"%file)
+        list_pkgs.append(file)
+
+    for i in range(0, len(list_pkgs), 5):
+        bb.note(' '.join(list_pkgs[i:i+5]))
 
 # Helper function to create a markup document with a list of IPKs in the respective deploy directory.
 # Set the variable 'GENERATE_IPK_VERSION_DOC' to enable this feature.
