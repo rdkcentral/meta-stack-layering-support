@@ -306,104 +306,74 @@ python do_sls_generate_native_sysroot(){
                 manifest.write(os.path.join(dir_path, file) + "\n")
 }
 
-do_populate_sysroot:prepend() {
+
+def check_prebuilt (d, ext):
     pn = d.getVar('PN', True)
-    staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
+    arch = d.getVar("PACKAGE_ARCH", True)
 
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
-        if not os.path.exists(d.getVar("PREBUILT_NATIVE_PKGS_LIST")):
-            bb.utils.mkdirhier(d.getVar("PREBUILT_NATIVE_PKGS_LIST"))
-        if not os.path.exists(d.getVar("SRC_NATIVE_PKGS_LIST")):
-            bb.utils.mkdirhier(d.getVar("SRC_NATIVE_PKGS_LIST"))
-
+        staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
         file_path_src = os.path.join(d.getVar("SRC_NATIVE_PKGS_LIST"),pn)
         file_path_pre = os.path.join(d.getVar("PREBUILT_NATIVE_PKGS_LIST"),pn)
-    else:
-        if not os.path.exists(d.getVar("PREBUILT_PKGS_LIST")):
-            bb.utils.mkdirhier(d.getVar("PREBUILT_PKGS_LIST"))
-        if not os.path.exists(d.getVar("SRC_PKGS_LIST")):
-            bb.utils.mkdirhier(d.getVar("SRC_PKGS_LIST"))
+        if staging_native_docker_path and os.path.exists(staging_native_docker_path):
+            native_pkg_dst = os.path.join(staging_native_docker_path, pn)
+            if os.path.exists(native_pkg_dst):
+                if "gcc-" in pn and  not os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
+                    bb.note("GCC is source mode. Not skipping do_populate_sysroot%s"%ext)
+                else:
+                    if os.path.exists(file_path_src):
+                        os.remove(file_path_src)
+                    if not os.path.exists(d.getVar("PREBUILT_NATIVE_PKGS_LIST")):
+                        bb.utils.mkdirhier(d.getVar("PREBUILT_NATIVE_PKGS_LIST"))
+                    if not os.path.exists(file_path_pre):
+                        open(file_path_pre, 'w').close()
+                    bb.note("Skipping do_populate_sysroot%s"%ext)
+                    return True
 
+        if os.path.exists(staging_native_docker_path):
+            if not os.path.exists(d.getVar("SRC_NATIVE_PKGS_LIST")):
+                bb.utils.mkdirhier(d.getVar("SRC_NATIVE_PKGS_LIST"))
+            if not os.path.exists(file_path_src):
+                open(file_path_src, 'w').close()
+    else:
         file_path_src = os.path.join(d.getVar("SRC_PKGS_LIST"),pn)
         file_path_pre = os.path.join(d.getVar("PREBUILT_PKGS_LIST"),pn)
+        if os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"):
+            if os.path.exists(file_path_src):
+                os.remove(file_path_src)
+            if not os.path.exists(d.getVar("PREBUILT_PKGS_LIST")):
+                bb.utils.mkdirhier(d.getVar("PREBUILT_PKGS_LIST"))
+            if not os.path.exists(file_path_pre):
+                open(file_path_pre, 'w').close()
+            bb.note("Skipping do_populate_sysroot%s"%ext)
+            return True
 
-    if staging_native_docker_path:
-        native_pkg_dst = os.path.join(staging_native_docker_path, pn)
-        if os.path.exists(native_pkg_dst):
-            if "gcc-" in pn and  not os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
-                bb.note("GCC is source mode. Not skipping do_populate_sysroot")
-            else:
-                if os.path.exists(file_path_src):
-                    os.remove(file_path_src)
-                if not os.path.exists(file_path_pre):
-                    open(file_path_pre, 'w').close()
-                bb.note("Skipping do_populate_sysroot")
-                return
-    native_pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
-    if os.path.exists(native_pkg_dst):
+        if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
+            if not os.path.exists(d.getVar("SRC_PKGS_LIST")):
+                bb.utils.mkdirhier(d.getVar("SRC_PKGS_LIST"))
+            if not os.path.exists(file_path_src):
+                open(file_path_src, 'w').close()
+
+    pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), arch, pn)
+    if os.path.exists(pkg_dst):
         import shutil
-        shutil.rmtree(native_pkg_dst)
-    if os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"):
-        if os.path.exists(file_path_src):
-            os.remove(file_path_src)
-        if not os.path.exists(file_path_pre):
-            open(file_path_pre, 'w').close()
-        bb.note("Skipping do_populate_sysroot")
-        return
+        shutil.rmtree(pkg_dst)
+
     if os.path.exists(file_path_pre):
         os.remove(file_path_pre)
-    if not os.path.exists(file_path_src):
-        open(file_path_src, 'w').close()
 
+    return False
+
+do_populate_sysroot:prepend() {
+    skip = check_prebuilt (d, "")
+    if skip:
+        return
 }
 
 do_populate_sysroot_setscene:prepend() {
-    pn = d.getVar('PN', True)
-    staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
-    if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
-        if not os.path.exists(d.getVar("PREBUILT_NATIVE_PKGS_LIST")):
-            bb.utils.mkdirhier(d.getVar("PREBUILT_NATIVE_PKGS_LIST"))
-        if not os.path.exists(d.getVar("SRC_NATIVE_PKGS_LIST")):
-            bb.utils.mkdirhier(d.getVar("SRC_NATIVE_PKGS_LIST"))
-
-        file_path_src = os.path.join(d.getVar("SRC_NATIVE_PKGS_LIST"),pn)
-        file_path_pre = os.path.join(d.getVar("PREBUILT_NATIVE_PKGS_LIST"),pn)
-    else:
-        if not os.path.exists(d.getVar("PREBUILT_PKGS_LIST")):
-            bb.utils.mkdirhier(d.getVar("PREBUILT_PKGS_LIST"))
-        if not os.path.exists(d.getVar("SRC_PKGS_LIST")):
-            bb.utils.mkdirhier(d.getVar("SRC_PKGS_LIST"))
-
-        file_path_src = os.path.join(d.getVar("SRC_PKGS_LIST"),pn)
-        file_path_pre = os.path.join(d.getVar("PREBUILT_PKGS_LIST"),pn)
-
-    if staging_native_docker_path:
-        native_pkg_dst = os.path.join(staging_native_docker_path, pn)
-        if os.path.exists(native_pkg_dst) and os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
-            if "gcc-" in pn and  not os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
-                bb.note("GCC is source mode. Not skipping do_populate_sysroot")
-            else:
-                if os.path.exists(file_path_src):
-                    os.remove(file_path_src)
-                if not os.path.exists(file_path_pre):
-                    open(file_path_pre, 'w').close()
-                bb.note("Skipping do_populate_sysroot_setscene")
-                return
-    native_pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
-    if os.path.exists(native_pkg_dst):
-        import shutil
-        shutil.rmtree(native_pkg_dst)
-    if os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"):
-        if os.path.exists(file_path_src):
-            os.remove(file_path_src)
-        if not os.path.exists(file_path_pre):
-            open(file_path_pre, 'w').close()
-        bb.note("Skipping do_populate_sysroot_setscene")
+    skip = check_prebuilt (d, "_setscene")
+    if skip:
         return
-    if os.path.exists(file_path_pre):
-        os.remove(file_path_pre)
-    if not os.path.exists(file_path_src):
-        open(file_path_src, 'w').close()
 }
 
 addtask do_sls_generate_native_sysroot before do_populate_sysroot
@@ -1500,20 +1470,20 @@ def print_pkgs_in_src_mode(d):
     pkgs_native_list = d.getVar("SRC_NATIVE_PKGS_LIST")
     pkgs_list = d.getVar("SRC_PKGS_LIST")
     list_pkgs = []
-    bb.note("NATIVE PKGS in SRC mode")
-    for file in os.listdir(pkgs_native_list):
-        list_pkgs.append(file)
-
-    for i in range(0, len(list_pkgs), 5):
-        bb.note(' '.join(list_pkgs[i:i+5]))
+    if os.path.exists(pkgs_native_list):
+        bb.note("NATIVE PKGS in SRC mode")
+        for file in os.listdir(pkgs_native_list):
+            list_pkgs.append(file)
+        for i in range(0, len(list_pkgs), 5):
+            bb.note(' '.join(list_pkgs[i:i+5]))
 
     list_pkgs = []
-    bb.note("TARGET PKGS in SRC mode")
-    for file in os.listdir(pkgs_list):
-        list_pkgs.append(file)
-
-    for i in range(0, len(list_pkgs), 5):
-        bb.note(' '.join(list_pkgs[i:i+5]))
+    if os.path.exists(pkgs_list):
+        bb.note("TARGET PKGS in SRC mode")
+        for file in os.listdir(pkgs_list):
+            list_pkgs.append(file)
+        for i in range(0, len(list_pkgs), 5):
+            bb.note(' '.join(list_pkgs[i:i+5]))
 
 # Helper function to create a markup document with a list of IPKs in the respective deploy directory.
 # Set the variable 'GENERATE_IPK_VERSION_DOC' to enable this feature.
