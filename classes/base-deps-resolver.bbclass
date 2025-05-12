@@ -148,16 +148,16 @@ python update_ipk_deps () {
             if dep == " " or  dep == "\n":
                 continue
             dep = dep.strip()
-            (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, dep)
-            if dep not in layer_pkgs and ipk_mode :
+            (ipk_mode, arch_check) = check_deps_ipk_mode(d, None, dep)
+            if dep not in layer_pkgs and ipk_mode and not arch_check:
                 d.appendVar("INSTALL_DEPENDS", ",%s" % dep)
         for dep in lrdeps:
             if dep == " " or  dep == "\n":
                 continue
             dep = dep.strip()
             rdeps_ipk = (d.getVar('INSTALL_RDEPENDS:%s'%pkg_pn) or "").split(",")
-            (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, dep)
-            if dep not in rdeps_ipk and ipk_mode :
+            (ipk_mode, arch_check) = check_deps_ipk_mode(d, None, dep)
+            if dep not in rdeps_ipk and ipk_mode not arch_check:
                 d.appendVar("INSTALL_RDEPENDS:%s"%pkg_pn, ",%s" % dep)
 }
 
@@ -658,10 +658,10 @@ def gcc_source_mode_check(d, pn):
     gcc_source_mode = True
     if "gcc-" in pn:
         version = get_version_info(d)
-        (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, "libgcc", False, version)
+        (ipk_mode, arch_check) = check_deps_ipk_mode(d, None, "libgcc", False, version)
         if ipk_mode and not check_targets(d, pn):
             gcc_source_mode = False
-        (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, "gcc-runtime", False, version)
+        (ipk_mode, arch_check) = check_deps_ipk_mode(d, None, "gcc-runtime", False, version)
         if ipk_mode and not check_targets(d, pn):
             gcc_source_mode = False
         else:
@@ -695,7 +695,7 @@ python () {
             d.appendVarFlag('do_deploy_setscene', 'prefuncs', ' do_clean_deploy_images')
         d.appendVar("DEPENDS", " pseudo-native")
 
-        (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, pn, False, version)
+        (ipk_mode, arch_check) = check_deps_ipk_mode(d, arch, pn, False, version)
         if ipk_mode and not check_targets(d, pn):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
             if not os.path.exists(skipped_pkg_dir):
@@ -719,7 +719,7 @@ python () {
                 if not os.path.exists(feed_info_dir+"src_mode/"):
                     bb.utils.mkdirhier(feed_info_dir+"src_mode/")
                 open(feed_info_dir+"src_mode/%s"%pn, 'w').close()
-                if version_check and not check_targets(d, pn):
+                if arch_check and not check_targets(d, pn):
                     open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
             d.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',d)
@@ -835,16 +835,14 @@ def get_base_pkg_name(pkg_name):
 # Handle multiple conditions to check the IPK consumption. 
 # Once we start consuming all packages as IPK except those in the 
 # same stack layer, we can optimize this condition check
-def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
+def check_deps_ipk_mode(d, pkg_arch, dep_bpkg, rrecommends = False, version = None):
     import re
     import glob
-    version_mismatch = True
-    same_arch = False
-    pkg_arch = d.getVar("PACKAGE_ARCH")
-    prefix = d.getVar('MLPREFIX') or ""
+    same_stack = False
     ipkmode = False
+    prefix = d.getVar('MLPREFIX') or ""
     if not dep_bpkg:
-        return ipkmode
+        return (ipkmode, same_stack)
     # Check dep package is in IPK mode
     if prefix and dep_bpkg.startswith(prefix):
         src_dep_bpkg = dep_bpkg[len(prefix):]
@@ -853,22 +851,27 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
 
     if is_excluded_pkg(d, dep_bpkg):
-        return (ipkmode, version_mismatch, same_arch)
+        return (ipkmode, same_stack)
 
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     archs = []
-    oss_ipk_mode = True if "1" == d.getVar('OSS_IPK_MODE') or d.getVar("STACK_LAYER_EXTENSION") or ipkmode else False
+    oss_ipk_mode = True if "1" == d.getVar('OSS_IPK_MODE') or d.getVar("STACK_LAYER_EXTENSION") else False
     for line in (d.getVar('IPK_FEED_URIS') or "").split():
         feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
         if feed is not None:
             if not oss_ipk_mode:
                 if "oss" in feed.group(1):
                     continue
-            archs.append(feed.group(1))
+            if pkg_arch:
+                feed.group(1) == pkg_arch:
+                   archs.append(feed.group(1))
+                   break
+            else:
+                archs.append(feed.group(1))
     if not archs:
-        return (ipkmode, version_mismatch, same_arch)
+        return (ipkmode, same_stack)
 
-    if staging_native_docker_path and os.path.exists(staging_native_docker_path):
+    if not oss_ipk_mode and staging_native_docker_path and os.path.exists(staging_native_docker_path):
         ipkmode = True if src_dep_bpkg in d.getVar("TOOLCHAIN_DEPS_PKGS").split(" ") or src_dep_bpkg in d.getVar("GLIBC_PKGS").split(" ") else False
 
     for arch in archs:
@@ -881,15 +884,8 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
             src_path = pkg_path + "source/%s_%s"%(src_dep_bpkg,version)
             if os.path.exists(src_path):
                 ipkmode = True
+                same_stack = True
                 break
-            # Check only the major version number
-            src_list = glob.glob(pkg_path + "source/%s_%s*"%(src_dep_bpkg,version.split(".")[0]))
-            if src_list:
-                src_path = src_list[0]
-                if os.path.exists(src_path):
-                    # Build from source
-                    version_mismatch = False
-                    break
         else:
             src_path = pkg_path + "source/%s"%src_dep_bpkg
             src_list = glob.glob(pkg_path + "source/%s_*"%src_dep_bpkg)
@@ -898,16 +894,17 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
 
             if os.path.exists(src_path) or os.path.exists(pkg_path + "rprovides/%s"%dep_bpkg) or os.path.exists(pkg_path + "package/%s"%dep_bpkg) or os.path.exists(pkg_path + "package/lib%s"%dep_bpkg):
                 if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
-                    same_arch = True
-                else:
-                    ipkmode = True
-                break
-            if rrecommends and dep_bpkg.startswith("kernel-module") and os.path.exists(pkg_path + "package/kernel"):
+                    same_stack = True
                 ipkmode = True
                 break
-    return (ipkmode, version_mismatch, same_arch)
+            elif rrecommends and dep_bpkg.startswith("kernel-module") and os.path.exists(pkg_path + "package/kernel"):
+                if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
+                    same_stack = True
+                ipkmode = True
+                break
+    return (ipkmode, same_stack)
 
-def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False, skip_depends=False):
+def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False):
     pkgrdeps, ipkrdeps = ([] for i in range(2))
     import re
     pattern = r'(\S+)(\s*\([^\)]*\))?'
@@ -925,35 +922,28 @@ def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False, skip_depends=False):
             continue
         preferred_provider = e.data.getVar('PREFERRED_PROVIDER_%s' % dep_bpkg, True)
         if preferred_provider is not None:
-            (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, preferred_provider, rrecommends, None)
+            (ipk_mode, arch_check) = check_deps_ipk_mode(e.data, None, preferred_provider, rrecommends, None)
             if ipk_mode:
                 dep = dep.replace(dep_bpkg,preferred_provider)
                 dep_bpkg = preferred_provider
                 dep_ver = None
         else:
-            (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, dep_bpkg, rrecommends, None)
+            (ipk_mode, arch_check) = check_deps_ipk_mode(e.data, None, dep_bpkg, rrecommends, None)
 
-        if ipk_mode or arch_check:
+        if ipk_mode and not arch_check:
             if dep_ver:
                 ipkrdeps.append(dep +" " + dep_ver)
             else:
                 ipkrdeps.append(dep)
-            if not arch_check:
-                continue
 
-        if preferred_provider == "noop":
-            dep = preferred_provider
-        if skip_depends:
-            if arch_check:
-                if dep_ver:
-                    pkgrdeps.append(dep +" " + dep_ver)
-                else:
-                    pkgrdeps.append(dep)
         else:
+            if preferred_provider == "noop":
+                dep = preferred_provider
+        
             if dep_ver:
-                pkgrdeps.append(dep +" " + dep_ver)
+               pkgrdeps.append(dep +" " + dep_ver)
             else:
-                pkgrdeps.append(dep)
+               pkgrdeps.append(dep)
 
     return (ipkrdeps,pkgrdeps)
 
@@ -961,7 +951,6 @@ def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False, skip_depends=False):
 # Create metadata for the direct dependent ipk packages.
 def update_dep_pkgs(e):
     src_pkgs, ipk_pkgs = ([] for i in range(2))
-    skip_depends = False
 
     pkg_pn = e.data.getVar('PN',  True) 
     arch = e.data.getVar('PACKAGE_ARCH',  True)
@@ -973,14 +962,11 @@ def update_dep_pkgs(e):
     version = "%s:%s-%s"%(pe,pv,pr) if pe else "%s-%s"%(pv,pr)
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     version = version.replace("AUTOINC","0")
-    (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, pkg_pn, False, version)
-    if ipk_mode and not check_targets(e.data, pkg_pn) :
-        skip_depends = True
 
     # Handle DEPENDS which needs recipe to process
     deps = (e.data.getVar('DEPENDS') or "").strip()
     if deps:
-        ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, deps, False, skip_depends)
+        ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, deps, False)
         e.data.setVar("DEPENDS", ' '.join(src_pkgs))
         if ipk_pkgs:
             have_ipk_deps = True
@@ -991,7 +977,7 @@ def update_dep_pkgs(e):
         for pkg in pkgs:
             rdeps = (e.data.getVar('RDEPENDS:%s'%pkg) or "").strip()
             if rdeps:
-                ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg, rdeps, False, skip_depends)
+                ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg, rdeps, False)
                 e.data.setVar("RDEPENDS:%s"%pkg, ' '.join(src_pkgs))
                 if ipk_pkgs:
                     have_ipk_deps = True
@@ -999,7 +985,7 @@ def update_dep_pkgs(e):
 
             rdeps = (e.data.getVar('RRECOMMENDS:%s'%pkg) or "").strip()
             if rdeps:
-                ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg, rdeps, True, skip_depends)
+                ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg, rdeps, True)
                 e.data.setVar("RRECOMMENDS:%s"%pkg, ' '.join(src_pkgs))
                 if ipk_pkgs:
                     have_ipk_deps = True
@@ -1011,32 +997,32 @@ def update_dep_pkgs(e):
         ipk_pkg_inst = []
         pkgs_inst = (e.data.getVar('IMAGE_INSTALL') or "").strip()
         if pkgs_inst:
-            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False, skip_depends)
+            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False)
             e.data.setVar("IMAGE_INSTALL", ' '.join(src_pkgs))
             if ipk_pkgs:
                 e.data.setVar('IPK_IMAGE_INSTALL',' '.join(ipk_pkgs))
         pkgs_inst = (e.data.getVar('RDEPENDS') or "").strip()
         if pkgs_inst:
-            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False, skip_depends)
+            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False)
             e.data.setVar("RDEPENDS", ' '.join(src_pkgs))
             if ipk_pkgs:
                 e.data.setVar('IPK_RDEPENDS',' '.join(ipk_pkgs))
         pkgs_inst = (e.data.getVar('ROOTFS_BOOTSTRAP_INSTALL') or "").strip()
         if pkgs_inst:
-            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False, skip_depends)
+            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False)
             e.data.setVar("ROOTFS_BOOTSTRAP_INSTALL", ' '.join(src_pkgs))
             if ipk_pkgs:
                 e.data.setVar('IPK_ROOTFS_BOOTSTRAP_INSTALL',' '.join(ipk_pkgs))
         pkgs_inst = (e.data.getVar('FEATURE_INSTALL') or "").strip()
         if pkgs_inst:
-            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False, skip_depends)
+            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False)
             e.data.setVar("FEATURE_INSTALL", ' '.join(src_pkgs))
             if ipk_pkgs:
                 e.data.setVar('IPK_FEATURE_INSTALL',' '.join(ipk_pkgs))
 
     #Insert do_update_rdeps_ipk after read_shlibdeps pkg function.
     pkgfns = e.data.getVar('PACKAGEFUNCS')
-    if pkgfns and not skip_depends:
+    if pkgfns:
         e.data.setVar('PACKAGEFUNCS',"")
         for f in (pkgfns or '').split():
             if f == "emit_pkgdata":
@@ -1231,14 +1217,11 @@ python deps_taskhandler() {
     pe = d.getVar('PE')
     pv = d.getVar('PV')
     pr = d.getVar('PR')
-    skip_depends = False
+    arch = d.getVar('PACKAGE_ARCH')
     have_ipk_deps = True
     version = "%s:%s-%s"%(pe,pv,pr) if pe else "%s-%s"%(pv,pr)
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     version = version.replace("AUTOINC","0")
-    (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, pn, False, version)
-    if ipk_mode and not check_targets(d, pn):
-        skip_depends = True
 
     bbtasks = e.tasklist
     dep_list = ["depends","rdepends"]
@@ -1255,18 +1238,14 @@ python deps_taskhandler() {
                 preferred_provider = e.data.getVar('PREFERRED_PROVIDER_%s' % pkg, True)
                 if preferred_provider is not None:
                     pkg = preferred_provider
-                (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pkg)
-                if ipk_mode:
+                (ipk_mode, arch_check) = check_deps_ipk_mode(e.data, None, pkg)
+                if ipk_mode and not arch_check:
                     if bb.data.inherits_class('multilib_global', d) and not e.data.getVar('MLPREFIX'):
                         have_ipk_deps = False
                     if have_ipk_deps and staging_ipk_task not in pkgs_list:
                         pkgs_list.append(staging_ipk_task)
                     continue
-                if skip_depends:
-                    if arch_check:
-                        pkgs_list.append(dep_task)
-                else:
-                    pkgs_list.append(dep_task)
+                pkgs_list.append(dep_task)
             e.data.setVarFlag(task,'%s'%dep,' '.join(pkgs_list))
 }
 deps_taskhandler[eventmask] = "bb.event.RecipeTaskPreProcess"
