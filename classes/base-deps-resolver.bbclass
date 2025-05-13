@@ -306,7 +306,6 @@ python do_sls_generate_native_sysroot(){
                 manifest.write(os.path.join(dir_path, file) + "\n")
 }
 
-
 def check_prebuilt (d, ext):
     pn = d.getVar('PN', True)
     arch = d.getVar("PACKAGE_ARCH", True)
@@ -856,6 +855,12 @@ def check_deps_ipk_mode(d, pkg_arch, dep_bpkg, rrecommends = False, version = No
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     archs = []
     oss_ipk_mode = True if "1" == d.getVar('OSS_IPK_MODE') or d.getVar("STACK_LAYER_EXTENSION") else False
+    if not oss_ipk_mode and staging_native_docker_path and os.path.exists(staging_native_docker_path):
+        ipkmode = True if src_dep_bpkg in d.getVar("TOOLCHAIN_DEPS_PKGS").split(" ") or src_dep_bpkg in d.getVar("GLIBC_PKGS").split(" ") else False
+        if ipkmode:
+            same_stack = True
+            return (ipkmode, same_stack)
+
     for line in (d.getVar('IPK_FEED_URIS') or "").split():
         feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
         if feed is not None:
@@ -870,11 +875,6 @@ def check_deps_ipk_mode(d, pkg_arch, dep_bpkg, rrecommends = False, version = No
                 archs.append(feed.group(1))
     if not archs:
         return (ipkmode, same_stack)
-
-    if not oss_ipk_mode and staging_native_docker_path and os.path.exists(staging_native_docker_path):
-        ipkmode = True if src_dep_bpkg in d.getVar("TOOLCHAIN_DEPS_PKGS").split(" ") or src_dep_bpkg in d.getVar("GLIBC_PKGS").split(" ") else False
-        if ipkmode:
-            same_stack = True
 
     for arch in archs:
         pkg_path = feed_info_dir+"%s/"%arch
