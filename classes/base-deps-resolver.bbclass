@@ -157,7 +157,7 @@ python update_ipk_deps () {
             dep = dep.strip()
             rdeps_ipk = (d.getVar('INSTALL_RDEPENDS:%s'%pkg_pn) or "").split(",")
             (ipk_mode, arch_check) = check_deps_ipk_mode(d, None, dep)
-            if dep not in rdeps_ipk and ipk_mode not arch_check:
+            if dep not in rdeps_ipk and ipk_mode and not arch_check:
                 d.appendVar("INSTALL_RDEPENDS:%s"%pkg_pn, ",%s" % dep)
 }
 
@@ -863,9 +863,9 @@ def check_deps_ipk_mode(d, pkg_arch, dep_bpkg, rrecommends = False, version = No
                 if "oss" in feed.group(1):
                     continue
             if pkg_arch:
-                feed.group(1) == pkg_arch:
-                   archs.append(feed.group(1))
-                   break
+                if feed.group(1) == pkg_arch:
+                    archs.append(feed.group(1))
+                    break
             else:
                 archs.append(feed.group(1))
     if not archs:
