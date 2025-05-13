@@ -873,13 +873,11 @@ def check_deps_ipk_mode(d, pkg_arch, dep_bpkg, rrecommends = False, version = No
 
     if not oss_ipk_mode and staging_native_docker_path and os.path.exists(staging_native_docker_path):
         ipkmode = True if src_dep_bpkg in d.getVar("TOOLCHAIN_DEPS_PKGS").split(" ") or src_dep_bpkg in d.getVar("GLIBC_PKGS").split(" ") else False
+        if ipkmode:
+            same_stack = True
 
     for arch in archs:
         pkg_path = feed_info_dir+"%s/"%arch
-        if prefix and dep_bpkg.startswith(prefix):
-            src_dep_bpkg = dep_bpkg[len(prefix):]
-        else:
-            src_dep_bpkg = dep_bpkg
         if version:
             src_path = pkg_path + "source/%s_%s"%(src_dep_bpkg,version)
             if os.path.exists(src_path):
