@@ -856,7 +856,7 @@ def check_deps_ipk_mode(d, pkg_arch, dep_bpkg, rrecommends = False, version = No
     archs = []
     oss_ipk_mode = True if "1" == d.getVar('OSS_IPK_MODE') or d.getVar("STACK_LAYER_EXTENSION") else False
     if not oss_ipk_mode and staging_native_docker_path and os.path.exists(staging_native_docker_path):
-        ipkmode = True if src_dep_bpkg in d.getVar("TOOLCHAIN_DEPS_PKGS").split(" ") or src_dep_bpkg in d.getVar("GLIBC_PKGS").split(" ") else False
+        ipkmode = True if src_dep_bpkg in d.getVar("TOOLCHAIN_DEPS_PKGS").split(" ") or src_dep_bpkg in d.getVar("GLIBC_PKGS").split(" ") or "libtool-cross" in  src_dep_bpkg else False
         if ipkmode:
             same_stack = True
             return (ipkmode, same_stack)
@@ -900,6 +900,8 @@ def check_deps_ipk_mode(d, pkg_arch, dep_bpkg, rrecommends = False, version = No
                     same_stack = True
                 ipkmode = True
                 break
+    if version:
+        same_stack = True
     return (ipkmode, same_stack)
 
 def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False):
@@ -939,9 +941,9 @@ def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False):
                 dep = preferred_provider
         
             if dep_ver:
-               pkgrdeps.append(dep +" " + dep_ver)
+                pkgrdeps.append(dep +" " + dep_ver)
             else:
-               pkgrdeps.append(dep)
+                pkgrdeps.append(dep)
 
     return (ipkrdeps,pkgrdeps)
 
