@@ -1,3 +1,12 @@
+def base_cmdline(d,cmd):
+    import subprocess
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    msg = process.communicate()[0]
+    if process.returncode == 0:
+        bb.note("CMD : %s : Sucess"%(cmd))
+    else:
+        msg = process.stderr.read()
+        bb.fatal("CMD : %s : Failed %s"%(cmd,str(msg)))
 
 def ipk_download(d):
     import subprocess
@@ -55,7 +64,6 @@ def download_ipks_in_parallel(d, ipk_list, server_path, arch, ipk_deploy_path):
 
 # Do sequential ipk download
 def download_ipk(d, ipk, server_path, arch, ipk_deploy_path):
-    import subprocess
     deploy_dir = d.getVar("DEPLOY_DIR_IPK")
     download_dir = d.getVar("IPK_CACHE_DIR", True)
     if not os.path.exists(download_dir):
@@ -67,12 +75,7 @@ def download_ipk(d, ipk, server_path, arch, ipk_deploy_path):
         else:
             ipk_url = server_path+"/"+ipk
             cmd = ["wget", ipk_url, f"--directory-prefix={download_dir}"]
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            stdout, stderr = process.communicate()
-            if process.returncode == 0:
-                bb.note("Downloaded Sucess %s"%ipk)
-            else:
-                bb.fatal("Failed to download %s"%ipk)
+            base_cmdline(d, cmd)
     if os.path.exists(ipk_deploy_path+"/%s"%ipk):
         os.unlink(ipk_deploy_path+"/%s"%ipk)
     os.link(ipk_dl_path, ipk_deploy_path+"/%s"%ipk)
