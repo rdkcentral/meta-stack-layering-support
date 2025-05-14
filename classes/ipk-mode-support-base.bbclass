@@ -55,6 +55,7 @@ def download_ipks_in_parallel(d, ipk_list, server_path, arch, ipk_deploy_path):
 
 # Do sequential ipk download
 def download_ipk(d, ipk, server_path, arch, ipk_deploy_path):
+    import subprocess
     deploy_dir = d.getVar("DEPLOY_DIR_IPK")
     download_dir = d.getVar("IPK_CACHE_DIR", True)
     if not os.path.exists(download_dir):
@@ -64,7 +65,14 @@ def download_ipk(d, ipk, server_path, arch, ipk_deploy_path):
         if server_path.startswith("file:"):
             shutil.copy(server_path[5:]+"/"+ipk, download_dir)
         else:
-            bb.process.run("wget %s --directory-prefix=%s"%(server_path+"/"+ipk, download_dir), stderr=subprocess.STDOUT)
+            ipk_url = server_path+"/"+ipk
+            cmd = ["wget", ipk_url, f"--directory-prefix={download_dir}"]
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = process.communicate()
+            if process.returncode == 0:
+                bb.note("Downloaded Sucess %s"%ipk)
+            else:
+                bb.fatal("Failed to download %s"%ipk)
     if os.path.exists(ipk_deploy_path+"/%s"%ipk):
         os.unlink(ipk_deploy_path+"/%s"%ipk)
     os.link(ipk_dl_path, ipk_deploy_path+"/%s"%ipk)
