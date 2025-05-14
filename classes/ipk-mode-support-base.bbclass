@@ -3,13 +3,13 @@ def ipk_download(d):
     import subprocess
     import shutil
     import re
-    
+
     arch = d.getVar('PACKAGE_ARCH')
     deploy_dir = d.getVar("DEPLOY_DIR_IPK")
     ipk_deploy_path = os.path.join(deploy_dir, arch)
     if not os.path.exists(ipk_deploy_path):
         bb.utils.mkdirhier(ipk_deploy_path)
-    
+
     ipk_list = get_ipk_list(d,arch)
 
     server_path = ""
@@ -29,7 +29,7 @@ def ipk_download(d):
 
         for ipk in ipk_list:
             manifest_file.write(os.path.join(ipk_deploy_path, ipk) + "\n")
-        
+
         manifest_file.close()
 
 # Function to download multiple ipk files in parallel
