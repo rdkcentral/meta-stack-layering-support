@@ -25,6 +25,7 @@ PREBUILTDEPLOYDIR = "${COMPONENTS_DIR}/${PACKAGE_ARCH}"
 do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
 inherit gir-ipk-qemuwrapper
+inherit ipk-mode-support-base
 
 def decode(str):
     import codecs
@@ -518,52 +519,6 @@ python do_install_ipk_recipe_sysroot () {
             os.environ['D'] = d.getVar('RECIPE_SYSROOT')
             subprocess.check_output(p, shell=True, stderr=subprocess.STDOUT)
 }
-
-def ipk_download(d):
-    import subprocess
-    import shutil
-    import re
-    arch = d.getVar('PACKAGE_ARCH')
-    deploy_dir = d.getVar("DEPLOY_DIR_IPK")
-    ipk_deploy_path = os.path.join(deploy_dir, arch)
-    if not os.path.exists(ipk_deploy_path):
-        bb.utils.mkdirhier(ipk_deploy_path)
-    ipk_list = get_ipk_list(d,arch)
-
-    download_dir = d.getVar("IPK_CACHE_DIR", True)
-    if not os.path.exists(download_dir):
-        bb.utils.mkdirhier(download_dir)
-    server_path = ""
-    for line in (d.getVar('IPK_FEED_URIS') or "").split():
-        feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
-        if feed is not None:
-            arch_name = feed.group(1)
-            arch_uri = feed.group(2)
-            if arch == arch_name:
-                server_path = arch_uri
-
-    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".package_write_ipk"
-    bb.utils.mkdirhier(os.path.dirname(manifest_name))
-    manifest_file = open(manifest_name, "w")
-    prefix = d.getVar('MLPREFIX') or ""
-
-    if server_path:
-        for ipk in ipk_list:
-            ipk_dl_path = os.path.join(download_dir,ipk)
-            if not os.path.exists(ipk_dl_path):
-                if server_path.startswith("file:"):
-                    shutil.copy(server_path[5:]+"/"+ipk, download_dir)
-                else:
-                    bb.process.run("wget %s --directory-prefix=%s"%(server_path+"/"+ipk, download_dir), stderr=subprocess.STDOUT)
-            if os.path.exists(ipk_deploy_path+"/%s"%ipk):
-                os.unlink(ipk_deploy_path+"/%s"%ipk)
-            os.link(ipk_dl_path, ipk_deploy_path+"/%s"%ipk)
-
-            if bb.data.inherits_class('multilib_global', d):
-                if not prefix:
-                    continue
-            manifest_file.write(os.path.join(ipk_deploy_path, ipk) + "\n")
-    manifest_file.close()
 
 def get_ipk_list(d, pkg_arch):
     import glob
