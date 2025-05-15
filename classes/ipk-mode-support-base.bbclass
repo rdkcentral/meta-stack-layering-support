@@ -44,7 +44,7 @@ def ipk_download(d):
             manifest_file.write("%s\n"%source_name)
             if "-dbg_" not in ipk:
                 cmd = "ar x %s && tar -C %s --no-same-owner -xpf data.tar.xz && rm data.tar.xz && rm -rf control.tar.gz && rm -rf debian-binary"%(source_name, install_dir)
-            base_cmdline(d, cmd)
+                base_cmdline(d, cmd)
 
         manifest_file.close()
 
