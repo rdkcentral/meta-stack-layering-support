@@ -1,6 +1,6 @@
 def base_cmdline(d,cmd):
     import subprocess
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     msg = process.communicate()[0]
     if process.returncode == 0:
         bb.note("CMD : %s : Sucess"%(cmd))
@@ -36,8 +36,15 @@ def ipk_download(d):
         bb.utils.mkdirhier(os.path.dirname(manifest_name))
         manifest_file = open(manifest_name, "w")
 
+        install_dir = d.getVar("D", True)
+        if not os.path.exists(install_dir):
+            bb.utils.mkdirhier(install_dir)
         for ipk in ipk_list:
-            manifest_file.write(os.path.join(ipk_deploy_path, ipk) + "\n")
+            source_name = os.path.join(ipk_deploy_path, ipk)
+            manifest_file.write("%s\n"%source_name)
+            if "-dbg_" not in ipk:
+                cmd = "ar x %s && tar -C %s --no-same-owner -xpf data.tar.xz && rm data.tar.xz && rm -rf control.tar.gz && rm -rf debian-binary"%(source_name, install_dir)
+            base_cmdline(d, cmd)
 
         manifest_file.close()
 
@@ -74,7 +81,7 @@ def download_ipk(d, ipk, server_path, arch, ipk_deploy_path):
             shutil.copy(server_path[5:]+"/"+ipk, download_dir)
         else:
             ipk_url = server_path+"/"+ipk
-            cmd = ["wget", ipk_url, f"--directory-prefix={download_dir}"]
+            cmd = "wget %s --directory-prefix=%s"%(ipk_url,download_dir)
             base_cmdline(d, cmd)
     if os.path.exists(ipk_deploy_path+"/%s"%ipk):
         os.unlink(ipk_deploy_path+"/%s"%ipk)
