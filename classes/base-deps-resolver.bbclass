@@ -23,6 +23,16 @@ do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
 inherit gir-ipk-qemuwrapper
 
+def base_cmdline(d,cmd):
+    import subprocess
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    msg = process.communicate()[0]
+    if process.returncode == 0:
+        bb.note("CMD : %s : Success"%(cmd))
+    else:
+        msg = process.stderr.read()
+        bb.fatal("CMD : %s : Failed %s"%(cmd,str(msg)))
+
 def decode(str):
     import codecs
     c = codecs.getdecoder("unicode_escape")
@@ -290,13 +300,19 @@ python do_sls_generate_native_sysroot(){
         return
 
     docker_native_pkg_path = os.path.join(staging_native_docker_path, pn)
-    if not os.path.exists(docker_native_pkg_path):
+    if os.path.exists(docker_native_pkg_path):
+        sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
+        if os.path.exists(sysroot_components_dir_dst):
+            shutil.rmtree(sysroot_components_dir_dst)
+        shutil.copytree(docker_native_pkg_path, sysroot_components_dir_dst, symlinks=True)
+    elif os.path.exists(docker_native_pkg_path+".tar.gz"):
+        sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
+        if os.path.exists(sysroot_components_dir_dst):
+            shutil.rmtree(sysroot_components_dir_dst)
+        cmd = "tar -xvzf %s -C %s" % (docker_native_pkg_path+".tar.gz", sysroot_components_dir_dst)
+        base_cmdline(d, cmd)
+    else:
         return
-
-    sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
-    if os.path.exists(sysroot_components_dir_dst):
-        shutil.rmtree(sysroot_components_dir_dst)
-    shutil.copytree(docker_native_pkg_path, sysroot_components_dir_dst, symlinks=True)
 
     manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".populate_sysroot"
     bb.utils.mkdirhier(os.path.dirname(manifest_name))
