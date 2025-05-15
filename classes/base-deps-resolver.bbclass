@@ -23,16 +23,6 @@ do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
 inherit gir-ipk-qemuwrapper
 
-def base_cmdline(d,cmd):
-    import subprocess
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    msg = process.communicate()[0]
-    if process.returncode == 0:
-        bb.note("CMD : %s : Success"%(cmd))
-    else:
-        msg = process.stderr.read()
-        bb.fatal("CMD : %s : Failed %s"%(cmd,str(msg)))
-
 def decode(str):
     import codecs
     c = codecs.getdecoder("unicode_escape")
@@ -294,23 +284,30 @@ do_package_write_ipk_setscene:prepend() {
 python do_sls_generate_native_sysroot(){
     import os
     import shutil
+    import subprocess
     pn = d.getVar("PN", True)
     staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
     if not staging_native_docker_path:
         return
 
     docker_native_pkg_path = os.path.join(staging_native_docker_path, pn)
-    if os.path.exists(docker_native_pkg_path):
+    docker_pkg_type = d.getVar("DOCKER_PKG_TYPE")
+    if docker_pkg_type:
+        docker_native_pkg_path += f".{docker_pkg_type}"
+    if os.path.exists(docker_native_pkg_path) and not docker_pkg_type:
         sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
         if os.path.exists(sysroot_components_dir_dst):
             shutil.rmtree(sysroot_components_dir_dst)
         shutil.copytree(docker_native_pkg_path, sysroot_components_dir_dst, symlinks=True)
-    elif os.path.exists(docker_native_pkg_path+".tar.gz"):
+    elif os.path.exists(docker_native_pkg_path):
         sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
         if os.path.exists(sysroot_components_dir_dst):
             shutil.rmtree(sysroot_components_dir_dst)
-        cmd = "tar -xvzf %s -C %s" % (docker_native_pkg_path+".tar.gz", sysroot_components_dir_dst)
-        base_cmdline(d, cmd)
+        sysroot_components_dir = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True))
+        if not os.path.exists(sysroot_components_dir):
+            bb.utils.mkdirhier(sysroot_components_dir)
+        if docker_pkg_type == "tar.gz":
+            bb.process.run("tar -xvzf %s -C %s" % (docker_native_pkg_path, sysroot_components_dir), stderr=subprocess.STDOUT)
     else:
         return
 
@@ -333,6 +330,9 @@ def check_prebuilt (d, ext):
         file_path_pre = os.path.join(d.getVar("PREBUILT_NATIVE_PKGS_LIST"),pn)
         if staging_native_docker_path and os.path.exists(staging_native_docker_path):
             native_pkg_dst = os.path.join(staging_native_docker_path, pn)
+            docker_pkg_type = d.getVar("DOCKER_PKG_TYPE")
+            if docker_pkg_type:
+                native_pkg_dst += f".{docker_pkg_type}"
             if os.path.exists(native_pkg_dst):
                 if "gcc-" in pn and  not os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
                     bb.note("GCC is source mode. Not skipping do_populate_sysroot%s"%ext)
@@ -700,6 +700,9 @@ python () {
         staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
         if staging_native_docker_path:
             docker_native_pkg_path = os.path.join(staging_native_docker_path, d.getVar("PN", True))
+            docker_pkg_type = d.getVar("DOCKER_PKG_TYPE")
+            if docker_pkg_type:
+                docker_native_pkg_path += f".{docker_pkg_type}"
             if os.path.exists(docker_native_pkg_path) and not gcc_source_mode_check(d, pn):
                 update_build_tasks(d, arch, "native")
     else:
