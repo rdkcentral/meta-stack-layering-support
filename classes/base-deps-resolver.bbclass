@@ -294,6 +294,10 @@ python do_sls_generate_native_sysroot(){
     prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
     if prebuilt_native_pkg_type:
         prebuilt_native_pkg_path += f".{prebuilt_native_pkg_type}"
+    exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
+    if pn in exclusion_list:
+        bb.note("Excluding %s from prebuilt consumption"%pn)
+        return
     if os.path.exists(prebuilt_native_pkg_path) and not prebuilt_native_pkg_type:
         sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
         if os.path.exists(sysroot_components_dir_dst):
@@ -321,19 +325,15 @@ python do_sls_generate_native_sysroot(){
                 manifest.write(os.path.join(dir_path, file) + "\n")
 }
 
-SSTATETASKS += "do_sls_generate_native_sysroot"
-do_sls_generate_native_sysroot[sstate-inputdirs] = ""
-do_sls_generate_native_sysroot[sstate-outputdirs] = ""
-python do_sls_generate_native_sysroot_setscene () {
-    sstate_setscene(d)
-}
-addtask do_package_qa_setscene
-
 def check_prebuilt (d, ext):
     pn = d.getVar('PN', True)
     arch = d.getVar("PACKAGE_ARCH", True)
 
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
+        exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
+        if pn in exclusion_list:
+            bb.note("Excluding %s from prebuilt consumption"%pn)
+            return False
         staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
         file_path_src = os.path.join(d.getVar("SRC_NATIVE_PKGS_LIST"),pn)
         file_path_pre = os.path.join(d.getVar("PREBUILT_NATIVE_PKGS_LIST"),pn)
@@ -400,8 +400,6 @@ do_populate_sysroot_setscene:prepend() {
     if skip:
         return
 }
-
-addtask do_sls_generate_native_sysroot before do_populate_sysroot
 
 # Install the dev ipks to the component sysroot
 python do_install_ipk_recipe_sysroot () {
@@ -708,11 +706,13 @@ python () {
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
         staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
         if staging_native_prebuilt_path:
+            exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
             prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, d.getVar("PN", True))
             prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
             if prebuilt_native_pkg_type:
                 prebuilt_native_pkg_path += f".{prebuilt_native_pkg_type}"
-            if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(d, pn):
+            if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(d, pn) and pn not in exclusion_list :
+                bb.build.addtask('do_sls_generate_native_sysroot', 'do_populate_sysroot', None, d)
                 update_build_tasks(d, arch, "native")
     else:
         # Skipping unrequired version of recipes
