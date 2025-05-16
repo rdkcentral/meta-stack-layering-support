@@ -286,28 +286,30 @@ python do_sls_generate_native_sysroot(){
     import shutil
     import subprocess
     pn = d.getVar("PN", True)
-    staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
-    if not staging_native_docker_path:
+    staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
+    if not staging_native_prebuilt_path:
         return
 
-    docker_native_pkg_path = os.path.join(staging_native_docker_path, pn)
-    docker_pkg_type = d.getVar("DOCKER_PKG_TYPE")
-    if docker_pkg_type:
-        docker_native_pkg_path += f".{docker_pkg_type}"
-    if os.path.exists(docker_native_pkg_path) and not docker_pkg_type:
+    prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
+    prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
+    if prebuilt_native_pkg_type:
+        prebuilt_native_pkg_path += f".{prebuilt_native_pkg_type}"
+    if os.path.exists(prebuilt_native_pkg_path) and not prebuilt_native_pkg_type:
         sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
         if os.path.exists(sysroot_components_dir_dst):
             shutil.rmtree(sysroot_components_dir_dst)
-        shutil.copytree(docker_native_pkg_path, sysroot_components_dir_dst, symlinks=True)
-    elif os.path.exists(docker_native_pkg_path):
+        shutil.copytree(prebuilt_native_pkg_path, sysroot_components_dir_dst, symlinks=True)
+    elif os.path.exists(prebuilt_native_pkg_path):
         sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
         if os.path.exists(sysroot_components_dir_dst):
             shutil.rmtree(sysroot_components_dir_dst)
         sysroot_components_dir = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True))
         if not os.path.exists(sysroot_components_dir):
             bb.utils.mkdirhier(sysroot_components_dir)
-        if docker_pkg_type == "tar.gz":
-            bb.process.run("tar -xvzf %s -C %s" % (docker_native_pkg_path, sysroot_components_dir), stderr=subprocess.STDOUT)
+        if prebuilt_native_pkg_type == "tar.gz":
+            bb.process.run("tar -xvzf %s -C %s" % (prebuilt_native_pkg_path, sysroot_components_dir), stderr=subprocess.STDOUT)
+        else:
+            bb.fatal("Support for the extension %s need to add. Currently support only tar.gz "%prebuilt_native_pkg_type)
     else:
         return
 
@@ -319,20 +321,27 @@ python do_sls_generate_native_sysroot(){
                 manifest.write(os.path.join(dir_path, file) + "\n")
 }
 
+SSTATETASKS += "do_sls_generate_native_sysroot"
+do_sls_generate_native_sysroot[sstate-inputdirs] = ""
+do_sls_generate_native_sysroot[sstate-outputdirs] = ""
+python do_sls_generate_native_sysroot_setscene () {
+    sstate_setscene(d)
+}
+addtask do_package_qa_setscene
 
 def check_prebuilt (d, ext):
     pn = d.getVar('PN', True)
     arch = d.getVar("PACKAGE_ARCH", True)
 
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
-        staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
+        staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
         file_path_src = os.path.join(d.getVar("SRC_NATIVE_PKGS_LIST"),pn)
         file_path_pre = os.path.join(d.getVar("PREBUILT_NATIVE_PKGS_LIST"),pn)
-        if staging_native_docker_path and os.path.exists(staging_native_docker_path):
-            native_pkg_dst = os.path.join(staging_native_docker_path, pn)
-            docker_pkg_type = d.getVar("DOCKER_PKG_TYPE")
-            if docker_pkg_type:
-                native_pkg_dst += f".{docker_pkg_type}"
+        if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
+            native_pkg_dst = os.path.join(staging_native_prebuilt_path, pn)
+            prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
+            if prebuilt_native_pkg_type:
+                native_pkg_dst += f".{prebuilt_native_pkg_type}"
             if os.path.exists(native_pkg_dst):
                 if "gcc-" in pn and  not os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
                     bb.note("GCC is source mode. Not skipping do_populate_sysroot%s"%ext)
@@ -346,7 +355,7 @@ def check_prebuilt (d, ext):
                     bb.note("Skipping do_populate_sysroot%s"%ext)
                     return True
 
-        if os.path.exists(staging_native_docker_path):
+        if os.path.exists(staging_native_prebuilt_path):
             if not os.path.exists(d.getVar("SRC_NATIVE_PKGS_LIST")):
                 bb.utils.mkdirhier(d.getVar("SRC_NATIVE_PKGS_LIST"))
             if not os.path.exists(file_path_src):
@@ -697,13 +706,13 @@ python () {
     version = get_version_info(d)
 
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
-        staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
-        if staging_native_docker_path:
-            docker_native_pkg_path = os.path.join(staging_native_docker_path, d.getVar("PN", True))
-            docker_pkg_type = d.getVar("DOCKER_PKG_TYPE")
-            if docker_pkg_type:
-                docker_native_pkg_path += f".{docker_pkg_type}"
-            if os.path.exists(docker_native_pkg_path) and not gcc_source_mode_check(d, pn):
+        staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
+        if staging_native_prebuilt_path:
+            prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, d.getVar("PN", True))
+            prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
+            if prebuilt_native_pkg_type:
+                prebuilt_native_pkg_path += f".{prebuilt_native_pkg_type}"
+            if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(d, pn):
                 update_build_tasks(d, arch, "native")
     else:
         # Skipping unrequired version of recipes
@@ -869,7 +878,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
         src_dep_bpkg = dep_bpkg[len(prefix):]
     else:
         src_dep_bpkg = dep_bpkg
-    staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
+    staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
 
     if is_excluded_pkg(d, dep_bpkg):
         return (ipkmode, version_mismatch, same_arch)
@@ -887,7 +896,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     if not archs:
         return (ipkmode, version_mismatch, same_arch)
 
-    if staging_native_docker_path and os.path.exists(staging_native_docker_path):
+    if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
         ipkmode = True if src_dep_bpkg in d.getVar("TOOLCHAIN_DEPS_PKGS").split(" ") or src_dep_bpkg in d.getVar("GLIBC_PKGS").split(" ") else False
 
     for arch in archs:
