@@ -8,6 +8,7 @@
 # -----------------------------------------------------------------------
 
 IPK_DESTDIR = "${WORKDIR}/ipk-destdir"
+IPK_SYSDIR = "${WORKDIR}/ipk-sysroot-dir"
 
 # Directories excluded from common ipk sysroot.
 IPK_COMMON_DIRS_EXCLUSIONLIST = " \
@@ -51,7 +52,7 @@ ipk_staging_dirs() {
 
 create_ipk_common_staging() {
     rm -rf ${SYSROOT_IPK}
-    ipk_staging_dirs ${IPK_DESTDIR}  ${SYSROOT_IPK}
+    ipk_staging_dirs ${IPK_DESTDIR}  ${IPK_SYSDIR}
     rm -rf ${IPK_DESTDIR}
 }
 
@@ -410,6 +411,28 @@ python(){
 }
 do_populate_ipk_sysroot[umask] = "022"
 
+SSTATETASKS += "do_populate_ipk_sysroot"
+do_populate_ipk_sysroot[dirs] = "${IPK_SYSDIR}"
+do_populate_ipk_sysroot[sstate-inputdirs] = "${IPK_SYSDIR}"
+do_populate_ipk_sysroot[sstate-outputdirs] = "${SYSROOT_IPK}"
+do_populate_ipk_sysroot[cleandirs] = "${SYSROOT_IPK}"
+
+python do_populate_ipk_sysroot_setscene () {
+    sstate_setscene(d)
+}
+addtask do_populate_ipk_sysroot_setscene
+
+python __anonymous() {
+    feed_index_dir = os.path.join(d.getVar("FEED_INFO_DIR"),"index")
+    checksum_combined = ""
+    if os.path.exists(feed_index_dir):
+        for file in os.listdir(feed_index_dir):
+            checksum = bb.utils.sha256_file(os.path.join(feed_index_dir, file))
+            checksum_combined += checksum
+    d.setVar("IPK_INDEX_CHECKSUM", checksum_combined)
+    bb.note("[staging-ipk] ipk index checksum %s"%(d.getVar("IPK_INDEX_CHECKSUM")))
+}
+do_populate_ipk_sysroot[vardeps] += "IPK_INDEX_CHECKSUM"
 do_populate_ipk_sysroot[network] = "1"
 deltask do_fetch
 deltask do_unpack
