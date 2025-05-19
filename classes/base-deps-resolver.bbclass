@@ -14,6 +14,11 @@ SYSROOT_DIRS_BIN_REQUIRED = "${MLPREFIX}gobject-introspection"
 # Pkgdata directory to store runtime IPK dependency details.
 IPK_PKGDATA_RUNTIME_DIR = "${WORKDIR}/pkgdata/ipk"
 
+SRC_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/src_mode/target"
+PREBUILT_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/prebuilt_mode/target"
+SRC_NATIVE_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/src_mode/native"
+PREBUILT_NATIVE_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/prebuilt_mode/native"
+
 do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
 inherit gir-ipk-qemuwrapper
@@ -279,19 +284,38 @@ do_package_write_ipk_setscene:prepend() {
 python do_sls_generate_native_sysroot(){
     import os
     import shutil
+    import subprocess
     pn = d.getVar("PN", True)
-    staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
-    if not staging_native_docker_path:
+    staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
+    if not staging_native_prebuilt_path:
         return
 
-    docker_native_pkg_path = os.path.join(staging_native_docker_path, pn)
-    if not os.path.exists(docker_native_pkg_path):
+    prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
+    prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
+    if prebuilt_native_pkg_type:
+        prebuilt_native_pkg_path += f".{prebuilt_native_pkg_type}"
+    exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
+    if pn in exclusion_list:
+        bb.note("Excluding %s from prebuilt consumption"%pn)
         return
-
-    sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
-    if os.path.exists(sysroot_components_dir_dst):
-        shutil.rmtree(sysroot_components_dir_dst)
-    shutil.copytree(docker_native_pkg_path, sysroot_components_dir_dst, symlinks=True)
+    if os.path.exists(prebuilt_native_pkg_path) and not prebuilt_native_pkg_type:
+        sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
+        if os.path.exists(sysroot_components_dir_dst):
+            shutil.rmtree(sysroot_components_dir_dst)
+        shutil.copytree(prebuilt_native_pkg_path, sysroot_components_dir_dst, symlinks=True)
+    elif os.path.exists(prebuilt_native_pkg_path):
+        sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
+        if os.path.exists(sysroot_components_dir_dst):
+            shutil.rmtree(sysroot_components_dir_dst)
+        sysroot_components_dir = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True))
+        if not os.path.exists(sysroot_components_dir):
+            bb.utils.mkdirhier(sysroot_components_dir)
+        if prebuilt_native_pkg_type == "tar.gz":
+            bb.process.run("tar -xvzf %s -C %s" % (prebuilt_native_pkg_path, sysroot_components_dir), stderr=subprocess.STDOUT)
+        else:
+            bb.fatal("Support for the extension %s need to add. Currently support only tar.gz "%prebuilt_native_pkg_type)
+    else:
+        return
 
     manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".populate_sysroot"
     bb.utils.mkdirhier(os.path.dirname(manifest_name))
@@ -301,48 +325,81 @@ python do_sls_generate_native_sysroot(){
                 manifest.write(os.path.join(dir_path, file) + "\n")
 }
 
-do_populate_sysroot:prepend() {
+def check_prebuilt (d, ext):
     pn = d.getVar('PN', True)
-    staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
-    if staging_native_docker_path:
-        native_pkg_dst = os.path.join(staging_native_docker_path, pn)
-        if os.path.exists(native_pkg_dst):
-            if "gcc-" in pn and  not os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
-                bb.note("GCC is source mode. Not skipping do_populate_sysroot")
-            else:
-                bb.note("Skipping do_populate_sysroot")
-                return
-    native_pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
-    if os.path.exists(native_pkg_dst):
-        import shutil
-        shutil.rmtree(native_pkg_dst)
-    if os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"):
-        bb.note("Skipping do_populate_sysroot")
-        return
+    arch = d.getVar("PACKAGE_ARCH", True)
 
+    if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
+        exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
+        if pn in exclusion_list:
+            bb.note("Excluding %s from prebuilt consumption"%pn)
+            return False
+        staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
+        file_path_src = os.path.join(d.getVar("SRC_NATIVE_PKGS_LIST"),pn)
+        file_path_pre = os.path.join(d.getVar("PREBUILT_NATIVE_PKGS_LIST"),pn)
+        if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
+            native_pkg_dst = os.path.join(staging_native_prebuilt_path, pn)
+            prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
+            if prebuilt_native_pkg_type:
+                native_pkg_dst += f".{prebuilt_native_pkg_type}"
+            if os.path.exists(native_pkg_dst):
+                if "gcc-" in pn and  not os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
+                    bb.note("GCC is source mode. Not skipping do_populate_sysroot%s"%ext)
+                else:
+                    if os.path.exists(file_path_src):
+                        os.remove(file_path_src)
+                    if not os.path.exists(d.getVar("PREBUILT_NATIVE_PKGS_LIST")):
+                        bb.utils.mkdirhier(d.getVar("PREBUILT_NATIVE_PKGS_LIST"))
+                    if not os.path.exists(file_path_pre):
+                        open(file_path_pre, 'w').close()
+                    bb.note("Skipping do_populate_sysroot%s"%ext)
+                    return True
+
+        if os.path.exists(staging_native_prebuilt_path):
+            if not os.path.exists(d.getVar("SRC_NATIVE_PKGS_LIST")):
+                bb.utils.mkdirhier(d.getVar("SRC_NATIVE_PKGS_LIST"))
+            if not os.path.exists(file_path_src):
+                open(file_path_src, 'w').close()
+    else:
+        file_path_src = os.path.join(d.getVar("SRC_PKGS_LIST"),pn)
+        file_path_pre = os.path.join(d.getVar("PREBUILT_PKGS_LIST"),pn)
+        if os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"):
+            if os.path.exists(file_path_src):
+                os.remove(file_path_src)
+            if not os.path.exists(d.getVar("PREBUILT_PKGS_LIST")):
+                bb.utils.mkdirhier(d.getVar("PREBUILT_PKGS_LIST"))
+            if not os.path.exists(file_path_pre):
+                open(file_path_pre, 'w').close()
+            bb.note("Skipping do_populate_sysroot%s"%ext)
+            return True
+
+        if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
+            if not os.path.exists(d.getVar("SRC_PKGS_LIST")):
+                bb.utils.mkdirhier(d.getVar("SRC_PKGS_LIST"))
+            if not os.path.exists(file_path_src):
+                open(file_path_src, 'w').close()
+
+    pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), arch, pn)
+    if os.path.exists(pkg_dst):
+        import shutil
+        shutil.rmtree(pkg_dst)
+
+    if os.path.exists(file_path_pre):
+        os.remove(file_path_pre)
+
+    return False
+
+do_populate_sysroot:prepend() {
+    skip = check_prebuilt (d, "")
+    if skip:
+        return
 }
 
 do_populate_sysroot_setscene:prepend() {
-    pn = d.getVar('PN', True)
-    staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
-    if staging_native_docker_path:
-        native_pkg_dst = os.path.join(staging_native_docker_path, pn)
-        if os.path.exists(native_pkg_dst) and os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
-            if "gcc-" in pn and  not os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
-                bb.note("GCC is source mode. Not skipping do_populate_sysroot")
-            else:
-                bb.note("Skipping do_populate_sysroot_setscene")
-                return
-    native_pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
-    if os.path.exists(native_pkg_dst):
-        import shutil
-        shutil.rmtree(native_pkg_dst)
-    if os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"):
-        bb.note("Skipping do_populate_sysroot")
+    skip = check_prebuilt (d, "_setscene")
+    if skip:
         return
 }
-
-addtask do_sls_generate_native_sysroot before do_populate_sysroot
 
 # Install the dev ipks to the component sysroot
 python do_install_ipk_recipe_sysroot () {
@@ -647,10 +704,15 @@ python () {
     version = get_version_info(d)
 
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
-        staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
-        if staging_native_docker_path:
-            docker_native_pkg_path = os.path.join(staging_native_docker_path, d.getVar("PN", True))
-            if os.path.exists(docker_native_pkg_path) and not gcc_source_mode_check(d, pn):
+        staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
+        if staging_native_prebuilt_path:
+            exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
+            prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, d.getVar("PN", True))
+            prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
+            if prebuilt_native_pkg_type:
+                prebuilt_native_pkg_path += f".{prebuilt_native_pkg_type}"
+            if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(d, pn) and pn not in exclusion_list :
+                bb.build.addtask('do_sls_generate_native_sysroot', 'do_populate_sysroot', None, d)
                 update_build_tasks(d, arch, "native")
     else:
         # Skipping unrequired version of recipes
@@ -816,7 +878,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
         src_dep_bpkg = dep_bpkg[len(prefix):]
     else:
         src_dep_bpkg = dep_bpkg
-    staging_native_docker_path = d.getVar("DOCKER_NATIVE_SYSROOT")
+    staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
 
     if is_excluded_pkg(d, dep_bpkg):
         return (ipkmode, version_mismatch, same_arch)
@@ -834,7 +896,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     if not archs:
         return (ipkmode, version_mismatch, same_arch)
 
-    if staging_native_docker_path and os.path.exists(staging_native_docker_path):
+    if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
         ipkmode = True if src_dep_bpkg in d.getVar("TOOLCHAIN_DEPS_PKGS").split(" ") or src_dep_bpkg in d.getVar("GLIBC_PKGS").split(" ") else False
 
     for arch in archs:
@@ -1432,12 +1494,95 @@ def create_feed_index(arg):
     if result:
         bb.note(result)
 
+def print_pkgs_in_src_mode(d):
+    pkgs_native_list = d.getVar("SRC_NATIVE_PKGS_LIST")
+    pkgs_list = d.getVar("SRC_PKGS_LIST")
+    list_pkgs = []
+    if os.path.exists(pkgs_native_list):
+        bb.note("NATIVE PKGS in SRC mode")
+        for file in os.listdir(pkgs_native_list):
+            list_pkgs.append(file)
+        for i in range(0, len(list_pkgs), 5):
+            bb.note(' '.join(list_pkgs[i:i+5]))
+
+    list_pkgs = []
+    if os.path.exists(pkgs_list):
+        bb.note("TARGET PKGS in SRC mode")
+        for file in os.listdir(pkgs_list):
+            list_pkgs.append(file)
+        for i in range(0, len(list_pkgs), 5):
+            bb.note(' '.join(list_pkgs[i:i+5]))
+
+# Helper function to create a markup document with a list of IPKs in the respective deploy directory.
+# Set the variable 'GENERATE_IPK_VERSION_DOC' to enable this feature.
+def generate_packages_and_versions_md(d):
+    import os
+
+    machine = d.getVar('MACHINE')
+    deploy_dir_ipk = d.getVar('DEPLOY_DIR_IPK')
+    if not os.path.exists(deploy_dir_ipk):
+        return
+
+    archs = d.getVar("ALL_MULTILIB_PACKAGE_ARCHS").split()
+    for arch in archs:
+        target_dir = os.path.join(deploy_dir_ipk, arch)
+        if not os.path.exists(target_dir):
+            continue
+
+        output_file = os.path.join(target_dir, "PackagesAndVersions.md")
+
+        # Collect and filter package names and versions
+        packages = []
+        for file in os.listdir(target_dir):
+            # Filter out unwanted packages and process only valid .ipk files
+            if file.endswith(".ipk") and not any(
+                suffix in file for suffix in ("-dbg", "-dev", "-static", "-staticdev", "-src")
+            ):
+                # Split the filename at the first "_" for package name and the rest for version
+                split_index = file.find("_")
+                if split_index != -1:
+                    pkg_name = file[:split_index]
+                    pkg_version = file[split_index + 1:].rsplit(".ipk", 1)[0]
+
+                    # Remove architecture suffix from version
+                    if "_" in pkg_version:
+                        pkg_version = pkg_version.rsplit("_", 1)[0]
+
+                    packages.append((pkg_name, pkg_version))
+
+        # Separate and sort packages
+        priority_entries = sorted(
+            [pkg for pkg in packages if "packagegroup-" in pkg[0]],
+            key=lambda x: x[0]
+        )
+        other_entries = sorted(
+            [pkg for pkg in packages if "packagegroup-" not in pkg[0]],
+            key=lambda x: x[0]
+        )
+
+        # Combine priority packages at the top
+        sorted_packages = priority_entries + other_entries
+
+        # Write to PackagesAndVersions.md
+        with open(output_file, "w") as f:
+            f.write("# Packages and Versions\n\n")
+            f.write("| Package Name | Package Version |\n")
+            f.write("|--------------|-----------------|\n")
+            for pkg_name, pkg_version in sorted_packages:
+                f.write(f"| {pkg_name} | {pkg_version} |\n")
+
+        bb.note(f"Generated {output_file}")
+
 # This is temporary. Once opkg-utils is part of Docker, we can remove it.
 # Also, need to check if the recipe-native can be generated for the default package.
 OPKG_UTILS_SYSROOT = "${COMPONENTS_DIR}/${BUILD_ARCH}/opkg-utils-native"
 OPKG_INDEX_FILE = "${OPKG_UTILS_SYSROOT}${bindir_native}/opkg-make-index"
 
 python feed_index_creation () {
+    print_pkgs_in_src_mode(d)
+    if e.data.getVar('GENERATE_IPK_VERSION_DOC') == "1":
+        generate_packages_and_versions_md(d)
+
     if e.data.getVar("DEPLOY_IPK_FEED") == "0":
         return
     cmds = set()
@@ -1484,7 +1629,6 @@ addhandler feed_index_creation
 feed_index_creation[eventmask] = "bb.event.BuildCompleted"
 
 python get_pkgs_handler () {
-
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     update_check = False
     if isinstance(e,bb.event.DepTreeGenerated):
