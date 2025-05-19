@@ -19,11 +19,7 @@ IPK_COMMON_DIRS_EXCLUSIONLIST = " \
 "
 # List of directories to generate common ipk sysroot.
 # /var/lib/opkg is required to get the opkg info.
-IPK_COMMON_DIRS = " \
-    ${includedir} ${libdir} ${base_libdir} ${bindir}\
-    ${nonarch_base_libdir} ${datadir} \
-    "/var/lib/opkg" "/usr/lib/opkg" "/kernel-source" "/kernel-build"\
-"
+IPK_COMMON_DIRS = "${includedir} ${libdir} ${base_libdir} ${bindir} ${nonarch_base_libdir} ${datadir} /var/lib/opkg /usr/lib/opkg /kernel-source /kernel-build /boot"
 
 do_populate_ipk_sysroot[depends] += "pseudo-native:do_populate_sysroot"
 do_populate_ipk_sysroot[depends] += "opkg-utils-native:do_populate_sysroot"
@@ -33,8 +29,9 @@ do_populate_ipk_sysroot[depends] += "opkg-native:do_populate_sysroot"
 ipk_staging_dirs() {
     src="$1"
     dest="$2"
+    comdir="$3"
 
-    for dir in ${IPK_COMMON_DIRS}; do
+    for dir in $comdir; do
         # Stage directory if it exists
         if [ -d "$src$dir" ]; then
             mkdir -p "$dest$dir"
@@ -51,8 +48,7 @@ ipk_staging_dirs() {
 }
 
 create_ipk_common_staging() {
-    rm -rf ${SYSROOT_IPK}
-    ipk_staging_dirs ${IPK_DESTDIR}  ${IPK_SYSDIR}
+    ipk_staging_dirs ${IPK_DESTDIR} ${IPK_SYSDIR} "${IPK_COMMON_DIRS}"
     rm -rf ${IPK_DESTDIR}
 }
 
@@ -140,7 +136,20 @@ def get_base_pkg_name(pkg_name):
         tmp_pkg_name = pkg_name[:-7]
     return tmp_pkg_name
 
-def do_kernel_devel_create(d):
+python do_copy_boot_files(){
+    import shutil
+    boot_dir = os.path.join(d.getVar("SYSROOT_IPK"),"%s"%d.getVar("IMAGEDEST"))
+    if os.path.exists(boot_dir):
+        img_deploy_dir = d.getVar("DEPLOY_DIR_IMAGE")
+        if not os.path.exists(img_deploy_dir):
+            bb.utils.mkdirhier(img_deploy_dir)
+        for item in os.listdir(boot_dir):
+            src = os.path.join(boot_dir, item)
+            dest = os.path.join(img_deploy_dir, item)
+            shutil.copy(src,dest)
+}
+
+python do_kernel_devel_create(){
     kernel_src = d.getVar('SYSROOT_IPK')+"/kernel-source"
     kernel_artifacts = d.getVar('SYSROOT_IPK')+"/kernel-build"
     kernel_src_staging = d.getVar('STAGING_KERNEL_DIR')
@@ -162,6 +171,7 @@ def do_kernel_devel_create(d):
             os.symlink(kernel_artifacts, d.getVar('STAGING_KERNEL_BUILDDIR'))
     else:
         bb.note("kernel devel build artifacts is not present in IPK feeds")
+}
 
 def check_staging_exclusion(d, pkg, pkg_path):
     is_excluded = False
@@ -190,7 +200,6 @@ def check_staging_exclusion(d, pkg, pkg_path):
 
 # Install the dependent ipks to the component sysroot
 fakeroot python do_populate_ipk_sysroot(){
-    import shutil
     import re
     deps, ipk_pkgs, ipk_list, inst_list= ([] for i in range(4))
 
@@ -391,19 +400,8 @@ fakeroot python do_populate_ipk_sysroot(){
     if inst_list:
         cmd = '%s %s install ' % (opkg_cmd, opkg_args)
         ipk_install(d, cmd, inst_list, sysroot_destdir)
-        boot_dir = os.path.join(sysroot_destdir,"%s"%d.getVar("IMAGEDEST"))
-        if os.path.exists(boot_dir):
-            img_deploy_dir = d.getVar("DEPLOY_DIR_IMAGE")
-            if not os.path.exists(img_deploy_dir):
-                bb.utils.mkdirhier(img_deploy_dir)
-            for item in os.listdir(boot_dir):
-                src = os.path.join(boot_dir, item)
-                dest = os.path.join(img_deploy_dir, item)
-                shutil.copy(src,dest)
         # Generate the IPK staging directory for sysroot creation.
         bb.build.exec_func("create_ipk_common_staging", d)
-        do_kernel_devel_create(d)
-
     bb.note("[staging-ipk] Installed pkgs : %s"%inst_list)
 }
 python(){
@@ -446,3 +444,8 @@ deltask do_package_qa
 deltask do_package_write_ipk
 
 addtask do_populate_ipk_sysroot before do_populate_sysroot
+addtask do_kernel_devel_create after do_populate_ipk_sysroot before do_populate_sysroot
+addtask do_copy_boot_files after do_populate_ipk_sysroot before do_populate_sysroot
+
+do_kernel_devel_create[nostamp] = "1"
+do_copy_boot_files[nostamp] = "1"
