@@ -8,9 +8,5 @@ inherit staging-ipk
 # stripped, we should skip the strip checking.
 INSANE_SKIP:${PN} += " already-stripped "
 
-# Disabling sstate, as this recipe needs to
-# execute to install the IPKs.
-SSTATE_SKIP_CREATION = "1"
-
 #Enable nativesdk support for the recipe.
 BBCLASSEXTEND = "nativesdk"
