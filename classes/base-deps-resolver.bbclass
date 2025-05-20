@@ -1440,7 +1440,18 @@ python create_stack_layer_info () {
     import shutil
     import gzip
     feed_info_dir = e.data.getVar("FEED_INFO_DIR")
-    if isinstance(e, bb.event.CacheLoadStarted):
+    index_check = os.path.join(e.data.getVar("TOPDIR")+"/index_created")
+    if isinstance(e, bb.event.BuildCompleted) or isinstance(e, bb.event.TreeDataPreparationStarted):
+        if os.path.exists(index_check):
+            os.remove(index_check)
+    if isinstance(e, bb.event.TreeDataPreparationCompleted):
+        if not os.path.exists(index_check):
+            open(index_check, 'w').close()
+    if isinstance(e, bb.event.MultiConfigParsed):
+        # For multiconfig builds.
+        if not os.path.exists(index_check):
+            open(index_check, 'w').close()
+    if isinstance(e, bb.event.ConfigParsed) and not os.path.exists(index_check):
         if os.path.exists(feed_info_dir):
             shutil.rmtree(feed_info_dir)
         if not os.path.exists(feed_info_dir+"index/"):
@@ -1449,6 +1460,12 @@ python create_stack_layer_info () {
             # To skip cache parsing and start recipe parsing
             import random
             e.data.setVar("TARGET_PARSING",random.randint(1, 50))
+
+        ml_config = e.data.getVar("BBMULTICONFIG") or ""
+        if not ml_config:
+            # For non multiconfig builds.
+            if not os.path.exists(index_check):
+                open(index_check, 'w').close()
 
         for line in (e.data.getVar('IPK_FEED_URIS') or "").split():
             feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
@@ -1467,7 +1484,7 @@ python create_stack_layer_info () {
                 create_ipk_pkgdata(e.data, index_file+arch_name ,feed_info_dir,arch_name)
 }
 addhandler create_stack_layer_info
-create_stack_layer_info[eventmask] = "bb.event.CacheLoadStarted"
+create_stack_layer_info[eventmask] = "bb.event.ConfigParsed bb.event.BuildCompleted bb.event.TreeDataPreparationStarted bb.event.TreeDataPreparationCompleted bb.event.MultiConfigParsed"
 
 def create_feed_index(arg):
     import subprocess
@@ -1648,6 +1665,9 @@ python get_pkgs_handler () {
                             update_check = True
                         bb.warn("%s version should update and rebuild. Dependency %s has changed with major version"%(source,dep))
     if update_check:
+        index_check = os.path.join(e.data.getVar("TOPDIR")+"/index_created")
+        if os.path.exists(index_check):
+            os.remove(index_check)
         bb.fatal("Update version and required rebuild")
 }
 addhandler get_pkgs_handler
