@@ -1632,15 +1632,18 @@ python get_pkgs_handler () {
         pkg_path = d.getVar("TARGET_DEPS_LIST")
         targetdeps = []
         for deps in e._depgraph['depends']:
-            if deps.endswith("-native"):
+            if deps.endswith("-native") or deps.endswith("-cross") :
                 continue
             if deps not in targetdeps:
                 targetdeps.append(deps)
         for deps in e._depgraph['rdepends-pn']:
-            if deps.endswith("-native"):
+            if deps.endswith("-native") or deps.endswith("-cross") :
                 continue
             if deps not in targetdeps:
                 targetdeps.append(deps)
+        if targetdeps:
+            targetdeps.sorted()
+
         ipk_mapping = e.data.getVar("IPK_DEPS_MAPPING_LIST") or {}
 
         if pkg_path and e.data.getVar("TARGET_BASED_IPK_INSTALL") == "1":

@@ -429,8 +429,14 @@ python __anonymous() {
             checksum_combined += checksum
     d.setVar("IPK_INDEX_CHECKSUM", checksum_combined)
     bb.note("[staging-ipk] ipk index checksum %s"%(d.getVar("IPK_INDEX_CHECKSUM")))
+    checksum = ""
+    target_list_path = d.getVar("TARGET_DEPS_LIST")
+    if target_list_path and os.path.exists(target_list_path) and d.getVar("TARGET_BASED_IPK_INSTALL") == "1":
+        checksum = bb.utils.sha256_file(target_list_path)
+        bb.note("[staging-ipk] target pkgs checksum %s"%(d.getVar("IPK_INDEX_CHECKSUM")))
+        d.setVar("TARGET_PKG_CHECKSUM", checksum)
 }
-do_populate_ipk_sysroot[vardeps] += "IPK_INDEX_CHECKSUM"
+do_populate_ipk_sysroot[vardeps] += "IPK_INDEX_CHECKSUM TARGET_PKG_CHECKSUM"
 do_populate_ipk_sysroot[network] = "1"
 deltask do_fetch
 deltask do_unpack
