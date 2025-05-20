@@ -1441,7 +1441,6 @@ python create_stack_layer_info () {
     import gzip
     feed_info_dir = e.data.getVar("FEED_INFO_DIR")
     if isinstance(e, bb.event.CacheLoadStarted):
-        bb.note("[base-deps-resolver] ipk index and pkgdata creation")
         if os.path.exists(feed_info_dir):
             shutil.rmtree(feed_info_dir)
         if not os.path.exists(feed_info_dir+"index/"):
