@@ -243,8 +243,6 @@ def update_build_tasks(d, arch, machine):
     enable_task(d, "do_cleanall")
     enable_task(d, "do_populate_sysroot")
     enable_task(d, "do_package_write_ipk")
-    if machine == "native":
-        enable_task(d, "do_sls_generate_native_sysroot")
 
     d.setVarFlag("do_populate_sysroot", "prefuncs", " ")
     d.setVarFlag("do_populate_sysroot", "postfuncs", " ")
@@ -277,6 +275,18 @@ do_package_write_ipk_setscene:prepend() {
         ipk_download(d)
         return
 }
+do_populate_sysroot:prepend() {
+    skip = sls_generate_native_sysroot (d)
+    if skip:
+        return
+}
+
+do_populate_sysroot_setscene:prepend() {
+    skip = sls_generate_native_sysroot (d)
+    if skip:
+        return
+}
+
 
 def sls_generate_native_sysroot(d):
     import os
@@ -308,83 +318,6 @@ def sls_generate_native_sysroot(d):
     else:
         return False
     return True
-
-SSTATETASKS += "do_sls_generate_native_sysroot"
-do_sls_generate_native_sysroot[dirs] = "${SYSROOT_PREBUILT_DESTDIR}"
-do_sls_generate_native_sysroot[dirs] = "${PREBUILTDEPLOYDIR}"
-do_sls_generate_native_sysroot[sstate-inputdirs] = "${SYSROOT_PREBUILT_DESTDIR}"
-do_sls_generate_native_sysroot[sstate-outputdirs] = "${PREBUILTDEPLOYDIR}"
-do_sls_generate_native_sysroot[cleandirs] = "${SYSROOT_PREBUILT_DESTDIR}"
-
-python do_sls_generate_native_sysroot_setscene () {
-    sstate_setscene(d)
-}
-addtask do_sls_generate_native_sysroot_setscene
-
-
-def check_prebuilt (d, ext):
-    pn = d.getVar('PN', True)
-    arch = d.getVar("PACKAGE_ARCH", True)
-
-    if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
-        exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
-        if pn in exclusion_list:
-            bb.note("Excluding %s from prebuilt consumption"%pn)
-            return False
-        staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
-        file_path_src = os.path.join(d.getVar("SRC_NATIVE_PKGS_LIST"),pn)
-        file_path_pre = os.path.join(d.getVar("PREBUILT_NATIVE_PKGS_LIST"),pn)
-        if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
-            native_pkg_dst = os.path.join(staging_native_prebuilt_path, pn)
-            prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
-            if prebuilt_native_pkg_type:
-                native_pkg_dst += f".{prebuilt_native_pkg_type}"
-            if os.path.exists(native_pkg_dst):
-                if "gcc-" in pn and  not os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
-                    bb.note("GCC is source mode. Not skipping do_populate_sysroot%s"%ext)
-                else:
-                    if os.path.exists(file_path_src):
-                        os.remove(file_path_src)
-                    if not os.path.exists(d.getVar("PREBUILT_NATIVE_PKGS_LIST")):
-                        bb.utils.mkdirhier(d.getVar("PREBUILT_NATIVE_PKGS_LIST"))
-                    if not os.path.exists(file_path_pre):
-                        open(file_path_pre, 'w').close()
-                    bb.note("Skipping do_populate_sysroot%s"%ext)
-                    return True
-
-        if os.path.exists(staging_native_prebuilt_path):
-            if not os.path.exists(d.getVar("SRC_NATIVE_PKGS_LIST")):
-                bb.utils.mkdirhier(d.getVar("SRC_NATIVE_PKGS_LIST"))
-            if not os.path.exists(file_path_src):
-                open(file_path_src, 'w').close()
-    else:
-        file_path_src = os.path.join(d.getVar("SRC_PKGS_LIST"),pn)
-        file_path_pre = os.path.join(d.getVar("PREBUILT_PKGS_LIST"),pn)
-        if os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"):
-            if os.path.exists(file_path_src):
-                os.remove(file_path_src)
-            if not os.path.exists(d.getVar("PREBUILT_PKGS_LIST")):
-                bb.utils.mkdirhier(d.getVar("PREBUILT_PKGS_LIST"))
-            if not os.path.exists(file_path_pre):
-                open(file_path_pre, 'w').close()
-            bb.note("Skipping do_populate_sysroot%s"%ext)
-            return True
-
-        if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
-            if not os.path.exists(d.getVar("SRC_PKGS_LIST")):
-                bb.utils.mkdirhier(d.getVar("SRC_PKGS_LIST"))
-            if not os.path.exists(file_path_src):
-                open(file_path_src, 'w').close()
-
-    pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), arch, pn)
-    if os.path.exists(pkg_dst):
-        import shutil
-        shutil.rmtree(pkg_dst)
-
-    if os.path.exists(file_path_pre):
-        os.remove(file_path_pre)
-
-    return False
 
 # Install the dev ipks to the component sysroot
 python do_install_ipk_recipe_sysroot () {
@@ -697,7 +630,6 @@ python () {
             if prebuilt_native_pkg_type:
                 prebuilt_native_pkg_path += f".{prebuilt_native_pkg_type}"
             if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(d, pn) and pn not in exclusion_list :
-                bb.build.addtask('do_sls_generate_native_sysroot', 'do_populate_sysroot', None, d)
                 update_build_tasks(d, arch, "native")
     else:
         # Skipping unrequired version of recipes
