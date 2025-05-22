@@ -19,6 +19,9 @@ PREBUILT_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/prebuilt_mode/target"
 SRC_NATIVE_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/src_mode/native"
 PREBUILT_NATIVE_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/prebuilt_mode/native"
 
+SYSROOT_PREBUILT_DESTDIR = "${WORKDIR}/sysroot-prebuilt-destdir"
+PREBUILTDEPLOYDIR = "${COMPONENTS_DIR}/${PACKAGE_ARCH}"
+
 do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
 inherit gir-ipk-qemuwrapper
@@ -248,13 +251,6 @@ def update_build_tasks(d, arch, machine):
     d.setVarFlag("do_populate_sysroot_setscene", "prefuncs", " ")
     d.setVarFlag("do_populate_sysroot_setscene", "postfuncs", " ")
 
-    sstate_tasks = d.getVar('SSTATETASKS', True)
-    sstate_tasks = sstate_tasks.replace("do_populate_sysroot", "")
-    sstate_tasks = sstate_tasks.replace("do_populate_sysroot_setscene", "")
-    sstate_tasks = sstate_tasks.replace("do_package_write_ipk", "")
-    sstate_tasks = sstate_tasks.replace("do_package_write_ipk_setscene", "")
-    d.setVar('SSTATETASKS', sstate_tasks)
-
     if machine == "target":
         manifest_path = d.getVar("SSTATE_MANIFESTS", True)
         if not os.path.exists(manifest_path):
@@ -281,14 +277,15 @@ do_package_write_ipk_setscene:prepend() {
         ipk_download(d)
         return
 }
-python do_sls_generate_native_sysroot(){
+
+def sls_generate_native_sysroot(d):
     import os
     import shutil
     import subprocess
     pn = d.getVar("PN", True)
     staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
     if not staging_native_prebuilt_path:
-        return
+        return False
 
     prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
     prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
@@ -297,33 +294,33 @@ python do_sls_generate_native_sysroot(){
     exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
     if pn in exclusion_list:
         bb.note("Excluding %s from prebuilt consumption"%pn)
-        return
+        return False
+    sysroot_components_dir = d.getVar("SYSROOT_PREBUILT_DESTDIR", True)
+    if not os.path.exists(sysroot_components_dir):
+        bb.utils.mkdirhier(sysroot_components_dir)
     if os.path.exists(prebuilt_native_pkg_path) and not prebuilt_native_pkg_type:
-        sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
-        if os.path.exists(sysroot_components_dir_dst):
-            shutil.rmtree(sysroot_components_dir_dst)
-        shutil.copytree(prebuilt_native_pkg_path, sysroot_components_dir_dst, symlinks=True)
+        shutil.copytree(prebuilt_native_pkg_path, sysroot_components_dir, symlinks=True)
     elif os.path.exists(prebuilt_native_pkg_path):
-        sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
-        if os.path.exists(sysroot_components_dir_dst):
-            shutil.rmtree(sysroot_components_dir_dst)
-        sysroot_components_dir = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True))
-        if not os.path.exists(sysroot_components_dir):
-            bb.utils.mkdirhier(sysroot_components_dir)
         if prebuilt_native_pkg_type == "tar.gz":
             bb.process.run("tar -xvzf %s -C %s" % (prebuilt_native_pkg_path, sysroot_components_dir), stderr=subprocess.STDOUT)
         else:
             bb.fatal("Support for the extension %s need to add. Currently support only tar.gz "%prebuilt_native_pkg_type)
     else:
-        return
+        return False
+    return True
 
-    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".populate_sysroot"
-    bb.utils.mkdirhier(os.path.dirname(manifest_name))
-    with open(manifest_name, "w") as manifest:
-        for (dir_path, dir_names, file_names) in os.walk(sysroot_components_dir_dst):
-            for file in file_names:
-                manifest.write(os.path.join(dir_path, file) + "\n")
+SSTATETASKS += "do_sls_generate_native_sysroot"
+do_sls_generate_native_sysroot[dirs] = "${SYSROOT_PREBUILT_DESTDIR}"
+do_sls_generate_native_sysroot[dirs] = "${PREBUILTDEPLOYDIR}"
+do_sls_generate_native_sysroot[sstate-inputdirs] = "${SYSROOT_PREBUILT_DESTDIR}"
+do_sls_generate_native_sysroot[sstate-outputdirs] = "${PREBUILTDEPLOYDIR}"
+do_sls_generate_native_sysroot[cleandirs] = "${SYSROOT_PREBUILT_DESTDIR}"
+
+python do_sls_generate_native_sysroot_setscene () {
+    sstate_setscene(d)
 }
+addtask do_sls_generate_native_sysroot_setscene
+
 
 def check_prebuilt (d, ext):
     pn = d.getVar('PN', True)
@@ -388,18 +385,6 @@ def check_prebuilt (d, ext):
         os.remove(file_path_pre)
 
     return False
-
-do_populate_sysroot:prepend() {
-    skip = check_prebuilt (d, "")
-    if skip:
-        return
-}
-
-do_populate_sysroot_setscene:prepend() {
-    skip = check_prebuilt (d, "_setscene")
-    if skip:
-        return
-}
 
 # Install the dev ipks to the component sysroot
 python do_install_ipk_recipe_sysroot () {
