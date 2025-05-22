@@ -246,8 +246,16 @@ def update_build_tasks(d, arch, machine):
 
     d.setVarFlag("do_populate_sysroot", "prefuncs", " ")
     d.setVarFlag("do_populate_sysroot", "postfuncs", " ")
+    d.setVarFlag("do_populate_sysroot", "sstate-interceptfuncs", " ")
+    d.setVarFlag("do_populate_sysroot", "sstate-fixmedir", " ")
     d.setVarFlag("do_populate_sysroot_setscene", "prefuncs", " ")
     d.setVarFlag("do_populate_sysroot_setscene", "postfuncs", " ")
+    d.setVarFlag("do_populate_sysroot_setscene", "sstate-interceptfuncs", " ")
+
+    sstate_tasks = d.getVar('SSTATETASKS', True)
+    sstate_tasks = sstate_tasks.replace("do_package_write_ipk", "")
+    sstate_tasks = sstate_tasks.replace("do_package_write_ipk_setscene", "")
+    d.setVar('SSTATETASKS', sstate_tasks)
 
     if machine == "target":
         manifest_path = d.getVar("SSTATE_MANIFESTS", True)
@@ -276,17 +284,11 @@ do_package_write_ipk_setscene:prepend() {
         return
 }
 do_populate_sysroot:prepend() {
-    skip = sls_generate_native_sysroot (d)
-    if skip:
-        return
+    if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
+        skip = sls_generate_native_sysroot (d)
+        if skip:
+            return
 }
-
-do_populate_sysroot_setscene:prepend() {
-    skip = sls_generate_native_sysroot (d)
-    if skip:
-        return
-}
-
 
 def sls_generate_native_sysroot(d):
     import os
@@ -305,18 +307,39 @@ def sls_generate_native_sysroot(d):
     if pn in exclusion_list:
         bb.note("Excluding %s from prebuilt consumption"%pn)
         return False
-    sysroot_components_dir = d.getVar("SYSROOT_PREBUILT_DESTDIR", True)
+    image_dir = d.getVar("D", True)
+    staging_native_dir = d.getVar("STAGING_DIR_NATIVE", True)
+    #staging_native_dir = d.getVar("STAGING_DIR_NATIVE", True)
+    sysroot_components_dir = os.path.join(image_dir, staging_native_dir.lstrip('/'))
     if not os.path.exists(sysroot_components_dir):
         bb.utils.mkdirhier(sysroot_components_dir)
     if os.path.exists(prebuilt_native_pkg_path) and not prebuilt_native_pkg_type:
         shutil.copytree(prebuilt_native_pkg_path, sysroot_components_dir, symlinks=True)
     elif os.path.exists(prebuilt_native_pkg_path):
         if prebuilt_native_pkg_type == "tar.gz":
-            bb.process.run("tar -xvzf %s -C %s" % (prebuilt_native_pkg_path, sysroot_components_dir), stderr=subprocess.STDOUT)
+            bb.process.run("tar --strip-components=1 -xvzf %s -C %s" % (prebuilt_native_pkg_path, sysroot_components_dir), stderr=subprocess.STDOUT)
         else:
             bb.fatal("Support for the extension %s need to add. Currently support only tar.gz "%prebuilt_native_pkg_type)
     else:
         return False
+    bb.build.exec_func("sysroot_stage_all", d)
+    #bb.build.exec_func("sysroot_strip", d)
+    for f in (d.getVar('SYSROOT_PREPROCESS_FUNCS') or '').split():
+        bb.build.exec_func(f, d)
+    fixme_path = d.expand("${SYSROOT_DESTDIR}${base_prefix}/")
+    fixme_file_path = os.path.join(sysroot_components_dir,"fixmepath")
+    if os.path.exists(fixme_file_path):
+        shutil.copy(fixme_file_path,fixme_path)
+    pn = d.getVar("PN")
+    multiprov = d.getVar("BB_MULTI_PROVIDER_ALLOWED").split()
+    provdir = d.expand("${SYSROOT_DESTDIR}${base_prefix}/sysroot-providers/")
+    bb.utils.mkdirhier(provdir)
+    for p in d.getVar("PROVIDES").split():
+        if p in multiprov:
+            continue
+        p = p.replace("/", "_")
+        with open(provdir + p, "w") as f:
+            f.write(pn)
     return True
 
 # Install the dev ipks to the component sysroot
