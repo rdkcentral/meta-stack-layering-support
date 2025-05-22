@@ -444,8 +444,8 @@ deltask do_package_qa
 deltask do_package_write_ipk
 
 addtask do_populate_ipk_sysroot before do_populate_sysroot
-addtask do_kernel_devel_create after do_populate_ipk_sysroot before do_populate_sysroot
-addtask do_copy_boot_files after do_populate_ipk_sysroot before do_populate_sysroot
+addtask do_kernel_devel_create
+addtask do_copy_boot_files
 
 do_kernel_devel_create[nostamp] = "1"
 do_copy_boot_files[nostamp] = "1"

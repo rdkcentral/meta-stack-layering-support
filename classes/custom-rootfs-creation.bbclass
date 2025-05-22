@@ -215,4 +215,5 @@ python do_update_opkg_config () {
 
 do_rootfs[prefuncs] += "do_update_opkg_config"
 do_rootfs[depends] += "shadow-native:do_populate_sysroot"
+do_rootfs[depends] += "staging-ipk-pkgs:do_copy_boot_files"
 do_rootfs[network] = "1"
