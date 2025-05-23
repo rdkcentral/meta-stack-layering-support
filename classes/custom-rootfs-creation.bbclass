@@ -213,7 +213,29 @@ python do_update_opkg_config () {
     d.setVar('BUILD_IMAGES_FROM_FEEDS', "1")
 }
 
+python do_copy_boot_files(){
+    import shutil
+    boot_dir = os.path.join(d.getVar("SYSROOT_IPK"),"%s"%d.getVar("IMAGEDEST"))
+    if os.path.exists(boot_dir):
+        img_deploy_dir = d.getVar("DEPLOY_DIR_IMAGE")
+        if not os.path.exists(img_deploy_dir):
+            bb.utils.mkdirhier(img_deploy_dir)
+        for item in os.listdir(boot_dir):
+            src_item = os.path.join(boot_dir, item)
+            dst_item = os.path.join(img_deploy_dir, item)
+            if not os.path.exists(dst_item):
+                if os.path.isdir(src_item):
+                    shutil.copytree(src_item, dst_item)
+                    bb.note(f"Directory copied: {src_item} -> {dst_item}")
+                else:
+                    shutil.copy(src_item, dst_item)
+                    bb.note(f"File copied: {src_item} -> {dst_item}")
+            else:
+                bb.note(f"Skipped (already exists): {dst_item}")
+}
+addtask do_copy_boot_files after do_rootfs before do_image_complete
+
 do_rootfs[prefuncs] += "do_update_opkg_config"
 do_rootfs[depends] += "shadow-native:do_populate_sysroot"
-do_rootfs[depends] += "staging-ipk-pkgs:do_copy_boot_files"
 do_rootfs[network] = "1"
+do_copy_boot_files[nostamp] = "1"
