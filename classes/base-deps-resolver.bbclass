@@ -656,9 +656,13 @@ python () {
         if staging_native_prebuilt_path:
             exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
             prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, d.getVar("PN", True))
-            prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
-            if prebuilt_native_pkg_type:
-                prebuilt_native_pkg_path += f".{prebuilt_native_pkg_type}"
+            if not os.path.exists(prebuilt_native_pkg_path):
+                prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
+                if prebuilt_native_pkg_type:
+                    import glob
+                    prebuilt_native_pkg_path_list = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
+                    if prebuilt_native_pkg_path_list:
+                        prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
             if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(d, pn) and pn not in exclusion_list :
                 update_build_tasks(d, arch, "native")
             elif pn.startswith("gcc-source-") and not gcc_source_mode_check(d, pn) :
