@@ -323,9 +323,6 @@ def sls_generate_native_sysroot(d):
     else:
         return False
     bb.build.exec_func("sysroot_stage_all", d)
-    #bb.build.exec_func("sysroot_strip", d)
-    for f in (d.getVar('SYSROOT_PREPROCESS_FUNCS') or '').split():
-        bb.build.exec_func(f, d)
     fixme_path = d.expand("${SYSROOT_DESTDIR}${base_prefix}/")
     fixme_file_path = os.path.join(sysroot_components_dir,"fixmepath")
     if os.path.exists(fixme_file_path):
@@ -643,9 +640,9 @@ python () {
     arch = d.getVar('PACKAGE_ARCH')
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     version = get_version_info(d)
+    staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
 
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
-        staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
         if staging_native_prebuilt_path:
             exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
             prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, d.getVar("PN", True))
@@ -654,7 +651,11 @@ python () {
                 prebuilt_native_pkg_path += f".{prebuilt_native_pkg_type}"
             if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(d, pn) and pn not in exclusion_list :
                 update_build_tasks(d, arch, "native")
+            elif pn.startswith("gcc-source-") and not gcc_source_mode_check(d, pn) :
+                update_build_tasks(d, arch, "native")
     else:
+        if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(d, pn):
+            update_build_tasks(d, arch, "native")
         # Skipping unrequired version of recipes
         if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
             d.appendVarFlag('do_package_write_ipk', 'prefuncs', ' do_clean_deploy')
