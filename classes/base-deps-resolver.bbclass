@@ -313,7 +313,7 @@ def sls_generate_native_sysroot(d):
     sysroot_components_dir = os.path.join(image_dir, staging_native_dir.lstrip('/'))
     if not os.path.exists(sysroot_components_dir):
         bb.utils.mkdirhier(sysroot_components_dir)
-    if os.path.exists(prebuilt_native_pkg_path) and not prebuilt_native_pkg_type:
+    if os.path.exists(prebuilt_native_pkg_path):
         for item in os.listdir(prebuilt_native_pkg_path):
             source_path = os.path.join(prebuilt_native_pkg_path, item)
             dest_path = os.path.join(sysroot_components_dir, item)
