@@ -262,8 +262,6 @@ def update_build_tasks(d, arch, machine):
         if not os.path.exists(manifest_path):
             bb.utils.mkdirhier(manifest_path)
 
-        manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".populate_sysroot"
-        open(manifest_name, 'w').close()
         manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".packagedata"
         open(manifest_name, 'w').close()
         manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"
