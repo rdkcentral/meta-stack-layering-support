@@ -262,8 +262,6 @@ def update_build_tasks(d, arch, machine):
         if not os.path.exists(manifest_path):
             bb.utils.mkdirhier(manifest_path)
 
-        manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".populate_sysroot"
-        open(manifest_name, 'w').close()
         manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".packagedata"
         open(manifest_name, 'w').close()
         manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"
@@ -301,19 +299,16 @@ def sls_generate_native_sysroot(d):
 
     prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
     prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
-    if prebuilt_native_pkg_type:
-        prebuilt_native_pkg_path += f".{prebuilt_native_pkg_type}"
     exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
     if pn in exclusion_list:
         bb.note("Excluding %s from prebuilt consumption"%pn)
         return False
     image_dir = d.getVar("D", True)
     staging_native_dir = d.getVar("STAGING_DIR_NATIVE", True)
-    #staging_native_dir = d.getVar("STAGING_DIR_NATIVE", True)
     sysroot_components_dir = os.path.join(image_dir, staging_native_dir.lstrip('/'))
     if not os.path.exists(sysroot_components_dir):
         bb.utils.mkdirhier(sysroot_components_dir)
-    if os.path.exists(prebuilt_native_pkg_path) and not prebuilt_native_pkg_type:
+    if os.path.exists(prebuilt_native_pkg_path):
         for item in os.listdir(prebuilt_native_pkg_path):
             source_path = os.path.join(prebuilt_native_pkg_path, item)
             dest_path = os.path.join(sysroot_components_dir, item)
@@ -321,11 +316,18 @@ def sls_generate_native_sysroot(d):
                 shutil.copytree(source_path, dest_path, symlinks=True)
             else:
                 shutil.copy(source_path, dest_path)
-    elif os.path.exists(prebuilt_native_pkg_path):
-        if prebuilt_native_pkg_type == "tar.gz":
-            bb.process.run("tar --strip-components=1 -xvzf %s -C %s" % (prebuilt_native_pkg_path, sysroot_components_dir), stderr=subprocess.STDOUT)
+    elif prebuilt_native_pkg_type:
+        import glob
+        prebuilt_native_pkg_path = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
+        if prebuilt_native_pkg_path:
+            prebuilt_native_pkg_path = prebuilt_native_pkg_path[0]
+            if prebuilt_native_pkg_type == "tar.gz":
+                bb.process.run("tar --strip-components=1 -xvzf %s -C %s" % (prebuilt_native_pkg_path, sysroot_components_dir), stderr=subprocess.STDOUT)
+            else:
+                bb.note("Support for the extension %s need to add. Currently support only tar.gz "%prebuilt_native_pkg_type)
+                return False
         else:
-            bb.fatal("Support for the extension %s need to add. Currently support only tar.gz "%prebuilt_native_pkg_type)
+            return False
     else:
         return False
     bb.build.exec_func("sysroot_stage_all", d)
@@ -652,9 +654,13 @@ python () {
         if staging_native_prebuilt_path:
             exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
             prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, d.getVar("PN", True))
-            prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
-            if prebuilt_native_pkg_type:
-                prebuilt_native_pkg_path += f".{prebuilt_native_pkg_type}"
+            if not os.path.exists(prebuilt_native_pkg_path):
+                prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
+                if prebuilt_native_pkg_type:
+                    import glob
+                    prebuilt_native_pkg_path_list = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
+                    if prebuilt_native_pkg_path_list:
+                        prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
             if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(d, pn) and pn not in exclusion_list :
                 update_build_tasks(d, arch, "native")
             elif pn.startswith("gcc-source-") and not gcc_source_mode_check(d, pn) :
