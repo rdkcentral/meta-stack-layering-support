@@ -301,15 +301,12 @@ def sls_generate_native_sysroot(d):
 
     prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
     prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
-    if prebuilt_native_pkg_type:
-        prebuilt_native_pkg_path += f".{prebuilt_native_pkg_type}"
     exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
     if pn in exclusion_list:
         bb.note("Excluding %s from prebuilt consumption"%pn)
         return False
     image_dir = d.getVar("D", True)
     staging_native_dir = d.getVar("STAGING_DIR_NATIVE", True)
-    #staging_native_dir = d.getVar("STAGING_DIR_NATIVE", True)
     sysroot_components_dir = os.path.join(image_dir, staging_native_dir.lstrip('/'))
     if not os.path.exists(sysroot_components_dir):
         bb.utils.mkdirhier(sysroot_components_dir)
@@ -321,11 +318,18 @@ def sls_generate_native_sysroot(d):
                 shutil.copytree(source_path, dest_path, symlinks=True)
             else:
                 shutil.copy(source_path, dest_path)
-    elif os.path.exists(prebuilt_native_pkg_path):
-        if prebuilt_native_pkg_type == "tar.gz":
-            bb.process.run("tar --strip-components=1 -xvzf %s -C %s" % (prebuilt_native_pkg_path, sysroot_components_dir), stderr=subprocess.STDOUT)
+    elif prebuilt_native_pkg_type:
+        import glob
+        prebuilt_native_pkg_path = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
+        if prebuilt_native_pkg_path:
+            prebuilt_native_pkg_path = prebuilt_native_pkg_path[0]
+            if prebuilt_native_pkg_type == "tar.gz":
+                bb.process.run("tar --strip-components=1 -xvzf %s -C %s" % (prebuilt_native_pkg_path, sysroot_components_dir), stderr=subprocess.STDOUT)
+            else:
+                bb.note("Support for the extension %s need to add. Currently support only tar.gz "%prebuilt_native_pkg_type)
+                return False
         else:
-            bb.fatal("Support for the extension %s need to add. Currently support only tar.gz "%prebuilt_native_pkg_type)
+            return False
     else:
         return False
     bb.build.exec_func("sysroot_stage_all", d)
