@@ -314,7 +314,13 @@ def sls_generate_native_sysroot(d):
     if not os.path.exists(sysroot_components_dir):
         bb.utils.mkdirhier(sysroot_components_dir)
     if os.path.exists(prebuilt_native_pkg_path) and not prebuilt_native_pkg_type:
-        shutil.copytree(prebuilt_native_pkg_path, sysroot_components_dir, symlinks=True)
+        for item in os.listdir(prebuilt_native_pkg_path):
+            source_path = os.path.join(prebuilt_native_pkg_path, item)
+            dest_path = os.path.join(sysroot_components_dir, item)
+            if os.path.isdir(source_path):
+                shutil.copytree(source_path, dest_path, symlinks=True)
+            else:
+                shutil.copy(source_path, dest_path)
     elif os.path.exists(prebuilt_native_pkg_path):
         if prebuilt_native_pkg_type == "tar.gz":
             bb.process.run("tar --strip-components=1 -xvzf %s -C %s" % (prebuilt_native_pkg_path, sysroot_components_dir), stderr=subprocess.STDOUT)
