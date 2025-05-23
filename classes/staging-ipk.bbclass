@@ -136,19 +136,6 @@ def get_base_pkg_name(pkg_name):
         tmp_pkg_name = pkg_name[:-7]
     return tmp_pkg_name
 
-python do_copy_boot_files(){
-    import shutil
-    boot_dir = os.path.join(d.getVar("SYSROOT_IPK"),"%s"%d.getVar("IMAGEDEST"))
-    if os.path.exists(boot_dir):
-        img_deploy_dir = d.getVar("DEPLOY_DIR_IMAGE")
-        if not os.path.exists(img_deploy_dir):
-            bb.utils.mkdirhier(img_deploy_dir)
-        for item in os.listdir(boot_dir):
-            src = os.path.join(boot_dir, item)
-            dest = os.path.join(img_deploy_dir, item)
-            shutil.copy(src,dest)
-}
-
 python do_kernel_devel_create(){
     kernel_src = d.getVar('SYSROOT_IPK')+"/kernel-source"
     kernel_artifacts = d.getVar('SYSROOT_IPK')+"/kernel-build"
@@ -444,8 +431,6 @@ deltask do_package_qa
 deltask do_package_write_ipk
 
 addtask do_populate_ipk_sysroot before do_populate_sysroot
-addtask do_kernel_devel_create after do_populate_ipk_sysroot before do_populate_sysroot
-addtask do_copy_boot_files after do_populate_ipk_sysroot before do_populate_sysroot
+addtask do_kernel_devel_create before do_build
 
 do_kernel_devel_create[nostamp] = "1"
-do_copy_boot_files[nostamp] = "1"
