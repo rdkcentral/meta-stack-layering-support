@@ -189,8 +189,16 @@ def check_staging_exclusion(d, pkg, pkg_path):
 fakeroot python do_populate_ipk_sysroot(){
     import re
     deps, ipk_pkgs, ipk_list, inst_list= ([] for i in range(4))
-
     bb.note("[staging-ipk] Enter : do_populate_ipk_sysroot")
+
+    if bb.data.inherits_class('multilib_global', d)
+        multilibs = d.getVar('MULTILIBS') or "multilib:lib00001"
+        prefixes = []
+        for ext in multilibs.split():
+            ml = ext.split(':')
+            if len(ml) > 1 and ml[0] == 'multilib':
+                prefixes.append(ml[1])
+
     listpath = d.getVar("DEPS_IPK_DIR")
     if not os.path.exists(listpath):
         bb.note("[staging-ipk] No pkgs listed for IPK dependency")
@@ -348,8 +356,10 @@ fakeroot python do_populate_ipk_sysroot(){
                 for dev_pkg in dev_pkgs:
                     if pkg_ver:
                         dev_pkg = dev_pkg+pkg_ver.strip("()")
-                    if prefix and not dev_pkg.startswith(prefix) and "firmware" not in dev_pkg:
-                            continue
+                    if prefix and not dev_pkg.startswith(prefix):
+                        continue
+                    elif not prefix and dev_pkg.startswith(tuple(prefixes)):
+                        continue
                     if dev_pkg not in inst_list:
                         if not is_excluded:
                             inst_list.append(dev_pkg)
@@ -357,8 +367,10 @@ fakeroot python do_populate_ipk_sysroot(){
                 for staticdev_pkg in staticdev_pkgs:
                     if pkg_ver:
                         staticdev_pkg = staticdev_pkg+pkg_ver.strip("()")
-                    if prefix and not staticdev_pkg.startswith(prefix) and "firmware" not in staticdev_pkg:
-                            continue
+                    if prefix and not staticdev_pkg.startswith(prefix):
+                        continue
+                    elif not prefix and staticdev_pkg.startswith(tuple(prefixes)):
+                        continue
                     if staticdev_pkg not in inst_list:
                         if not is_excluded:
                             inst_list.append(staticdev_pkg)
@@ -366,23 +378,26 @@ fakeroot python do_populate_ipk_sysroot(){
                 for rel_pkg in rel_pkgs:
                     if pkg_ver:
                         rel_pkg = rel_pkg+pkg_ver.strip("()")
-                    if prefix and not rel_pkg.startswith(prefix) and "firmware" not in rel_pkg:
-                            continue
+                    if prefix and not rel_pkg.startswith(prefix):
+                        continue
+                    elif not prefix and rel_pkg.startswith(tuple(prefixes):
+                        continue
                     if rel_pkg not in inst_list:
                         if not is_excluded:
                             inst_list.append(rel_pkg)
 
     #Check and Install kernel and device tree
-    for arch in archs:
-        arch_check =  False
-        pkg_path = feed_info_dir+"%s/"%arch
-        if os.path.exists(pkg_path + "rprovides/kernel-image"):
-            inst_list.append("kernel-image")
-            if os.path.exists(pkg_path + "package/kernel-devicetree"):
-                inst_list.append("kernel-devicetree")
-            if os.path.exists(pkg_path + "package/kernel-devel"):
-                inst_list.append("kernel-devel")
-            break
+    if not prefix:
+        for arch in archs:
+            arch_check =  False
+            pkg_path = feed_info_dir+"%s/"%arch
+            if os.path.exists(pkg_path + "rprovides/kernel-image"):
+                inst_list.append("kernel-image")
+                if os.path.exists(pkg_path + "package/kernel-devicetree"):
+                    inst_list.append("kernel-devicetree")
+                if os.path.exists(pkg_path + "package/kernel-devel"):
+                    inst_list.append("kernel-devel")
+                break
 
     if inst_list:
         cmd = '%s %s install ' % (opkg_cmd, opkg_args)
