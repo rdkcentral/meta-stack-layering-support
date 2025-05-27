@@ -191,13 +191,12 @@ fakeroot python do_populate_ipk_sysroot(){
     deps, ipk_pkgs, ipk_list, inst_list= ([] for i in range(4))
     bb.note("[staging-ipk] Enter : do_populate_ipk_sysroot")
 
-    if bb.data.inherits_class('multilib_global', d)
-        multilibs = d.getVar('MULTILIBS') or "multilib:lib00001"
-        prefixes = []
-        for ext in multilibs.split():
-            ml = ext.split(':')
-            if len(ml) > 1 and ml[0] == 'multilib':
-                prefixes.append(ml[1])
+    multilibs = d.getVar('MULTILIBS') or "multilib:lib00001"
+    prefixes = []
+    for ext in multilibs.split():
+        ml = ext.split(':')
+        if len(ml) > 1 and ml[0] == 'multilib':
+            prefixes.append(ml[1])
 
     listpath = d.getVar("DEPS_IPK_DIR")
     if not os.path.exists(listpath):
@@ -380,7 +379,7 @@ fakeroot python do_populate_ipk_sysroot(){
                         rel_pkg = rel_pkg+pkg_ver.strip("()")
                     if prefix and not rel_pkg.startswith(prefix):
                         continue
-                    elif not prefix and rel_pkg.startswith(tuple(prefixes):
+                    elif not prefix and rel_pkg.startswith(tuple(prefixes)):
                         continue
                     if rel_pkg not in inst_list:
                         if not is_excluded:
