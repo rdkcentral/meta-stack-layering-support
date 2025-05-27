@@ -825,7 +825,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     prefix = d.getVar('MLPREFIX') or ""
     ipkmode = False
     if not dep_bpkg:
-        return ipkmode
+        return (ipkmode, version_mismatch, same_arch)
     # Check dep package is in IPK mode
     if prefix and dep_bpkg.startswith(prefix):
         src_dep_bpkg = dep_bpkg[len(prefix):]
