@@ -854,7 +854,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
                 break
     return (ipkmode, version_mismatch, same_arch)
 
-def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False, skip_depends=False):
+def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False):
     pkgrdeps, ipkrdeps = ([] for i in range(2))
     import re
     pattern = r'(\S+)(\s*\([^\)]*\))?'
@@ -890,17 +890,10 @@ def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False, skip_depends=False):
 
         if preferred_provider == "noop":
             dep = preferred_provider
-        if skip_depends:
-            if arch_check:
-                if dep_ver:
-                    pkgrdeps.append(dep +" " + dep_ver)
-                else:
-                    pkgrdeps.append(dep)
+        if dep_ver:
+            pkgrdeps.append(dep +" " + dep_ver)
         else:
-            if dep_ver:
-                pkgrdeps.append(dep +" " + dep_ver)
-            else:
-                pkgrdeps.append(dep)
+            pkgrdeps.append(dep)
 
     return (ipkrdeps,pkgrdeps)
 
@@ -908,7 +901,6 @@ def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False, skip_depends=False):
 # Create metadata for the direct dependent ipk packages.
 def update_dep_pkgs(e):
     src_pkgs, ipk_pkgs = ([] for i in range(2))
-    skip_depends = False
 
     pkg_pn = e.data.getVar('PN',  True) 
     arch = e.data.getVar('PACKAGE_ARCH',  True)
@@ -921,13 +913,11 @@ def update_dep_pkgs(e):
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     version = version.replace("AUTOINC","0")
     (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, pkg_pn, False, version)
-    if ipk_mode and not check_targets(e.data, pkg_pn) :
-        skip_depends = True
 
     # Handle DEPENDS which needs recipe to process
     deps = (e.data.getVar('DEPENDS') or "").strip()
     if deps:
-        ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, deps, False, skip_depends)
+        ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, deps, False)
         e.data.setVar("DEPENDS", ' '.join(src_pkgs))
         if ipk_pkgs:
             have_ipk_deps = True
@@ -938,7 +928,7 @@ def update_dep_pkgs(e):
         for pkg in pkgs:
             rdeps = (e.data.getVar('RDEPENDS:%s'%pkg) or "").strip()
             if rdeps:
-                ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg, rdeps, False, skip_depends)
+                ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg, rdeps, False)
                 e.data.setVar("RDEPENDS:%s"%pkg, ' '.join(src_pkgs))
                 if ipk_pkgs:
                     have_ipk_deps = True
@@ -946,7 +936,7 @@ def update_dep_pkgs(e):
 
             rdeps = (e.data.getVar('RRECOMMENDS:%s'%pkg) or "").strip()
             if rdeps:
-                ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg, rdeps, True, skip_depends)
+                ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg, rdeps, True)
                 e.data.setVar("RRECOMMENDS:%s"%pkg, ' '.join(src_pkgs))
                 if ipk_pkgs:
                     have_ipk_deps = True
@@ -958,32 +948,32 @@ def update_dep_pkgs(e):
         ipk_pkg_inst = []
         pkgs_inst = (e.data.getVar('IMAGE_INSTALL') or "").strip()
         if pkgs_inst:
-            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False, skip_depends)
+            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False)
             e.data.setVar("IMAGE_INSTALL", ' '.join(src_pkgs))
             if ipk_pkgs:
                 e.data.setVar('IPK_IMAGE_INSTALL',' '.join(ipk_pkgs))
         pkgs_inst = (e.data.getVar('RDEPENDS') or "").strip()
         if pkgs_inst:
-            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False, skip_depends)
+            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False)
             e.data.setVar("RDEPENDS", ' '.join(src_pkgs))
             if ipk_pkgs:
                 e.data.setVar('IPK_RDEPENDS',' '.join(ipk_pkgs))
         pkgs_inst = (e.data.getVar('ROOTFS_BOOTSTRAP_INSTALL') or "").strip()
         if pkgs_inst:
-            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False, skip_depends)
+            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False)
             e.data.setVar("ROOTFS_BOOTSTRAP_INSTALL", ' '.join(src_pkgs))
             if ipk_pkgs:
                 e.data.setVar('IPK_ROOTFS_BOOTSTRAP_INSTALL',' '.join(ipk_pkgs))
         pkgs_inst = (e.data.getVar('FEATURE_INSTALL') or "").strip()
         if pkgs_inst:
-            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False, skip_depends)
+            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False)
             e.data.setVar("FEATURE_INSTALL", ' '.join(src_pkgs))
             if ipk_pkgs:
                 e.data.setVar('IPK_FEATURE_INSTALL',' '.join(ipk_pkgs))
 
     #Insert do_update_rdeps_ipk after read_shlibdeps pkg function.
     pkgfns = e.data.getVar('PACKAGEFUNCS')
-    if pkgfns and not skip_depends:
+    if pkgfns:
         e.data.setVar('PACKAGEFUNCS',"")
         for f in (pkgfns or '').split():
             if f == "emit_pkgdata":
@@ -1178,14 +1168,10 @@ python deps_taskhandler() {
     pe = d.getVar('PE')
     pv = d.getVar('PV')
     pr = d.getVar('PR')
-    skip_depends = False
     have_ipk_deps = True
     version = "%s:%s-%s"%(pe,pv,pr) if pe else "%s-%s"%(pv,pr)
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     version = version.replace("AUTOINC","0")
-    (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, pn, False, version)
-    if ipk_mode and not check_targets(d, pn):
-        skip_depends = True
 
     bbtasks = e.tasklist
     dep_list = ["depends","rdepends"]
@@ -1209,11 +1195,7 @@ python deps_taskhandler() {
                     if have_ipk_deps and staging_ipk_task not in pkgs_list:
                         pkgs_list.append(staging_ipk_task)
                     continue
-                if skip_depends:
-                    if arch_check:
-                        pkgs_list.append(dep_task)
-                else:
-                    pkgs_list.append(dep_task)
+                pkgs_list.append(dep_task)
             e.data.setVarFlag(task,'%s'%dep,' '.join(pkgs_list))
 }
 deps_taskhandler[eventmask] = "bb.event.RecipeTaskPreProcess"
