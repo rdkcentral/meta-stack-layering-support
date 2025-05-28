@@ -828,6 +828,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
             src_path = pkg_path + "source/%s_%s"%(src_dep_bpkg,version)
             if os.path.exists(src_path):
                 ipkmode = True
+                same_arch = True
                 break
             # Check only the major version number
             src_list = glob.glob(pkg_path + "source/%s_%s*"%(src_dep_bpkg,version.split(".")[0]))
@@ -850,6 +851,8 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
                     ipkmode = True
                 break
             if rrecommends and dep_bpkg.startswith("kernel-module") and os.path.exists(pkg_path + "package/kernel"):
+                if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
+                    same_arch = True
                 ipkmode = True
                 break
     return (ipkmode, version_mismatch, same_arch)
@@ -880,7 +883,7 @@ def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False):
         else:
             (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, dep_bpkg, rrecommends, None)
 
-        if ipk_mode or arch_check:
+        if ipk_mode and not arch_check:
             if dep_ver:
                 ipkrdeps.append(dep +" " + dep_ver)
             else:
@@ -912,7 +915,6 @@ def update_dep_pkgs(e):
     version = "%s:%s-%s"%(pe,pv,pr) if pe else "%s-%s"%(pv,pr)
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     version = version.replace("AUTOINC","0")
-    (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, pkg_pn, False, version)
 
     # Handle DEPENDS which needs recipe to process
     deps = (e.data.getVar('DEPENDS') or "").strip()
