@@ -643,6 +643,12 @@ def gcc_source_mode_check(d, pn):
         gcc_source_mode = False
     return gcc_source_mode
 
+python do_add_version(){
+    version_file = os.path.join(d.expand("${SYSROOT_DESTDIR}${base_prefix}/"),"version-%s"%d.getVar("PN"))
+    version = d.getVar("PV")+"-"+d.getVar("PR")
+    with open(version_file, "w") as f:
+        f.writelines(version)
+}
 python () {
     pn = d.getVar('PN')
     arch = d.getVar('PACKAGE_ARCH')
@@ -665,6 +671,8 @@ python () {
                 update_build_tasks(d, arch, "native")
             elif pn.startswith("gcc-source-") and not gcc_source_mode_check(d, pn) :
                 update_build_tasks(d, arch, "native")
+        if d.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
+            d.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
     else:
         if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(d, pn):
             update_build_tasks(d, arch, "native")
@@ -1436,10 +1444,9 @@ python create_stack_layer_info () {
 addhandler create_stack_layer_info
 create_stack_layer_info[eventmask] = "bb.event.ConfigParsed bb.event.MultiConfigParsed bb.event.CacheLoadStarted"
 
-def create_feed_index(arg):
+def exec_sls_cmd(arg):
     import subprocess
     cmd = arg
-    bb.note("Executing '%s' ..." % cmd)
     result = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).decode("utf-8")
     if result:
         bb.note(result)
@@ -1528,8 +1535,32 @@ def generate_packages_and_versions_md(d):
 OPKG_UTILS_SYSROOT = "${COMPONENTS_DIR}/${BUILD_ARCH}/opkg-utils-native"
 OPKG_INDEX_FILE = "${OPKG_UTILS_SYSROOT}${bindir_native}/opkg-make-index"
 
+def generate_native_prebuilts_tar(d):
+    sys_dir = d.expand("${COMPONENTS_DIR}/${BUILD_ARCH}/")
+    dest_path = d.getVar("NATIVE_PREBUILT_DIR")
+    bb.utils.mkdirhier(dest_path)
+    if os.path.exists(sys_dir):
+        cmds = []
+        for item in os.listdir(sys_dir):
+            if "-cross" in item or item.endswith("-native"):
+                source_path = os.path.join(sys_dir, item)
+                if os.path.isdir(source_path):
+                    version_file = "version-"+item
+                    version_path = os.path.join(source_path,version_file)
+                    version = ""
+                    if os.path.exists(version_path):
+                        with open(version_path,"r") as fd:
+                            lines = fd.readlines()
+                        version = "_"+lines[0]
+                    tar_file = os.path.join(dest_path,"%s%s.tar.gz"%(item,version))
+                    cmds.append('cd %s && tar --exclude="fixmepath.cmd" -czf %s %s' %(sys_dir,tar_file, item))
+        oe.utils.multiprocess_launch(exec_sls_cmd, cmds, d)
+
 python feed_index_creation () {
     print_pkgs_in_src_mode(d)
+    if e.data.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1":
+        generate_native_prebuilts_tar(d)
+
     if e.data.getVar('GENERATE_IPK_VERSION_DOC') == "1":
         generate_packages_and_versions_md(d)
 
@@ -1572,7 +1603,7 @@ python feed_index_creation () {
         bb.note("There are no packages in %s!" % deploy_dir)
         return
 
-    oe.utils.multiprocess_launch(create_feed_index, cmds, e.data)
+    oe.utils.multiprocess_launch(exec_sls_cmd, cmds, e.data)
 }
 
 addhandler feed_index_creation
