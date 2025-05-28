@@ -335,6 +335,9 @@ def sls_generate_native_sysroot(d):
     fixme_file_path = os.path.join(sysroot_components_dir,"fixmepath")
     if os.path.exists(fixme_file_path):
         shutil.copy(fixme_file_path,fixme_path)
+    ver_file_path = os.path.join(sysroot_components_dir,"version-%s"%d.getVar("PN"))
+    if os.path.exists(ver_file_path):
+        shutil.copy(ver_file_path,fixme_path)
     pn = d.getVar("PN")
     multiprov = d.getVar("BB_MULTI_PROVIDER_ALLOWED").split()
     provdir = d.expand("${SYSROOT_DESTDIR}${base_prefix}/sysroot-providers/")
