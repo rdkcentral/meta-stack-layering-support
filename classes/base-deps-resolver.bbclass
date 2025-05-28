@@ -19,6 +19,9 @@ PREBUILT_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/prebuilt_mode/target"
 SRC_NATIVE_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/src_mode/native"
 PREBUILT_NATIVE_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/prebuilt_mode/native"
 
+SYSROOT_PREBUILT_DESTDIR = "${WORKDIR}/sysroot-prebuilt-destdir"
+PREBUILTDEPLOYDIR = "${COMPONENTS_DIR}/${PACKAGE_ARCH}"
+
 do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
 inherit gir-ipk-qemuwrapper
@@ -240,17 +243,16 @@ def update_build_tasks(d, arch, machine):
     enable_task(d, "do_cleanall")
     enable_task(d, "do_populate_sysroot")
     enable_task(d, "do_package_write_ipk")
-    if machine == "native":
-        enable_task(d, "do_sls_generate_native_sysroot")
 
     d.setVarFlag("do_populate_sysroot", "prefuncs", " ")
     d.setVarFlag("do_populate_sysroot", "postfuncs", " ")
+    d.setVarFlag("do_populate_sysroot", "sstate-interceptfuncs", " ")
+    d.setVarFlag("do_populate_sysroot", "sstate-fixmedir", " ")
     d.setVarFlag("do_populate_sysroot_setscene", "prefuncs", " ")
     d.setVarFlag("do_populate_sysroot_setscene", "postfuncs", " ")
+    d.setVarFlag("do_populate_sysroot_setscene", "sstate-interceptfuncs", " ")
 
     sstate_tasks = d.getVar('SSTATETASKS', True)
-    sstate_tasks = sstate_tasks.replace("do_populate_sysroot", "")
-    sstate_tasks = sstate_tasks.replace("do_populate_sysroot_setscene", "")
     sstate_tasks = sstate_tasks.replace("do_package_write_ipk", "")
     sstate_tasks = sstate_tasks.replace("do_package_write_ipk_setscene", "")
     d.setVar('SSTATETASKS', sstate_tasks)
@@ -260,8 +262,6 @@ def update_build_tasks(d, arch, machine):
         if not os.path.exists(manifest_path):
             bb.utils.mkdirhier(manifest_path)
 
-        manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".populate_sysroot"
-        open(manifest_name, 'w').close()
         manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".packagedata"
         open(manifest_name, 'w').close()
         manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"
@@ -281,125 +281,71 @@ do_package_write_ipk_setscene:prepend() {
         ipk_download(d)
         return
 }
-python do_sls_generate_native_sysroot(){
+do_populate_sysroot:prepend() {
+    if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
+        skip = sls_generate_native_sysroot (d)
+        if skip:
+            return
+}
+
+def sls_generate_native_sysroot(d):
     import os
     import shutil
     import subprocess
     pn = d.getVar("PN", True)
     staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
     if not staging_native_prebuilt_path:
-        return
+        return False
 
     prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
     prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
-    if prebuilt_native_pkg_type:
-        prebuilt_native_pkg_path += f".{prebuilt_native_pkg_type}"
     exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
     if pn in exclusion_list:
         bb.note("Excluding %s from prebuilt consumption"%pn)
-        return
-    if os.path.exists(prebuilt_native_pkg_path) and not prebuilt_native_pkg_type:
-        sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
-        if os.path.exists(sysroot_components_dir_dst):
-            shutil.rmtree(sysroot_components_dir_dst)
-        shutil.copytree(prebuilt_native_pkg_path, sysroot_components_dir_dst, symlinks=True)
-    elif os.path.exists(prebuilt_native_pkg_path):
-        sysroot_components_dir_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True), pn)
-        if os.path.exists(sysroot_components_dir_dst):
-            shutil.rmtree(sysroot_components_dir_dst)
-        sysroot_components_dir = os.path.join(d.getVar("COMPONENTS_DIR", True), d.getVar("PACKAGE_ARCH", True))
-        if not os.path.exists(sysroot_components_dir):
-            bb.utils.mkdirhier(sysroot_components_dir)
-        if prebuilt_native_pkg_type == "tar.gz":
-            bb.process.run("tar -xvzf %s -C %s" % (prebuilt_native_pkg_path, sysroot_components_dir), stderr=subprocess.STDOUT)
+        return False
+    image_dir = d.getVar("D", True)
+    staging_native_dir = d.getVar("STAGING_DIR_NATIVE", True)
+    sysroot_components_dir = os.path.join(image_dir, staging_native_dir.lstrip('/'))
+    if not os.path.exists(sysroot_components_dir):
+        bb.utils.mkdirhier(sysroot_components_dir)
+    if os.path.exists(prebuilt_native_pkg_path):
+        for item in os.listdir(prebuilt_native_pkg_path):
+            source_path = os.path.join(prebuilt_native_pkg_path, item)
+            dest_path = os.path.join(sysroot_components_dir, item)
+            if os.path.isdir(source_path):
+                shutil.copytree(source_path, dest_path, symlinks=True)
+            else:
+                shutil.copy(source_path, dest_path)
+    elif prebuilt_native_pkg_type:
+        import glob
+        prebuilt_native_pkg_path = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
+        if prebuilt_native_pkg_path:
+            prebuilt_native_pkg_path = prebuilt_native_pkg_path[0]
+            if prebuilt_native_pkg_type == "tar.gz":
+                bb.process.run("tar --strip-components=1 -xvzf %s -C %s" % (prebuilt_native_pkg_path, sysroot_components_dir), stderr=subprocess.STDOUT)
+            else:
+                bb.note("Support for the extension %s need to add. Currently support only tar.gz "%prebuilt_native_pkg_type)
+                return False
         else:
-            bb.fatal("Support for the extension %s need to add. Currently support only tar.gz "%prebuilt_native_pkg_type)
-    else:
-        return
-
-    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".populate_sysroot"
-    bb.utils.mkdirhier(os.path.dirname(manifest_name))
-    with open(manifest_name, "w") as manifest:
-        for (dir_path, dir_names, file_names) in os.walk(sysroot_components_dir_dst):
-            for file in file_names:
-                manifest.write(os.path.join(dir_path, file) + "\n")
-}
-
-def check_prebuilt (d, ext):
-    pn = d.getVar('PN', True)
-    arch = d.getVar("PACKAGE_ARCH", True)
-
-    if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
-        exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
-        if pn in exclusion_list:
-            bb.note("Excluding %s from prebuilt consumption"%pn)
             return False
-        staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
-        file_path_src = os.path.join(d.getVar("SRC_NATIVE_PKGS_LIST"),pn)
-        file_path_pre = os.path.join(d.getVar("PREBUILT_NATIVE_PKGS_LIST"),pn)
-        if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
-            native_pkg_dst = os.path.join(staging_native_prebuilt_path, pn)
-            prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
-            if prebuilt_native_pkg_type:
-                native_pkg_dst += f".{prebuilt_native_pkg_type}"
-            if os.path.exists(native_pkg_dst):
-                if "gcc-" in pn and  not os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"):
-                    bb.note("GCC is source mode. Not skipping do_populate_sysroot%s"%ext)
-                else:
-                    if os.path.exists(file_path_src):
-                        os.remove(file_path_src)
-                    if not os.path.exists(d.getVar("PREBUILT_NATIVE_PKGS_LIST")):
-                        bb.utils.mkdirhier(d.getVar("PREBUILT_NATIVE_PKGS_LIST"))
-                    if not os.path.exists(file_path_pre):
-                        open(file_path_pre, 'w').close()
-                    bb.note("Skipping do_populate_sysroot%s"%ext)
-                    return True
-
-        if os.path.exists(staging_native_prebuilt_path):
-            if not os.path.exists(d.getVar("SRC_NATIVE_PKGS_LIST")):
-                bb.utils.mkdirhier(d.getVar("SRC_NATIVE_PKGS_LIST"))
-            if not os.path.exists(file_path_src):
-                open(file_path_src, 'w').close()
     else:
-        file_path_src = os.path.join(d.getVar("SRC_PKGS_LIST"),pn)
-        file_path_pre = os.path.join(d.getVar("PREBUILT_PKGS_LIST"),pn)
-        if os.path.exists(d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"):
-            if os.path.exists(file_path_src):
-                os.remove(file_path_src)
-            if not os.path.exists(d.getVar("PREBUILT_PKGS_LIST")):
-                bb.utils.mkdirhier(d.getVar("PREBUILT_PKGS_LIST"))
-            if not os.path.exists(file_path_pre):
-                open(file_path_pre, 'w').close()
-            bb.note("Skipping do_populate_sysroot%s"%ext)
-            return True
-
-        if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
-            if not os.path.exists(d.getVar("SRC_PKGS_LIST")):
-                bb.utils.mkdirhier(d.getVar("SRC_PKGS_LIST"))
-            if not os.path.exists(file_path_src):
-                open(file_path_src, 'w').close()
-
-    pkg_dst = os.path.join(d.getVar("COMPONENTS_DIR", True), arch, pn)
-    if os.path.exists(pkg_dst):
-        import shutil
-        shutil.rmtree(pkg_dst)
-
-    if os.path.exists(file_path_pre):
-        os.remove(file_path_pre)
-
-    return False
-
-do_populate_sysroot:prepend() {
-    skip = check_prebuilt (d, "")
-    if skip:
-        return
-}
-
-do_populate_sysroot_setscene:prepend() {
-    skip = check_prebuilt (d, "_setscene")
-    if skip:
-        return
-}
+        return False
+    bb.build.exec_func("sysroot_stage_all", d)
+    fixme_path = d.expand("${SYSROOT_DESTDIR}${base_prefix}/")
+    fixme_file_path = os.path.join(sysroot_components_dir,"fixmepath")
+    if os.path.exists(fixme_file_path):
+        shutil.copy(fixme_file_path,fixme_path)
+    pn = d.getVar("PN")
+    multiprov = d.getVar("BB_MULTI_PROVIDER_ALLOWED").split()
+    provdir = d.expand("${SYSROOT_DESTDIR}${base_prefix}/sysroot-providers/")
+    bb.utils.mkdirhier(provdir)
+    for p in d.getVar("PROVIDES").split():
+        if p in multiprov:
+            continue
+        p = p.replace("/", "_")
+        with open(provdir + p, "w") as f:
+            f.write(pn)
+    return True
 
 # Install the dev ipks to the component sysroot
 python do_install_ipk_recipe_sysroot () {
@@ -702,19 +648,26 @@ python () {
     arch = d.getVar('PACKAGE_ARCH')
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     version = get_version_info(d)
+    staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
 
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
-        staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
         if staging_native_prebuilt_path:
             exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
             prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, d.getVar("PN", True))
-            prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
-            if prebuilt_native_pkg_type:
-                prebuilt_native_pkg_path += f".{prebuilt_native_pkg_type}"
+            if not os.path.exists(prebuilt_native_pkg_path):
+                prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
+                if prebuilt_native_pkg_type:
+                    import glob
+                    prebuilt_native_pkg_path_list = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
+                    if prebuilt_native_pkg_path_list:
+                        prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
             if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(d, pn) and pn not in exclusion_list :
-                bb.build.addtask('do_sls_generate_native_sysroot', 'do_populate_sysroot', None, d)
+                update_build_tasks(d, arch, "native")
+            elif pn.startswith("gcc-source-") and not gcc_source_mode_check(d, pn) :
                 update_build_tasks(d, arch, "native")
     else:
+        if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(d, pn):
+            update_build_tasks(d, arch, "native")
         # Skipping unrequired version of recipes
         if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
             d.appendVarFlag('do_package_write_ipk', 'prefuncs', ' do_clean_deploy')
@@ -872,7 +825,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     prefix = d.getVar('MLPREFIX') or ""
     ipkmode = False
     if not dep_bpkg:
-        return ipkmode
+        return (ipkmode, version_mismatch, same_arch)
     # Check dep package is in IPK mode
     if prefix and dep_bpkg.startswith(prefix):
         src_dep_bpkg = dep_bpkg[len(prefix):]
@@ -1441,12 +1394,9 @@ python create_stack_layer_info () {
     import gzip
     feed_info_dir = e.data.getVar("FEED_INFO_DIR")
     index_check = os.path.join(e.data.getVar("TOPDIR")+"/index_created")
-    if isinstance(e, bb.event.BuildCompleted) or isinstance(e, bb.event.TreeDataPreparationStarted):
+    if isinstance(e, bb.event.CacheLoadStarted):
         if os.path.exists(index_check):
             os.remove(index_check)
-    if isinstance(e, bb.event.TreeDataPreparationCompleted):
-        if not os.path.exists(index_check):
-            open(index_check, 'w').close()
     if isinstance(e, bb.event.MultiConfigParsed):
         # For multiconfig builds.
         if not os.path.exists(index_check):
@@ -1484,7 +1434,7 @@ python create_stack_layer_info () {
                 create_ipk_pkgdata(e.data, index_file+arch_name ,feed_info_dir,arch_name)
 }
 addhandler create_stack_layer_info
-create_stack_layer_info[eventmask] = "bb.event.ConfigParsed bb.event.BuildCompleted bb.event.TreeDataPreparationStarted bb.event.TreeDataPreparationCompleted bb.event.MultiConfigParsed"
+create_stack_layer_info[eventmask] = "bb.event.ConfigParsed bb.event.MultiConfigParsed bb.event.CacheLoadStarted"
 
 def create_feed_index(arg):
     import subprocess
@@ -1665,9 +1615,6 @@ python get_pkgs_handler () {
                             update_check = True
                         bb.warn("%s version should update and rebuild. Dependency %s has changed with major version"%(source,dep))
     if update_check:
-        index_check = os.path.join(e.data.getVar("TOPDIR")+"/index_created")
-        if os.path.exists(index_check):
-            os.remove(index_check)
         bb.fatal("Update version and required rebuild")
 }
 addhandler get_pkgs_handler
