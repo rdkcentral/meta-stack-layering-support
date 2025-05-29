@@ -36,7 +36,7 @@ def ipk_download(d):
         bb.utils.mkdirhier(os.path.dirname(manifest_name))
         manifest_file = open(manifest_name, "w")
 
-        install_dir = d.getVar("D", True)
+        install_dir = d.expand("${D}${base_prefix}")
         if not os.path.exists(install_dir):
             bb.utils.mkdirhier(install_dir)
         for ipk in ipk_list:
@@ -47,6 +47,18 @@ def ipk_download(d):
                 base_cmdline(d, cmd)
 
         manifest_file.close()
+
+    bb.build.exec_func("sysroot_stage_all", d)
+    multiprov = d.getVar("BB_MULTI_PROVIDER_ALLOWED").split()
+    provdir = d.expand("${SYSROOT_DESTDIR}${base_prefix}/sysroot-providers/")
+    bb.utils.mkdirhier(provdir)
+    pn = d.getVar("PN")
+    for p in d.getVar("PROVIDES").split():
+        if p in multiprov:
+            continue
+        p = p.replace("/", "_")
+        with open(provdir + p, "w") as f:
+            f.write(pn)
 
 # Function to download multiple ipk files in parallel
 def download_ipks_in_parallel(d, ipk_list, server_path, arch, ipk_deploy_path):
@@ -63,14 +75,14 @@ def download_ipks_in_parallel(d, ipk_list, server_path, arch, ipk_deploy_path):
     for ipk_batch in split_into_batches(ipk_list, batch_size=batch_size):
         processes = []
         for ipk in ipk_batch:
-            p = multiprocessing.Process(target=download_ipk, args=(d, ipk, server_path, arch, ipk_deploy_path, ))
+            p = multiprocessing.Process(target=download_ipk, args=(d, ipk, server_path, ipk_deploy_path, ))
             processes.append(p)
             p.start()
         for process in processes:
             process.join()
 
 # Do sequential ipk download
-def download_ipk(d, ipk, server_path, arch, ipk_deploy_path):
+def download_ipk(d, ipk, server_path, ipk_deploy_path):
     deploy_dir = d.getVar("DEPLOY_DIR_IPK")
     download_dir = d.getVar("IPK_CACHE_DIR", True)
     if not os.path.exists(download_dir):

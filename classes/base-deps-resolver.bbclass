@@ -265,27 +265,28 @@ def update_build_tasks(d, arch, machine):
 
         manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".packagedata"
         open(manifest_name, 'w').close()
-        manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"
-        open(manifest_name, 'w').close()
 
 do_package_write_ipk:prepend() {
     manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
     if os.path.exists(manifest_name):
-        bb.note("Running ipk_download custom task and skipping do_package_write_ipk")
-        ipk_download(d)
+        bb.note("Skipping do_package_write_ipk")
         return
 }
 do_package_write_ipk_setscene:prepend() {
     manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
     if os.path.exists(manifest_name):
-        bb.note("Running ipk_download custom task and skipping do_package_write_ipk_setscene")
-        ipk_download(d)
+        bb.note("Skipping do_package_write_ipk_setscene")
         return
 }
 do_populate_sysroot:prepend() {
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
         skip = sls_generate_native_sysroot (d)
         if skip:
+            return
+    else:
+        manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
+        if os.path.exists(manifest_name):
+            ipk_download(d)
             return
 }
 
@@ -518,6 +519,19 @@ python do_install_ipk_recipe_sysroot () {
             import subprocess
             os.environ['D'] = d.getVar('RECIPE_SYSROOT')
             subprocess.check_output(p, shell=True, stderr=subprocess.STDOUT)
+
+    feed_info_dir = d.getVar("FEED_INFO_DIR")
+    archs = []
+    for line in (d.getVar('IPK_FEED_URIS') or "").split():
+        feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
+        if feed is not None:
+            archs.append(feed.group(1))
+    for arch in archs:
+        skipped_pkg_file = os.path.join(feed_info_dir,"%s/skipped/%sgobject-introspection"%(arch,prefix))
+        if os.path.exists(skipped_pkg_file) and "%sgobject-introspection"%prefix in d.getVar("DEPENDS").split():
+            bb.note(" [deps-resolver] gobject-introspection requires cross compilation support")
+            g_ir_cc_support(d,recipe_sysroot,pkg_pn)
+            break
 }
 
 def get_ipk_list(d, pkg_arch):
@@ -656,9 +670,6 @@ python () {
             manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
             if os.path.exists(manifest_name):
                 os.remove(manifest_name)
-            manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".skipped_sysroot"
-            if os.path.exists(manifest_name):
-                os.remove(manifest_name)
             if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', d):
                 d.appendVarFlag('do_packagedata', 'prefuncs', ' do_clean_pkgdata')
                 d.appendVarFlag('do_packagedata_setscene', 'prefuncs', ' do_clean_pkgdata')
@@ -669,6 +680,7 @@ python () {
                 if version_check and not check_targets(d, pn):
                     open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
             d.appendVar("DEPENDS", " opkg-native ")
+            d.appendVar("INSANE_SKIP", " file-rdeps ")
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',d)
             d.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
             # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
