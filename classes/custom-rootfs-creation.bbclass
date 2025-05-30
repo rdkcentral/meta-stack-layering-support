@@ -215,7 +215,9 @@ python do_update_opkg_config () {
 
 python do_copy_boot_files(){
     import shutil
+    prefix = d.getVar('MLPREFIX') or ""
     boot_dir = os.path.join(d.getVar("SYSROOT_IPK"),"%s"%d.getVar("IMAGEDEST"))
+    boot_dir = boot_dir.replace(prefix, "")
     if os.path.exists(boot_dir):
         img_deploy_dir = d.getVar("DEPLOY_DIR_IMAGE")
         if not os.path.exists(img_deploy_dir):
