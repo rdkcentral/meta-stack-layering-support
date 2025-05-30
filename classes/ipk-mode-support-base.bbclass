@@ -14,6 +14,7 @@ def ipk_download(d):
     import re
 
     arch = d.getVar('PACKAGE_ARCH')
+    download_dir =  d.getVar("IPK_CACHE_DIR", True)
     deploy_dir = d.getVar("DEPLOY_DIR_IPK")
     ipk_deploy_path = os.path.join(deploy_dir, arch)
     if not os.path.exists(ipk_deploy_path):
@@ -40,7 +41,7 @@ def ipk_download(d):
         if not os.path.exists(install_dir):
             bb.utils.mkdirhier(install_dir)
         for ipk in ipk_list:
-            source_name = os.path.join(ipk_deploy_path, ipk)
+            source_name = os.path.join(download_dir, ipk)
             manifest_file.write("%s\n"%source_name)
             if "-dbg_" not in ipk:
                 cmd = "ar x %s && tar -C %s --no-same-owner -xpf data.tar.xz && rm data.tar.xz && rm -rf control.tar.gz && rm -rf debian-binary"%(source_name, install_dir)
@@ -95,6 +96,17 @@ def download_ipk(d, ipk, server_path, ipk_deploy_path):
             ipk_url = server_path+"/"+ipk
             cmd = "wget %s --directory-prefix=%s"%(ipk_url,download_dir)
             base_cmdline(d, cmd)
-    if os.path.exists(ipk_deploy_path+"/%s"%ipk):
-        os.unlink(ipk_deploy_path+"/%s"%ipk)
-    os.link(ipk_dl_path, ipk_deploy_path+"/%s"%ipk)
+
+def copy_deploy_ipk(d):
+    import shutil
+    arch = d.getVar('PACKAGE_ARCH')
+    ipk_outdir = d.getVar('PKGWRITEDIRIPK')
+    download_dir = d.getVar("IPK_CACHE_DIR", True)
+
+    ipk_list = get_ipk_list(d,arch)
+    bb.note("ipk list : %s"%ipk_list)
+    for ipk in ipk_list:
+        src_path = os.path.join(download_dir,ipk)
+        bb.note("SRC : %s"%src_path)
+        if os.path.exists(src_path):
+            shutil.copy(src_path, ipk_outdir)

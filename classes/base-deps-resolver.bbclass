@@ -263,19 +263,14 @@ def update_build_tasks(d, arch, machine):
         if not os.path.exists(manifest_path):
             bb.utils.mkdirhier(manifest_path)
 
-        manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".packagedata"
-        open(manifest_name, 'w').close()
+        #manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".packagedata"
+        #open(manifest_name, 'w').close()
 
 do_package_write_ipk:prepend() {
     manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
     if os.path.exists(manifest_name):
-        bb.note("Skipping do_package_write_ipk")
-        return
-}
-do_package_write_ipk_setscene:prepend() {
-    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
-    if os.path.exists(manifest_name):
-        bb.note("Skipping do_package_write_ipk_setscene")
+        copy_deploy_ipk(d)
+        bb.note(" Copying Skipping do_package_write_ipk")
         return
 }
 do_populate_sysroot:prepend() {
