@@ -253,18 +253,13 @@ def update_build_tasks(d, arch, machine):
     d.setVarFlag("do_populate_sysroot_setscene", "postfuncs", " ")
     d.setVarFlag("do_populate_sysroot_setscene", "sstate-interceptfuncs", " ")
 
-    sstate_tasks = d.getVar('SSTATETASKS', True)
-    sstate_tasks = sstate_tasks.replace("do_package_write_ipk", "")
-    sstate_tasks = sstate_tasks.replace("do_package_write_ipk_setscene", "")
-    d.setVar('SSTATETASKS', sstate_tasks)
-
     if machine == "target":
         manifest_path = d.getVar("SSTATE_MANIFESTS", True)
         if not os.path.exists(manifest_path):
             bb.utils.mkdirhier(manifest_path)
 
-        #manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".packagedata"
-        #open(manifest_name, 'w').close()
+        manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".packagedata"
+        open(manifest_name, 'w').close()
 
 do_package_write_ipk:prepend() {
     manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
@@ -549,6 +544,10 @@ def get_ipk_list(d, pkg_arch):
             with open(recipe_info, 'r') as file:
                 pkgs = file.readlines()
             for pkg in pkgs:
+                if prefix and not pkg.startswith(prefix):
+                    continue
+                if not prefix and pkg.startswith("lib32-"):
+                    continue
                 pkg_ipk = "%s_%s_%s.ipk"%(pkg[:-1],pkg_ver,pkg_arch)
                 ipk_list.append(pkg_ipk)
     return ipk_list

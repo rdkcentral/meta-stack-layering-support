@@ -15,10 +15,6 @@ def ipk_download(d):
 
     arch = d.getVar('PACKAGE_ARCH')
     download_dir =  d.getVar("IPK_CACHE_DIR", True)
-    deploy_dir = d.getVar("DEPLOY_DIR_IPK")
-    ipk_deploy_path = os.path.join(deploy_dir, arch)
-    if not os.path.exists(ipk_deploy_path):
-        bb.utils.mkdirhier(ipk_deploy_path)
 
     ipk_list = get_ipk_list(d,arch)
 
@@ -32,22 +28,16 @@ def ipk_download(d):
                 server_path = arch_uri
 
     if server_path:
-        download_ipks_in_parallel(d, ipk_list, server_path, arch, ipk_deploy_path)
-        manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".package_write_ipk"
-        bb.utils.mkdirhier(os.path.dirname(manifest_name))
-        manifest_file = open(manifest_name, "w")
+        download_ipks_in_parallel(d, ipk_list, server_path)
 
         install_dir = d.expand("${D}${base_prefix}")
         if not os.path.exists(install_dir):
             bb.utils.mkdirhier(install_dir)
         for ipk in ipk_list:
             source_name = os.path.join(download_dir, ipk)
-            manifest_file.write("%s\n"%source_name)
             if "-dbg_" not in ipk:
                 cmd = "ar x %s && tar -C %s --no-same-owner -xpf data.tar.xz && rm data.tar.xz && rm -rf control.tar.gz && rm -rf debian-binary"%(source_name, install_dir)
                 base_cmdline(d, cmd)
-
-        manifest_file.close()
 
     bb.build.exec_func("sysroot_stage_all", d)
     multiprov = d.getVar("BB_MULTI_PROVIDER_ALLOWED").split()
@@ -62,7 +52,7 @@ def ipk_download(d):
             f.write(pn)
 
 # Function to download multiple ipk files in parallel
-def download_ipks_in_parallel(d, ipk_list, server_path, arch, ipk_deploy_path):
+def download_ipks_in_parallel(d, ipk_list, server_path):
     import multiprocessing
 
     def split_into_batches(lst, batch_size=10):
@@ -76,15 +66,14 @@ def download_ipks_in_parallel(d, ipk_list, server_path, arch, ipk_deploy_path):
     for ipk_batch in split_into_batches(ipk_list, batch_size=batch_size):
         processes = []
         for ipk in ipk_batch:
-            p = multiprocessing.Process(target=download_ipk, args=(d, ipk, server_path, ipk_deploy_path, ))
+            p = multiprocessing.Process(target=download_ipk, args=(d, ipk, server_path, ))
             processes.append(p)
             p.start()
         for process in processes:
             process.join()
 
 # Do sequential ipk download
-def download_ipk(d, ipk, server_path, ipk_deploy_path):
-    deploy_dir = d.getVar("DEPLOY_DIR_IPK")
+def download_ipk(d, ipk, server_path):
     download_dir = d.getVar("IPK_CACHE_DIR", True)
     if not os.path.exists(download_dir):
         bb.utils.mkdirhier(download_dir)
@@ -100,13 +89,17 @@ def download_ipk(d, ipk, server_path, ipk_deploy_path):
 def copy_deploy_ipk(d):
     import shutil
     arch = d.getVar('PACKAGE_ARCH')
-    ipk_outdir = d.getVar('PKGWRITEDIRIPK')
+    ipk_outdir = os.path.join(d.getVar('PKGWRITEDIRIPK'),arch)
+    if not os.path.exists(ipk_outdir):
+        bb.utils.mkdirhier(ipk_outdir)
+
     download_dir = d.getVar("IPK_CACHE_DIR", True)
 
     ipk_list = get_ipk_list(d,arch)
-    bb.note("ipk list : %s"%ipk_list)
+    bb.note("[copy_deploy_ipk] ipk list : %s"%ipk_list)
     for ipk in ipk_list:
         src_path = os.path.join(download_dir,ipk)
-        bb.note("SRC : %s"%src_path)
+        bb.note("[copy_deploy_ipk] ipk path : %s"%src_path)
         if os.path.exists(src_path):
+            bb.note("[copy_deploy_ipk] copying : %s"%src_path)
             shutil.copy(src_path, ipk_outdir)
