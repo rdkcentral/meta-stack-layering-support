@@ -8,16 +8,14 @@ def base_cmdline(d,cmd):
         msg = process.stderr.read()
         bb.fatal("CMD : %s : Failed %s"%(cmd,str(msg)))
 
-def ipk_download(d):
+python do_ipk_download (){
     import subprocess
     import shutil
     import re
 
     arch = d.getVar('PACKAGE_ARCH')
-    download_dir =  d.getVar("IPK_CACHE_DIR", True)
 
     ipk_list = get_ipk_list(d,arch)
-
     server_path = ""
     for line in (d.getVar('IPK_FEED_URIS') or "").split():
         feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
@@ -29,15 +27,22 @@ def ipk_download(d):
 
     if server_path:
         download_ipks_in_parallel(d, ipk_list, server_path)
+}
 
-        install_dir = d.expand("${D}${base_prefix}")
-        if not os.path.exists(install_dir):
-            bb.utils.mkdirhier(install_dir)
-        for ipk in ipk_list:
-            source_name = os.path.join(download_dir, ipk)
-            if "-dbg_" not in ipk:
-                cmd = "ar x %s && tar -C %s --no-same-owner -xpf data.tar.xz && rm data.tar.xz && rm -rf control.tar.gz && rm -rf debian-binary"%(source_name, install_dir)
-                base_cmdline(d, cmd)
+def ipk_sysroot_creation(d):
+    install_dir = d.expand("${D}${base_prefix}")
+    arch = d.getVar('PACKAGE_ARCH')
+    download_dir =  d.getVar("IPK_CACHE_DIR", True)
+    if not os.path.exists(install_dir):
+        bb.utils.mkdirhier(install_dir)
+    ipk_list = get_ipk_list(d,arch)
+    for ipk in ipk_list:
+        source_name = os.path.join(download_dir, ipk)
+        if "-dbg_" not in ipk:
+            if not os.path.exists(source_name):
+                bb.warn("[ipk_sysroot_creation] %s has not been downloaded. Check ..."%source_name)
+            cmd = "ar x %s && tar -C %s --no-same-owner -xpf data.tar.xz && rm data.tar.xz && rm -rf control.tar.gz && rm -rf debian-binary"%(source_name, install_dir)
+            base_cmdline(d, cmd)
 
     bb.build.exec_func("sysroot_stage_all", d)
     multiprov = d.getVar("BB_MULTI_PROVIDER_ALLOWED").split()

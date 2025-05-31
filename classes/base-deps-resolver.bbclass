@@ -276,7 +276,7 @@ do_populate_sysroot:prepend() {
     else:
         manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
         if os.path.exists(manifest_name):
-            ipk_download(d)
+            ipk_sysroot_creation(d)
             return
 }
 
@@ -660,6 +660,7 @@ python () {
             update_build_tasks(d, arch, "target")
             manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
             open(manifest_name, 'w').close()
+            bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,d)
         else:
             manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
             if os.path.exists(manifest_name):
