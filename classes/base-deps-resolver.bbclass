@@ -613,81 +613,76 @@ python do_add_version(){
 }
 
 python update_recipe_deps_handler() {
-    if isinstance(e,bb.event.RecipePreFinalise):
-        d = e.data
-        variant = e.data.getVar("BBEXTENDVARIANT")
-        pn = d.getVar('PN')
-
-        if variant:
-            manifest_name = d.getVar("SSTATE_IPK_MANFILEPREFIX", True)+variant+"-"+d.getVar("PN")
-        else:
-            manifest_name = d.getVar("SSTATE_IPK_MANFILEPREFIX", True)+d.getVar("PN")
-        manifest_file = manifest_name + ".ipk_download"
-
-        arch = d.getVar('PACKAGE_ARCH')
-        feed_info_dir = d.getVar("FEED_INFO_DIR")
-        version = get_version_info(d)
-        staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
-        if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
-            if staging_native_prebuilt_path:
-                exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
-                prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, d.getVar("PN", True))
-                if not os.path.exists(prebuilt_native_pkg_path):
-                    prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
-                    if prebuilt_native_pkg_type:
-                        import glob
-                        prebuilt_native_pkg_path_list = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
-                        if prebuilt_native_pkg_path_list:
-                            prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
-                if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(d, pn) and pn not in exclusion_list :
-                    update_build_tasks(d, arch, "native", manifest_name)
-                elif pn.startswith("gcc-source-") and not gcc_source_mode_check(d, pn) :
-                    update_build_tasks(d, arch, "native", manifest_name)
-            if d.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
-                d.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
-        else:
-            if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(d, pn):
+    staging_native_prebuilt_path = e.data.getVar("PREBUILT_NATIVE_SYSROOT")
+    feed_info_dir = e.data.getVar("FEED_INFO_DIR")
+    variant = e.data.getVar("BBEXTENDVARIANT")
+    arch = e.data.getVar('PACKAGE_ARCH')
+    pn = e.data.getVar('PN')
+    if variant:
+        manifest_name = e.data.getVar("SSTATE_IPK_MANFILEPREFIX", True)+variant+"-"+pn
+    else:
+        manifest_name = e.data.getVar("SSTATE_IPK_MANFILEPREFIX", True)+pn
+    manifest_file = manifest_name + ".ipk_download"
+    version = get_version_info(e.data)
+    if bb.data.inherits_class('native', e.data) or bb.data.inherits_class('cross', e.data):
+        if staging_native_prebuilt_path:
+            exclusion_list = (e.data.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
+            prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
+            if not os.path.exists(prebuilt_native_pkg_path):
+                prebuilt_native_pkg_type = e.data.getVar("PREBUILT_NATIVE_PKG_TYPE")
+                if prebuilt_native_pkg_type:
+                    import glob
+                    prebuilt_native_pkg_path_list = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
+                    if prebuilt_native_pkg_path_list:
+                        prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
+            if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(e.data, pn) and pn not in exclusion_list :
+                update_build_tasks(e.data, arch, "native", manifest_name)
+            elif pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn) :
                 update_build_tasks(d, arch, "native", manifest_name)
-            # Skipping unrequired version of recipes
-            if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
-                d.appendVarFlag('do_package_write_ipk', 'prefuncs', ' do_clean_deploy')
-                d.appendVarFlag('do_package_write_ipk_setscene', 'prefuncs', ' do_clean_deploy')
-                d.appendVarFlag('do_deploy', 'prefuncs', ' do_clean_deploy_images')
-                d.appendVarFlag('do_deploy_setscene', 'prefuncs', ' do_clean_deploy_images')
-            d.appendVar("DEPENDS", " pseudo-native")
+        if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
+            e.data.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
+    else:
+        if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn):
+            update_build_tasks(e.data, arch, "native", manifest_name)
+        # Skipping unrequired version of recipes
+        if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
+            e.data.appendVarFlag('do_package_write_ipk', 'prefuncs', ' do_clean_deploy')
+            e.data.appendVarFlag('do_package_write_ipk_setscene', 'prefuncs', ' do_clean_deploy')
+            e.data.appendVarFlag('do_deploy', 'prefuncs', ' do_clean_deploy_images')
+            e.data.appendVarFlag('do_deploy_setscene', 'prefuncs', ' do_clean_deploy_images')
+        e.data.appendVar("DEPENDS", " pseudo-native")
 
-            (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, pn, False, version)
-            if ipk_mode and not check_targets(d, pn):
-                skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
-                if not os.path.exists(skipped_pkg_dir):
-                    bb.utils.mkdirhier(skipped_pkg_dir)
-
-                open(skipped_pkg_dir+pn, 'w').close()
-                update_build_tasks(d, arch, "target", manifest_name)
-                open(manifest_file, 'w').close()
-                bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,d)
-            else:
-                if os.path.exists(manifest_file):
-                    os.remove(manifest_file)
-                if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', d):
-                    d.appendVarFlag('do_packagedata', 'prefuncs', ' do_clean_pkgdata')
-                    d.appendVarFlag('do_packagedata_setscene', 'prefuncs', ' do_clean_pkgdata')
-                if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
-                    if not os.path.exists(feed_info_dir+"src_mode/"):
-                        bb.utils.mkdirhier(feed_info_dir+"src_mode/")
-                    open(feed_info_dir+"src_mode/%s"%pn, 'w').close()
-                    if version_check and not check_targets(d, pn):
-                        open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
-                d.appendVar("DEPENDS", " opkg-native ")
-                d.appendVar("INSANE_SKIP", " file-rdeps ")
-                bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',d)
-                d.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
-                # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
-                postfuncs = (d.getVarFlag('do_prepare_recipe_sysroot', 'postfuncs') or "").split()
-                if postfuncs:
-                    for fn in postfuncs:
-                        d.appendVarFlag('do_install_ipk_recipe_sysroot', 'postfuncs', " %s"%fn)
-                    d.setVarFlag('do_prepare_recipe_sysroot', 'postfuncs', "")
+        (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
+        if ipk_mode and not check_targets(e.data, pn):
+            skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
+            if not os.path.exists(skipped_pkg_dir):
+                bb.utils.mkdirhier(skipped_pkg_dir)
+            open(skipped_pkg_dir+pn, 'w').close()
+            update_build_tasks(e.data, arch, "target", manifest_name)
+            open(manifest_file, 'w').close()
+            bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
+        else:
+            if os.path.exists(manifest_file):
+                os.remove(manifest_file)
+            if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', e.data):
+                e.data.appendVarFlag('do_packagedata', 'prefuncs', ' do_clean_pkgdata')
+                e.data.appendVarFlag('do_packagedata_setscene', 'prefuncs', ' do_clean_pkgdata')
+            if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
+                if not os.path.exists(feed_info_dir+"src_mode/"):
+                    bb.utils.mkdirhier(feed_info_dir+"src_mode/")
+                open(feed_info_dir+"src_mode/%s"%pn, 'w').close()
+                if version_check and not check_targets(e.data, pn):
+                    open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
+            e.data.appendVar("DEPENDS", " opkg-native ")
+            e.data.appendVar("INSANE_SKIP", " file-rdeps ")
+            bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',e.data)
+            e.data.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
+            # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
+            postfuncs = (e.data.getVarFlag('do_prepare_recipe_sysroot', 'postfuncs') or "").split()
+            if postfuncs:
+                for fn in postfuncs:
+                    e.data.appendVarFlag('do_install_ipk_recipe_sysroot', 'postfuncs', " %s"%fn)
+                e.data.setVarFlag('do_prepare_recipe_sysroot', 'postfuncs', "")
 }
 addhandler update_recipe_deps_handler
 update_recipe_deps_handler[eventmask] = "bb.event.RecipePreFinalise"
