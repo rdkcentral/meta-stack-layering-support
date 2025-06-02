@@ -40,7 +40,7 @@ def ipk_sysroot_creation(d):
         source_name = os.path.join(download_dir, ipk)
         if "-dbg_" not in ipk:
             if not os.path.exists(source_name):
-                bb.warn("[ipk_sysroot_creation] %s has not been downloaded. Check ..."%source_name)
+                bb.fatal("[ipk_sysroot_creation] %s has not been downloaded. Check ..."%source_name)
             cmd = "ar x %s && tar -C %s --no-same-owner -xpf data.tar.xz && rm data.tar.xz && rm -rf control.tar.gz && rm -rf debian-binary"%(source_name, install_dir)
             base_cmdline(d, cmd)
 

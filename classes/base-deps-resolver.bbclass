@@ -568,10 +568,12 @@ def get_target_list(d):
 
     return targets
 
-def check_targets(d, pkg):
+def check_targets(d, pkg, variant):
     is_target = False
     targets = get_target_list(d)
     for target in targets:
+        if target.startswith("lib32-") and not variant:
+            target = target[6:]
         if pkg == target[:-1]:
             is_target = True
             break
@@ -585,15 +587,15 @@ def get_version_info(d):
     version = version.replace("AUTOINC","0")
     return version
 
-def gcc_source_mode_check(d, pn):
+def gcc_source_mode_check(d, pn, variant):
     gcc_source_mode = True
     if "gcc-" in pn:
         version = get_version_info(d)
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, "libgcc", False, version)
-        if ipk_mode and not check_targets(d, pn):
+        if ipk_mode and not check_targets(d, pn, variant):
             gcc_source_mode = False
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, "gcc-runtime", False, version)
-        if ipk_mode and not check_targets(d, pn):
+        if ipk_mode and not check_targets(d, pn, variant):
             gcc_source_mode = False
         else:
             gcc_source_mode = True
@@ -635,25 +637,23 @@ python update_recipe_deps_handler() {
                     prebuilt_native_pkg_path_list = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
                     if prebuilt_native_pkg_path_list:
                         prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
-            if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(e.data, pn) and pn not in exclusion_list :
+            if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(e.data, pn,variant) and pn not in exclusion_list :
                 update_build_tasks(e.data, arch, "native", manifest_name)
-            elif pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn) :
+            elif pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant) :
                 update_build_tasks(d, arch, "native", manifest_name)
         if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
             e.data.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
     else:
-        if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn):
+        if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
             update_build_tasks(e.data, arch, "native", manifest_name)
         # Skipping unrequired version of recipes
         if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
-            e.data.appendVarFlag('do_package_write_ipk', 'prefuncs', ' do_clean_deploy')
-            e.data.appendVarFlag('do_package_write_ipk_setscene', 'prefuncs', ' do_clean_deploy')
             e.data.appendVarFlag('do_deploy', 'prefuncs', ' do_clean_deploy_images')
             e.data.appendVarFlag('do_deploy_setscene', 'prefuncs', ' do_clean_deploy_images')
         e.data.appendVar("DEPENDS", " pseudo-native")
 
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
-        if ipk_mode and not check_targets(e.data, pn):
+        if ipk_mode and not check_targets(e.data, pn, variant):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
             if not os.path.exists(skipped_pkg_dir):
                 bb.utils.mkdirhier(skipped_pkg_dir)
@@ -671,10 +671,10 @@ python update_recipe_deps_handler() {
                 if not os.path.exists(feed_info_dir+"src_mode/"):
                     bb.utils.mkdirhier(feed_info_dir+"src_mode/")
                 open(feed_info_dir+"src_mode/%s"%pn, 'w').close()
-                if version_check and not check_targets(e.data, pn):
+                if version_check and not check_targets(e.data, pn, variant):
                     open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
             e.data.appendVar("DEPENDS", " opkg-native ")
-            e.data.appendVar("INSANE_SKIP", " file-rdeps ")
+            #e.data.appendVar("INSANE_SKIP", " file-rdeps ")
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',e.data)
             e.data.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
             # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
@@ -692,28 +692,6 @@ python do_clean_pkgdata(){
                                            'kernel-abiversion')
     if os.path.exists(kernel_abi_ver_file):
         os.remove(kernel_abi_ver_file)
-}
-
-def unlink_file(file_path):
-    if os.path.exists(file_path):
-        try:
-            os.unlink(file_path)
-        except OSError as err:
-            if err.errno == errno.ENOENT:
-                bb.warn("Link already removed.." + file_path + "\n")
-            else:
-                raise
-
-python do_clean_deploy() {
-    # Get the ipk file list from the ipk write manifest file
-    ipk_manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".package_write_ipk"
-    if os.path.exists(ipk_manifest_name):
-        with open(ipk_manifest_name, "r") as ipk_list:
-            ipk_list = ipk_list.readlines()
-            for line in ipk_list:
-                ipk_file = line.strip("\n")
-                if ipk_file.endswith(".ipk"):
-                    unlink_file(ipk_file)
 }
 
 python do_clean_deploy_images(){
@@ -1019,6 +997,7 @@ def get_rdeps_provider_ipk(d, rdep):
     opkg_args = "-f %s -t %s -o %s " % (opkg_conf, info_file_path ,reciepe_sysroot)
 
     cmd = '%s %s search "'"*/%s"'"' % (opkg_cmd, opkg_args,rdep.strip()) + " 2>/dev/null"
+    bb.note("[deps-resolver] CMD: %s"%cmd)
     fd = os.popen(cmd)
     lines = fd.readlines()
     fd.close()
