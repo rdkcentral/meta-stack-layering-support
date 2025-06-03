@@ -11,11 +11,13 @@ To ensure that the prebuilt libraries are usable across all stack layers, we sho
 If we do not use a common value for this variable, we won't be able to use the toolchain's prebuilt libraries, such as libgcc.<br />
 
 ### Steps to generate the prebuilt native packages support in VM/docker:
-- Set GENERATE_NATIVE_PKG_PREBUILT to "1"
-- Default its value is "0"
-- Build the required native packages using bitbake command. Example "bitbake opkg-native"
-- It will generate the <pkg-name>-<version>.tar.gz file in ${NATIVE_PREBUILT_DIR}
-- Default path is NATIVE_PREBUILT_DIR = "${TMPDIR}/native-pre-pkgs
+- Set GENERATE_NATIVE_PKG_PREBUILT to "1". <br />
+     Default its value is "0"
+/>
+- Build the required native packages using bitbake command. Example "bitbake opkg-native".<br />
+     It will generate the <pkg-name>-<version>.tar.gz file in ${NATIVE_PREBUILT_DIR}
+     Default is NATIVE_PREBUILT_DIR = "${TMPDIR}/native-pre-pkgs
+/>
 - Ex: build-rdk-arm64/tmp/native-pre-pkgs/openssl-native_3.0.15-r0.tar.gz
 - Copy the native prebuilt package tar files from build directory "${NATIVE_PREBUILT_DIR}" to the Docker or VM path. <br />
      The default path is set to "/opt/staging-native/x86_64". <br /> 
@@ -23,8 +25,8 @@ If we do not use a common value for this variable, we won't be able to use the t
 - Use the meta-stack-layering-support tag 2.0.3 or higher
 
 ### Advantages
-- Traceability. We can track the packages using version info
-- Easy update. We can independetly update each package 
+- Traceability: Packages can be tracked using version information.
+- Easy Updates: Each package can be updated independently.
 - Will use the prebuilt native packages and toolchain from the Docker path instead of building them from source. If any native package is missing in the Docker path, it will be built from source.
 - Ensures consistent native packages and toolchain across different stack layer projects.
 - Significantly reduces both build time and build server disk usage.
