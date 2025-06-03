@@ -14,10 +14,7 @@ SYSROOT_DIRS_BIN_REQUIRED = "${MLPREFIX}gobject-introspection"
 # Pkgdata directory to store runtime IPK dependency details.
 IPK_PKGDATA_RUNTIME_DIR = "${WORKDIR}/pkgdata/ipk"
 
-SRC_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/src_mode/target"
-PREBUILT_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/prebuilt_mode/target"
-SRC_NATIVE_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/src_mode/native"
-PREBUILT_NATIVE_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/prebuilt_mode/native"
+SSTATE_MANFILEPREFIX_NATIVE_FILTER = "${SSTATE_MANIFESTS}/manifest-${BUILD_ARCH}-"
 
 SYSROOT_PREBUILT_DESTDIR = "${WORKDIR}/sysroot-prebuilt-destdir"
 PREBUILTDEPLOYDIR = "${COMPONENTS_DIR}/${PACKAGE_ARCH}"
@@ -283,9 +280,20 @@ do_package_write_ipk_setscene:prepend() {
 }
 do_populate_sysroot:prepend() {
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
+        staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
+        manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
+        manifest_src_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".source_mode"
         skip = sls_generate_native_sysroot (d)
         if skip:
+            open(manifest_pre_mode, 'w').close()
+            if os.path.exists(manifest_src_mode):
+                os.remove(manifest_src_mode)
             return
+        else:
+            if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
+                open(manifest_src_mode, 'w').close()
+                if os.path.exists(manifest_pre_mode):
+                    os.remove(manifest_pre_mode)
 }
 
 def sls_generate_native_sysroot(d):
@@ -1455,23 +1463,17 @@ def exec_sls_cmd(arg):
         bb.note(result)
 
 def print_pkgs_in_src_mode(d):
-    pkgs_native_list = d.getVar("SRC_NATIVE_PKGS_LIST")
-    pkgs_list = d.getVar("SRC_PKGS_LIST")
-    list_pkgs = []
-    if os.path.exists(pkgs_native_list):
+    import glob
+    prefix = d.getVar("SSTATE_MANFILEPREFIX_NATIVE_FILTER", True)
+    src_mode_pkgs = glob.glob(prefix+"*.source_mode")
+    if src_mode_pkgs:
+        list_native_pkgs = []
+        for pkg in src_mode_pkgs:
+            file = pn_value = pkg[len(prefix):-12]
+            list_native_pkgs.append(file)
         bb.note("NATIVE PKGS in SRC mode")
-        for file in os.listdir(pkgs_native_list):
-            list_pkgs.append(file)
-        for i in range(0, len(list_pkgs), 5):
-            bb.note(' '.join(list_pkgs[i:i+5]))
-
-    list_pkgs = []
-    if os.path.exists(pkgs_list):
-        bb.note("TARGET PKGS in SRC mode")
-        for file in os.listdir(pkgs_list):
-            list_pkgs.append(file)
-        for i in range(0, len(list_pkgs), 5):
-            bb.note(' '.join(list_pkgs[i:i+5]))
+        for i in range(0, len(list_native_pkgs), 5):
+            bb.note(' '.join(list_native_pkgs[i:i+5]))
 
 # Helper function to create a markup document with a list of IPKs in the respective deploy directory.
 # Set the variable 'GENERATE_IPK_VERSION_DOC' to enable this feature.
