@@ -14,7 +14,7 @@ SYSROOT_DIRS_BIN_REQUIRED = "${MLPREFIX}gobject-introspection"
 # Pkgdata directory to store runtime IPK dependency details.
 IPK_PKGDATA_RUNTIME_DIR = "${WORKDIR}/pkgdata/ipk"
 
-SSTATE_MANFILEPREFIX_FILTER = "${SSTATE_MANIFESTS}/manifest-${SSTATE_MANMACH}-"
+SSTATE_MANFILEPREFIX_NATIVE_FILTER = "${SSTATE_MANIFESTS}/manifest-${BUILD_ARCH}-"
 
 SYSROOT_PREBUILT_DESTDIR = "${WORKDIR}/sysroot-prebuilt-destdir"
 PREBUILTDEPLOYDIR = "${COMPONENTS_DIR}/${PACKAGE_ARCH}"
@@ -1464,24 +1464,16 @@ def exec_sls_cmd(arg):
 
 def print_pkgs_in_src_mode(d):
     import glob
-    prefix = d.getVar("SSTATE_MANFILEPREFIX_FILTER", True)
-    src_mode_pkgs = glob.glob(d.getVar("SSTATE_MANIFESTS",True)+"*.source_mode")
+    prefix = d.getVar("SSTATE_MANFILEPREFIX_NATIVE_FILTER", True)
+    src_mode_pkgs = glob.glob(prefix+"*.source_mode")
     if src_mode_pkgs:
         list_native_pkgs = []
-        list_target_pkgs = []
         for pkg in src_mode_pkgs:
             file = pn_value = pkg[len(prefix):-12]
-            if "native" in file or "cross" in file:
-                list_native_pkgs.append(file)
-            else:
-                list_target_pkgs.append(file)
+            list_native_pkgs.append(file)
         bb.note("NATIVE PKGS in SRC mode")
         for i in range(0, len(list_native_pkgs), 5):
             bb.note(' '.join(list_native_pkgs[i:i+5]))
-
-        bb.note("TARGET PKGS in SRC mode")
-        for i in range(0, len(list_target_pkgs), 5):
-            bb.note(' '.join(list_target_pkgs[i:i+5]))
 
 # Helper function to create a markup document with a list of IPKs in the respective deploy directory.
 # Set the variable 'GENERATE_IPK_VERSION_DOC' to enable this feature.
