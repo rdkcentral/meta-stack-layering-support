@@ -14,10 +14,10 @@ SYSROOT_DIRS_BIN_REQUIRED = "${MLPREFIX}gobject-introspection"
 # Pkgdata directory to store runtime IPK dependency details.
 IPK_PKGDATA_RUNTIME_DIR = "${WORKDIR}/pkgdata/ipk"
 
-SRC_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/src_mode/target"
-PREBUILT_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/prebuilt_mode/target"
-SRC_NATIVE_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/src_mode/native"
-PREBUILT_NATIVE_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/prebuilt_mode/native"
+SRC_PKGS_LIST = "${SSTATE_MANIFESTS}/pkgs_list/src_mode/target"
+PREBUILT_PKGS_LIST = "${SSTATE_MANIFESTS}/pkgs_list/prebuilt_mode/target"
+SRC_NATIVE_PKGS_LIST = "${SSTATE_MANIFESTS}/pkgs_list/src_mode/native"
+PREBUILT_NATIVE_PKGS_LIST = "${SSTATE_MANIFESTS}/pkgs_list/prebuilt_mode/native"
 
 SYSROOT_PREBUILT_DESTDIR = "${WORKDIR}/sysroot-prebuilt-destdir"
 PREBUILTDEPLOYDIR = "${COMPONENTS_DIR}/${PACKAGE_ARCH}"
@@ -283,9 +283,26 @@ do_package_write_ipk_setscene:prepend() {
 }
 do_populate_sysroot:prepend() {
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
+        staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
+        if not os.path.exists(d.getVar("SRC_NATIVE_PKGS_LIST")):
+            bb.utils.mkdirhier(d.getVar("SRC_NATIVE_PKGS_LIST"))
+        if not os.path.exists(d.getVar("PREBUILT_NATIVE_PKGS_LIST")):
+            bb.utils.mkdirhier(d.getVar("PREBUILT_NATIVE_PKGS_LIST"))
+        file_path_src = os.path.join(d.getVar("SRC_NATIVE_PKGS_LIST"),d.getVar("PN",True))
+        file_path_pre = os.path.join(d.getVar("PREBUILT_NATIVE_PKGS_LIST"),d.getVar("PN",True))
         skip = sls_generate_native_sysroot (d)
         if skip:
+            if not os.path.exists(file_path_pre):
+                open(file_path_pre, 'w').close()
+            if os.path.exists(file_path_src):
+                os.remove(file_path_src)
             return
+        else:
+            if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
+                if not os.path.exists(file_path_src):
+                    open(file_path_src, 'w').close()
+                if os.path.exists(file_path_pre):
+                    os.remove(file_path_pre)
 }
 
 def sls_generate_native_sysroot(d):
