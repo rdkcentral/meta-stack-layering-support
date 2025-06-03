@@ -12,15 +12,13 @@ If we do not use a common value for this variable, we won't be able to use the t
 
 ### Steps to generate the prebuilt native packages support in VM/docker:
 - Set GENERATE_NATIVE_PKG_PREBUILT to "1". <br />
-     Default value is "0"
-/>
+     Default value is "0" <br /> 
 - Build the required native packages using bitbake command. Example "bitbake opkg-native".<br />
-     It will generate the <pkg-name>-<version>.tar.gz file in ${NATIVE_PREBUILT_DIR}
-     Default is NATIVE_PREBUILT_DIR = "${TMPDIR}/native-pre-pkgs
-/>
-- Ex: build-rdk-arm64/tmp/native-pre-pkgs/openssl-native_3.0.15-r0.tar.gz
-- Copy the native prebuilt package tar files from build directory "${NATIVE_PREBUILT_DIR}" to the Docker or VM path. <br />
-     The default path is set to "/opt/staging-native/x86_64". <br /> 
+     It will generate the [pkg-name]-[version].tar.gz file in "${NATIVE_PREBUILT_DIR}".<br /> 
+     Default is NATIVE_PREBUILT_DIR = "${TMPDIR}/native-pre-pkgs <br /> 
+     Example: build-rdk-arm64/tmp/native-pre-pkgs/openssl-native_3.0.15-r0.tar.gz <br /> 
+- Copy the native prebuilt package tar files from build directory "${NATIVE_PREBUILT_DIR}" to the Docker or VM path "${DOCKER_NATIVE_SYSROOT}". <br />
+     The default path is "/opt/staging-native/x86_64". <br /> 
      If you need to copy to a different path, you should update the path variable "DOCKER_NATIVE_SYSROOT" using new path. <br />
 - Use the meta-stack-layering-support tag 2.0.3 or higher
 
