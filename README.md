@@ -25,7 +25,7 @@ Sreejith Ravi
 ├── COPYING -> LICENSE
 ├── docs
 │   ├── ipk-mode-support.md
-│   ├── native-toolchain-support.md
+│   ├── nativepkg-toolchain-prebuilt-mode.md
 │   ├── prerequisite.md
 │   ├── stack-layering-support.md
 │   └── variables.md
@@ -55,7 +55,7 @@ Central to this functionality are several BBClasses that automate dependency res
 - [Key BBClasses & Their Roles](#key-bbclasses--their-roles)  
 - [Recipes (.bb)](#recipes-bb)  
 - [IPK Mode Support](#ipk-mode-support)  
-- [Native Toolchain Support](#native-toolchain-support)  
+- [Native Toolchain Support](#nativepkg-toolchain-prebuilt-mode)  
 - [Custom Rootfs Creation & IPK Dependency Resolution](#custom-rootfs-creation--ipk-dependency-resolution)  
 - [Configuration Variables](#configuration-variables)  
 - [Prerequisites](#prerequisites)  
@@ -106,7 +106,7 @@ To address this, we have designed and integrated a new feature that allows consu
 
 This approach standardizes the host toolchain and dramatically reduces rebuild times in containerized builds.
 
-_For a full walkthrough, see [Native Toolchain Support](https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/native-toolchain-support.md)._
+_For a full walkthrough, see [Native Pkgs and Toolchain Prebuilt Mode](https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/nativepkg-toolchain-prebuilt-mode.md)._
 
 ---
 
@@ -163,8 +163,8 @@ _See the detailed prerequisites checklist: [Prerequisite](https://github.com/rdk
 
 - **IPK Mode Support**: Version-based source vs. IPK builds.  
   https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/ipk-mode-support.md  
-- **Native Toolchain Support**: VM/Docker native package staging.  
-  https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/native-toolchain-support.md  
+- **Native Pkgs and Toolchain Prebuilt Mode**: VM/Docker native package staging.  
+  https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/nativepkg-toolchain-prebuilt-mode.md  
 - **Prerequisite**: Yocto version and layer setup.  
   https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/prerequisite.md  
 - **Stack Layering Support**: Core bbclass extensions and flow.  
