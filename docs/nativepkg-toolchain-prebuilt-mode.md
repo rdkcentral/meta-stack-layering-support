@@ -12,7 +12,7 @@ If we do not use a common value for this variable, we won't be able to use the t
 
 ### Steps to generate the prebuilt native packages support in VM/docker:
 - Set GENERATE_NATIVE_PKG_PREBUILT to "1". <br />
-     Default its value is "0"
+     Default value is "0"
 />
 - Build the required native packages using bitbake command. Example "bitbake opkg-native".<br />
      It will generate the <pkg-name>-<version>.tar.gz file in ${NATIVE_PREBUILT_DIR}
