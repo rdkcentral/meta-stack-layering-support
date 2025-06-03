@@ -11,13 +11,20 @@ To ensure that the prebuilt libraries are usable across all stack layers, we sho
 If we do not use a common value for this variable, we won't be able to use the toolchain's prebuilt libraries, such as libgcc.<br />
 
 ### Steps to generate the prebuilt native packages support in VM/docker:
-- Build the required native packages using bitbake command. Example "bitbake opkg-native"
-- Copy the native package prebuilts from build directory "${COMPONENTS_DIR}/${BUILD_ARCH}" to the Docker or VM path. <br />
-     The default path is set to "/opt/staging-native/x86_64". <br /> 
-     If we need to copy to a different path, we should update the path variable "DOCKER_NATIVE_SYSROOT" using new path. <br />
-- Use the meta-stack-layering-support tag 2.0.0 or higher
+- Set GENERATE_NATIVE_PKG_PREBUILT to "1". <br />
+     Default value is "0" <br /> 
+- Build the required native packages using bitbake command. Example "bitbake opkg-native".<br />
+     It will generate the [pkg-name]-[version].tar.gz file in "${NATIVE_PREBUILT_DIR}".<br /> 
+     Default is NATIVE_PREBUILT_DIR = "${TMPDIR}/native-pre-pkgs <br /> 
+     Example: build-rdk-arm64/tmp/native-pre-pkgs/openssl-native_3.0.15-r0.tar.gz <br /> 
+- Copy the native prebuilt package tar files from build directory "${NATIVE_PREBUILT_DIR}" to the Docker or VM path "${DOCKER_NATIVE_SYSROOT}". <br />
+     The default path is "/opt/staging-native/x86_64". <br /> 
+     If you need to copy to a different path, you should update the path variable "DOCKER_NATIVE_SYSROOT" using new path. <br />
+- Use the meta-stack-layering-support tag 2.0.3 or higher
 
 ### Advantages
+- Traceability: Packages can be tracked using version information.
+- Easy Updates: Each package can be updated independently.
 - Will use the prebuilt native packages and toolchain from the Docker path instead of building them from source. If any native package is missing in the Docker path, it will be built from source.
 - Ensures consistent native packages and toolchain across different stack layer projects.
 - Significantly reduces both build time and build server disk usage.
