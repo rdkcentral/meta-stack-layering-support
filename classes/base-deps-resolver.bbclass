@@ -14,10 +14,7 @@ SYSROOT_DIRS_BIN_REQUIRED = "${MLPREFIX}gobject-introspection"
 # Pkgdata directory to store runtime IPK dependency details.
 IPK_PKGDATA_RUNTIME_DIR = "${WORKDIR}/pkgdata/ipk"
 
-SRC_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/src_mode/target"
-PREBUILT_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/prebuilt_mode/target"
-SRC_NATIVE_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/src_mode/native"
-PREBUILT_NATIVE_PKGS_LIST = "${IPK_PKGDATA_DIR}/pkgs_list/prebuilt_mode/native"
+SSTATE_MANFILEPREFIX_NATIVE_FILTER = "${SSTATE_MANIFESTS}/manifest-${BUILD_ARCH}-"
 
 SYSROOT_PREBUILT_DESTDIR = "${WORKDIR}/sysroot-prebuilt-destdir"
 PREBUILTDEPLOYDIR = "${COMPONENTS_DIR}/${PACKAGE_ARCH}"
@@ -283,9 +280,20 @@ do_package_write_ipk_setscene:prepend() {
 }
 do_populate_sysroot:prepend() {
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
+        staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
+        manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
+        manifest_src_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".source_mode"
         skip = sls_generate_native_sysroot (d)
         if skip:
+            open(manifest_pre_mode, 'w').close()
+            if os.path.exists(manifest_src_mode):
+                os.remove(manifest_src_mode)
             return
+        else:
+            if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
+                open(manifest_src_mode, 'w').close()
+                if os.path.exists(manifest_pre_mode):
+                    os.remove(manifest_pre_mode)
 }
 
 def sls_generate_native_sysroot(d):
@@ -335,6 +343,9 @@ def sls_generate_native_sysroot(d):
     fixme_file_path = os.path.join(sysroot_components_dir,"fixmepath")
     if os.path.exists(fixme_file_path):
         shutil.copy(fixme_file_path,fixme_path)
+    ver_file_path = os.path.join(sysroot_components_dir,"version-%s"%d.getVar("PN"))
+    if os.path.exists(ver_file_path):
+        shutil.copy(ver_file_path,fixme_path)
     pn = d.getVar("PN")
     multiprov = d.getVar("BB_MULTI_PROVIDER_ALLOWED").split()
     provdir = d.expand("${SYSROOT_DESTDIR}${base_prefix}/sysroot-providers/")
@@ -643,6 +654,12 @@ def gcc_source_mode_check(d, pn):
         gcc_source_mode = False
     return gcc_source_mode
 
+python do_add_version(){
+    version_file = os.path.join(d.expand("${SYSROOT_DESTDIR}${base_prefix}/"),"version-%s"%d.getVar("PN"))
+    version = d.getVar("PV")+"-"+d.getVar("PR")
+    with open(version_file, "w") as f:
+        f.writelines(version)
+}
 python () {
     pn = d.getVar('PN')
     arch = d.getVar('PACKAGE_ARCH')
@@ -665,6 +682,8 @@ python () {
                 update_build_tasks(d, arch, "native")
             elif pn.startswith("gcc-source-") and not gcc_source_mode_check(d, pn) :
                 update_build_tasks(d, arch, "native")
+        if d.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
+            d.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
     else:
         if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(d, pn):
             update_build_tasks(d, arch, "native")
@@ -1436,32 +1455,25 @@ python create_stack_layer_info () {
 addhandler create_stack_layer_info
 create_stack_layer_info[eventmask] = "bb.event.ConfigParsed bb.event.MultiConfigParsed bb.event.CacheLoadStarted"
 
-def create_feed_index(arg):
+def exec_sls_cmd(arg):
     import subprocess
     cmd = arg
-    bb.note("Executing '%s' ..." % cmd)
     result = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True).decode("utf-8")
     if result:
         bb.note(result)
 
 def print_pkgs_in_src_mode(d):
-    pkgs_native_list = d.getVar("SRC_NATIVE_PKGS_LIST")
-    pkgs_list = d.getVar("SRC_PKGS_LIST")
-    list_pkgs = []
-    if os.path.exists(pkgs_native_list):
+    import glob
+    prefix = d.getVar("SSTATE_MANFILEPREFIX_NATIVE_FILTER", True)
+    src_mode_pkgs = glob.glob(prefix+"*.source_mode")
+    if src_mode_pkgs:
+        list_native_pkgs = []
+        for pkg in src_mode_pkgs:
+            file = pn_value = pkg[len(prefix):-12]
+            list_native_pkgs.append(file)
         bb.note("NATIVE PKGS in SRC mode")
-        for file in os.listdir(pkgs_native_list):
-            list_pkgs.append(file)
-        for i in range(0, len(list_pkgs), 5):
-            bb.note(' '.join(list_pkgs[i:i+5]))
-
-    list_pkgs = []
-    if os.path.exists(pkgs_list):
-        bb.note("TARGET PKGS in SRC mode")
-        for file in os.listdir(pkgs_list):
-            list_pkgs.append(file)
-        for i in range(0, len(list_pkgs), 5):
-            bb.note(' '.join(list_pkgs[i:i+5]))
+        for i in range(0, len(list_native_pkgs), 5):
+            bb.note(' '.join(list_native_pkgs[i:i+5]))
 
 # Helper function to create a markup document with a list of IPKs in the respective deploy directory.
 # Set the variable 'GENERATE_IPK_VERSION_DOC' to enable this feature.
@@ -1528,8 +1540,32 @@ def generate_packages_and_versions_md(d):
 OPKG_UTILS_SYSROOT = "${COMPONENTS_DIR}/${BUILD_ARCH}/opkg-utils-native"
 OPKG_INDEX_FILE = "${OPKG_UTILS_SYSROOT}${bindir_native}/opkg-make-index"
 
+def generate_native_prebuilts_tar(d):
+    sys_dir = d.expand("${COMPONENTS_DIR}/${BUILD_ARCH}/")
+    dest_path = d.getVar("NATIVE_PREBUILT_DIR")
+    bb.utils.mkdirhier(dest_path)
+    if os.path.exists(sys_dir):
+        cmds = []
+        for item in os.listdir(sys_dir):
+            if "-cross" in item or item.endswith("-native"):
+                source_path = os.path.join(sys_dir, item)
+                if os.path.isdir(source_path):
+                    version_file = "version-"+item
+                    version_path = os.path.join(source_path,version_file)
+                    version = ""
+                    if os.path.exists(version_path):
+                        with open(version_path,"r") as fd:
+                            lines = fd.readlines()
+                        version = "_"+lines[0]
+                    tar_file = os.path.join(dest_path,"%s%s.tar.gz"%(item,version))
+                    cmds.append('cd %s && tar --exclude="fixmepath.cmd" -czf %s %s' %(sys_dir,tar_file, item))
+        oe.utils.multiprocess_launch(exec_sls_cmd, cmds, d)
+
 python feed_index_creation () {
     print_pkgs_in_src_mode(d)
+    if e.data.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1":
+        generate_native_prebuilts_tar(d)
+
     if e.data.getVar('GENERATE_IPK_VERSION_DOC') == "1":
         generate_packages_and_versions_md(d)
 
@@ -1572,7 +1608,7 @@ python feed_index_creation () {
         bb.note("There are no packages in %s!" % deploy_dir)
         return
 
-    oe.utils.multiprocess_launch(create_feed_index, cmds, e.data)
+    oe.utils.multiprocess_launch(exec_sls_cmd, cmds, e.data)
 }
 
 addhandler feed_index_creation
