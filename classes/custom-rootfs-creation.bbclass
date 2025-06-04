@@ -42,6 +42,14 @@ python do_update_install_pkgs_with_version() {
             pkg_install = d.getVar("IMAGE_INSTALL")
             d.setVar('IMAGE_INSTALL', ipk +" " +pkg_install)
             bb.note("[custom-rootfs] Updated IMAGE_INSTALL with ipk pkgs : %s"%ipk)
+    prefix = d.getVar('MLPREFIX') or ""
+    gen_debugfs = d.getVar('IMAGE_GEN_DEBUGFS')
+    if ipk_pkg_install and gen_debugfs == "1":
+        pkgs_list = ipk_pkg_install.split()
+        for pkg in pkgs_list:
+            if prefix and not pkg.startswith(prefix):
+                pkg = prefix+pkg
+            d.appendVar("IMAGE_INSTALL_DEBUGFS", " %s-dbg"%pkg)
 
     ipk_pkg_install = (d.getVar('IPK_ROOTFS_BOOTSTRAP_INSTALL') or "").strip()
     if ipk_pkg_install:
@@ -78,7 +86,6 @@ python do_update_install_pkgs_with_version() {
         for pkg in inst_list:
             if "packagegroup-" not in pkg:
                 continue
-            prefix = d.getVar('MLPREFIX') or ""
             if prefix and not pkg.startswith(prefix):
                 pkg = prefix + pkg
             rprovides_check = os.path.join(runtime_rrprovides,pkg)
