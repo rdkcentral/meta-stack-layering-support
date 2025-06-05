@@ -1036,6 +1036,8 @@ def update_rdeps_shlib(d,pkg):
             shlib_skip = d.getVar('SHLIBSKIPLIST_%s'%pkg).split(" ")
             for shlib in shlib_skip:
                 ipk = get_rdeps_provider_ipk(d,shlib)
+                if ipk.endswith("-dev"):
+                    continue
                 if ipk not in ipks and ipk != " ":
                     ipks.append(ipk)
                 if ipk != " ":
