@@ -262,10 +262,9 @@ do_package_write_ipk:prepend() {
         return
 }
 do_populate_sysroot:prepend() {
+    manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
+    manifest_src_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".source_mode"
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
-        staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
-        manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
-        manifest_src_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".source_mode"
         skip = sls_generate_native_sysroot (d)
         if skip:
             open(manifest_pre_mode, 'w').close()
@@ -276,12 +275,10 @@ do_populate_sysroot:prepend() {
         manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
         if os.path.exists(manifest_name):
             ipk_sysroot_creation(d)
+            open(manifest_pre_mode, 'w').close()
+            if os.path.exists(manifest_src_mode):
+                os.remove(manifest_src_mode)
             return
-        else:
-            if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
-                open(manifest_src_mode, 'w').close()
-                if os.path.exists(manifest_pre_mode):
-                    os.remove(manifest_pre_mode)
 }
 
 def sls_generate_native_sysroot(d):
@@ -503,7 +500,7 @@ python do_install_ipk_recipe_sysroot () {
         if feed is not None:
             archs.append(feed.group(1))
     for arch in archs:
-        skipped_pkg_file = os.path.join(feed_info_dir,"%s/skipped/%sgobject-introspection"%(arch,prefix))
+        skipped_pkg_file = os.path.join(feed_info_dir,"%s/skipped/gobject-introspection"%arch)
         if os.path.exists(skipped_pkg_file) and "%sgobject-introspection"%prefix in d.getVar("DEPENDS").split():
             bb.note(" [deps-resolver] gobject-introspection requires cross compilation support")
             g_ir_cc_support(d,recipe_sysroot,pkg_pn)
@@ -664,7 +661,7 @@ python update_recipe_deps_handler() {
                 if version_check and not check_targets(e.data, pn, variant):
                     open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
             e.data.appendVar("DEPENDS", " opkg-native ")
-            #e.data.appendVar("INSANE_SKIP", " file-rdeps ")
+            e.data.appendVar("INSANE_SKIP", " file-rdeps ")
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',e.data)
             e.data.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
             # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
