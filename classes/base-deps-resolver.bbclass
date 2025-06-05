@@ -299,9 +299,7 @@ def sls_generate_native_sysroot(d):
     if pn in exclusion_list:
         bb.note("Excluding %s from prebuilt consumption"%pn)
         return False
-    image_dir = d.getVar("D", True)
-    staging_native_dir = d.getVar("STAGING_DIR_NATIVE", True)
-    sysroot_components_dir = os.path.join(image_dir, staging_native_dir.lstrip('/'))
+    sysroot_components_dir = d.expand("${SYSROOT_DESTDIR}${base_prefix}/")
     if not os.path.exists(sysroot_components_dir):
         bb.utils.mkdirhier(sysroot_components_dir)
     if os.path.exists(prebuilt_native_pkg_path):
@@ -323,27 +321,11 @@ def sls_generate_native_sysroot(d):
                 bb.note("Support for the extension %s need to add. Currently support only tar.gz "%prebuilt_native_pkg_type)
                 return False
         else:
+            bb.note("Prebuilt pkg is not present ..")
             return False
     else:
+        bb.note("Prebuilt pkg is not present ...")
         return False
-    bb.build.exec_func("sysroot_stage_all", d)
-    fixme_path = d.expand("${SYSROOT_DESTDIR}${base_prefix}/")
-    fixme_file_path = os.path.join(sysroot_components_dir,"fixmepath")
-    if os.path.exists(fixme_file_path):
-        shutil.copy(fixme_file_path,fixme_path)
-    ver_file_path = os.path.join(sysroot_components_dir,"version-%s"%d.getVar("PN"))
-    if os.path.exists(ver_file_path):
-        shutil.copy(ver_file_path,fixme_path)
-    pn = d.getVar("PN")
-    multiprov = d.getVar("BB_MULTI_PROVIDER_ALLOWED").split()
-    provdir = d.expand("${SYSROOT_DESTDIR}${base_prefix}/sysroot-providers/")
-    bb.utils.mkdirhier(provdir)
-    for p in d.getVar("PROVIDES").split():
-        if p in multiprov:
-            continue
-        p = p.replace("/", "_")
-        with open(provdir + p, "w") as f:
-            f.write(pn)
     return True
 
 # Install the dev ipks to the component sysroot
