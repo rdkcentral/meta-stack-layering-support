@@ -30,7 +30,10 @@ python do_ipk_download (){
 }
 
 def ipk_sysroot_creation(d):
-    install_dir = d.expand("${D}${base_prefix}")
+    import subprocess
+    import shutil
+    install_dir = d.getVar("D", True)
+    ctrl_ext_dir = os.path.join(install_dir,"ctrl_dir")
     arch = d.getVar('PACKAGE_ARCH')
     download_dir =  d.getVar("IPK_CACHE_DIR", True)
     if not os.path.exists(install_dir):
@@ -39,10 +42,27 @@ def ipk_sysroot_creation(d):
     for ipk in ipk_list:
         source_name = os.path.join(download_dir, ipk)
         if "-dbg_" not in ipk:
+            if not os.path.exists(ctrl_ext_dir):
+                bb.utils.mkdirhier(ctrl_ext_dir)
             if not os.path.exists(source_name):
                 bb.fatal("[ipk_sysroot_creation] %s has not been downloaded. Check ..."%source_name)
-            cmd = "ar x %s && tar -C %s --no-same-owner -xpf data.tar.xz && rm data.tar.xz && rm -rf control.tar.gz && rm -rf debian-binary"%(source_name, install_dir)
-            base_cmdline(d, cmd)
+            subprocess.run(["ar", "x", source_name], check=True, cwd=install_dir)
+            subprocess.run(["tar", "-C", install_dir, "--no-same-owner", "-xpf", "data.tar.xz"], check=True, cwd=install_dir)
+            ctr_tar =  os.path.join(install_dir,"control.tar.gz")
+            if os.path.exists(ctr_tar) and "base-passwd" in ipk:
+                subprocess.run(["tar", "-C", ctrl_ext_dir, "--no-same-owner", "-xvpf", "control.tar.gz"], check=True, cwd=install_dir)
+            p =  os.path.join(ctrl_ext_dir,"preinst")
+            if os.path.exists(p):
+                os.environ['D'] = install_dir
+                subprocess.check_output(p, shell=True, stderr=subprocess.STDOUT)
+
+            for f in ["data.tar.xz", "control.tar.gz", "debian-binary", "ctrl_ext_dir"]:
+                file_path = os.path.join(install_dir, f)
+                if os.path.exists(file_path):
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)  # Removes a file
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
 
     bb.build.exec_func("sysroot_stage_all", d)
     multiprov = d.getVar("BB_MULTI_PROVIDER_ALLOWED").split()
