@@ -33,40 +33,46 @@ def ipk_sysroot_creation(d):
     import subprocess
     import shutil
     install_dir = d.getVar("D", True)
-    ctrl_ext_dir = os.path.join(install_dir,"ctrl_dir")
     arch = d.getVar('PACKAGE_ARCH')
     download_dir =  d.getVar("IPK_CACHE_DIR", True)
-    if not os.path.exists(install_dir):
-        bb.utils.mkdirhier(install_dir)
+    if os.path.exists(install_dir):
+        shutil.rmtree(install_dir)
+    ipk_install_list = []
     ipk_list = get_ipk_list(d,arch)
+    opkg_cmd = bb.utils.which(os.getenv('PATH'), "opkg")
     for ipk in ipk_list:
         source_name = os.path.join(download_dir, ipk)
         if "-dbg_" not in ipk:
-            if not os.path.exists(ctrl_ext_dir):
-                bb.utils.mkdirhier(ctrl_ext_dir)
             if not os.path.exists(source_name):
                 bb.fatal("[ipk_sysroot_creation] %s has not been downloaded. Check ..."%source_name)
-            subprocess.run(["ar", "x", source_name], check=True, cwd=install_dir)
-            subprocess.run(["tar", "-C", install_dir, "--no-same-owner", "-xpf", "data.tar.xz"], check=True, cwd=install_dir)
-            ctr_tar =  os.path.join(install_dir,"control.tar.gz")
-            if os.path.exists(ctr_tar) and "base-passwd" in ipk:
-                subprocess.run(["tar", "-C", ctrl_ext_dir, "--no-same-owner", "-xvpf", "control.tar.gz"], check=True, cwd=install_dir)
-            p =  os.path.join(ctrl_ext_dir,"preinst")
-            if os.path.exists(p):
-                os.environ['D'] = install_dir
-                subprocess.check_output(p, shell=True, stderr=subprocess.STDOUT)
-
-            for f in ["data.tar.xz", "control.tar.gz", "debian-binary", "ctrl_ext_dir"]:
-                file_path = os.path.join(install_dir, f)
-                if os.path.exists(file_path):
-                    if os.path.isfile(file_path):
-                        os.remove(file_path)  # Removes a file
-                    elif os.path.isdir(file_path):
-                        shutil.rmtree(file_path)
-
+            ipk_install_list.append(source_name)
+    if not ipk_install_list:
+        bb.note("[ipk_sysroot_creation] IPK list is empty")
+        return
+    opkg_conf = d.getVar("IPKGCONF_LAYERING")
+    import oe.sls_utils
+    oe.sls_utils.sls_opkg_conf (d, opkg_conf)
+    opkg_args = "-f %s -o %s" %(opkg_conf,install_dir)
+    cmd = '%s %s --volatile-cache --nodeps install %s' % (opkg_cmd, opkg_args, ' '.join(ipk_install_list))
+    base_cmdline(d, cmd)
+    os.remove(opkg_conf)
     bb.build.exec_func("sysroot_stage_all", d)
     multiprov = d.getVar("BB_MULTI_PROVIDER_ALLOWED").split()
     provdir = d.expand("${SYSROOT_DESTDIR}${base_prefix}/sysroot-providers/")
+    opkg_extra_src = d.expand("${D}${base_prefix}/var/lib/opkg/")
+    if os.path.exists(opkg_extra_src):
+        opkg_extra_dest = d.expand("${SYSROOT_DESTDIR}${base_prefix}/var/lib/opkg")
+        bb.note("opkg_extra_dest : %s"%opkg_extra_dest)
+        shutil.copytree(opkg_extra_src, opkg_extra_dest)
+        old_name = d.expand("${SYSROOT_DESTDIR}${base_prefix}/var/lib/opkg/status")
+        new_name = d.expand("${SYSROOT_DESTDIR}${base_prefix}/var/lib/opkg/${PN}.status")
+        os.rename(old_name, new_name)
+    opkg_extra_src = d.expand("${D}${base_prefix}/usr/lib/opkg/")
+    if os.path.exists(opkg_extra_src):
+        opkg_extra_dest = d.expand("${SYSROOT_DESTDIR}${base_prefix}/usr/lib/opkg")
+        bb.note("opkg_extra_dest : %s"%opkg_extra_dest)
+        shutil.copytree(opkg_extra_src, opkg_extra_dest)
+
     bb.utils.mkdirhier(provdir)
     pn = d.getVar("PN")
     for p in d.getVar("PROVIDES").split():

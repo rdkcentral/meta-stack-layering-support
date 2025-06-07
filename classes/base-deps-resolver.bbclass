@@ -486,7 +486,7 @@ python do_install_ipk_recipe_sysroot () {
         else:
             bb.note("[deps-resolver] Skipped PKG - %s - from recipe sysroot"%pkg)
     if bb.data.inherits_class('useradd', d):
-        p =  d.getVar('SYSROOT_IPK')+f"/var/lib/opkg/info/{d.getVar('MLPREFIX')}base-passwd.preinst"
+        p =  d.getVar('RECIPE_SYSROOT', True)+f"/var/lib/opkg/info/{d.getVar('MLPREFIX')}base-passwd.preinst"
         if os.path.exists(p):
             bb.note(" [deps-resolver] base-passwd files requires for useradd support")
             import subprocess
@@ -505,6 +505,18 @@ python do_install_ipk_recipe_sysroot () {
             bb.note(" [deps-resolver] gobject-introspection requires cross compilation support")
             g_ir_cc_support(d,recipe_sysroot,pkg_pn)
             break
+
+    output_file = os.path.join(d.getVar('RECIPE_SYSROOT'), 'var/lib/opkg/status')
+    directory = os.path.dirname(output_file)
+    if not os.path.exists(os.path.dirname(output_file)):
+        return
+    with open(output_file, 'a') as outfile:
+        for filename in os.listdir(directory):
+            if filename.endswith('.status') and filename != 'status':
+                file_path = os.path.join(directory, filename)
+                outfile.write('\n')
+                with open(file_path, 'r') as infile:
+                    outfile.write(infile.read())
 }
 
 def get_ipk_list(d, pkg_arch):
@@ -647,6 +659,7 @@ python update_recipe_deps_handler() {
             open(skipped_pkg_dir+pn, 'w').close()
             update_build_tasks(e.data, arch, "target", manifest_name)
             open(manifest_file, 'w').close()
+            e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
         else:
             if os.path.exists(manifest_file):
@@ -661,7 +674,6 @@ python update_recipe_deps_handler() {
                 if version_check and not check_targets(e.data, pn, variant):
                     open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
             e.data.appendVar("DEPENDS", " opkg-native ")
-            e.data.appendVar("INSANE_SKIP", " file-rdeps ")
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',e.data)
             e.data.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
             # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
@@ -983,8 +995,7 @@ def get_rdeps_provider_ipk(d, rdep):
 
     opkg_args = "-f %s -t %s -o %s " % (opkg_conf, info_file_path ,reciepe_sysroot)
 
-    cmd = '%s %s search "'"*/%s"'"' % (opkg_cmd, opkg_args,rdep.strip()) + " 2>/dev/null"
-    bb.note("[deps-resolver] CMD: %s"%cmd)
+    cmd = '%s %s -A search "'"*/%s"'"' % (opkg_cmd, opkg_args,rdep.strip()) + " 2>/dev/null"
     fd = os.popen(cmd)
     lines = fd.readlines()
     fd.close()
@@ -1002,7 +1013,7 @@ def get_rdeps_provider_ipk(d, rdep):
 
 def check_file_provider_ipk(d, file, rdeps):
     ipk = ""
-    layer_sysroot = d.getVar("SYSROOT_IPK")
+    layer_sysroot = d.getVar("RECIPE_SYSROOT")
     lpkgopkg_path = os.path.join(layer_sysroot,"usr/lib/opkg/alternatives")
     alternatives_file_path = os.path.join(lpkgopkg_path,file.split("/")[-1])
     if os.path.exists(alternatives_file_path):
