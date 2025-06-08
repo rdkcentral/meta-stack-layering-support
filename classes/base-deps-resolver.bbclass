@@ -584,10 +584,14 @@ def check_targets(d, pkg, variant):
     return is_target
 
 def get_version_info(d):
-    pe = d.getVar('PE')
-    pv = d.getVar('PV')
-    pr = d.getVar('PR')
+    pe = d.getVar('PE', True)
+    pv = d.getVar('PV', True)
+    pr = d.getVar('PR', True)
     version = "%s:%s-%s"%(pe,pv,pr) if pe else "%s-%s"%(pv,pr)
+    if "${SRCPV}" in version:
+        d.setVar("SRC_REV_VALUE", "${@bb.fetch2.get_srcrev(d)}")
+        src_rev = d.getVar("SRC_REV_VALUE")
+        version = version.replace("${SRCPV}",src_rev)
     version = version.replace("AUTOINC","0")
     return version
 
@@ -655,7 +659,6 @@ python update_recipe_deps_handler() {
             e.data.appendVarFlag('do_deploy', 'prefuncs', ' do_clean_deploy_images')
             e.data.appendVarFlag('do_deploy_setscene', 'prefuncs', ' do_clean_deploy_images')
         e.data.appendVar("DEPENDS", " pseudo-native")
-
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
         if ipk_mode and not check_targets(e.data, pn, variant):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
