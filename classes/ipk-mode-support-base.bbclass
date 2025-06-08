@@ -1,3 +1,36 @@
+def ipk_install(d, cmd, pkgs, sysroot_destdir):
+    import subprocess
+
+    command = cmd + " ".join(pkgs)
+    env_bkp = os.environ.copy()
+    os.environ['D'] = sysroot_destdir
+    os.environ['OFFLINE_ROOT'] = sysroot_destdir
+    os.environ['IPKG_OFFLINE_ROOT'] = sysroot_destdir
+    os.environ['OPKG_OFFLINE_ROOT'] = sysroot_destdir
+    os.environ['NATIVE_ROOT'] = d.getVar('STAGING_DIR_NATIVE')
+    try:
+        bb.note("[staging-ipk] Installing the following packages: %s" % ' '.join(pkgs))
+        bb.note("Command: %s"%command)
+
+        # Run the command and decode the result
+        result = subprocess.check_output(command.split(), stderr=subprocess.STDOUT).decode("utf-8")
+        bb.note(result)
+
+        # Identify packages with failed postinstall scripts
+        failed_pkgs = [
+            line.split(".")[0]
+            for line in result.splitlines()
+            if line.endswith("configuration required on target.")
+        ]
+
+        if failed_pkgs:
+            bb.note("Post installation of %s failed"%failed_pkgs)
+    except subprocess.CalledProcessError as e:
+        error_msg = e.output.decode("utf-8")
+        bb.fatal("Packages installation failed. Command : %s \n%s"%(command, error_msg))
+    os.environ.clear()
+    os.environ.update(env_bkp)
+
 def base_cmdline(d,cmd):
     import subprocess
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
@@ -53,9 +86,20 @@ def ipk_sysroot_creation(d):
     import oe.sls_utils
     oe.sls_utils.sls_opkg_conf (d, opkg_conf)
     opkg_args = "-f %s -o %s" %(opkg_conf,install_dir)
-    cmd = '%s %s --volatile-cache --nodeps install %s' % (opkg_cmd, opkg_args, ' '.join(ipk_install_list))
-    base_cmdline(d, cmd)
+    cmd = '%s %s --volatile-cache --no-install-recommends --nodeps install ' % (opkg_cmd, opkg_args)
+    ipk_install(d, cmd, ipk_install_list, install_dir)
     os.remove(opkg_conf)
+    pn = d.getVar("PN")
+    alternatives = d.getVar("ALTERNATIVE:%s"%pn)
+    if alternatives:
+        alter_dir = os.path.join(install_dir, "usr/lib/alternatives")
+        if not os.path.exists(alter_dir):
+            bb.utils.mkdirhier(alter_dir)
+        for alt in alternatives.split(" "):
+            if alt:
+                alter_file = os.path.join(alter_dir, alt)
+                with open(alter_file, "w") as f:
+                    f.write(pn)
     bb.build.exec_func("sysroot_stage_all", d)
     multiprov = d.getVar("BB_MULTI_PROVIDER_ALLOWED").split()
     provdir = d.expand("${SYSROOT_DESTDIR}${base_prefix}/sysroot-providers/")
@@ -67,12 +111,6 @@ def ipk_sysroot_creation(d):
         old_name = d.expand("${SYSROOT_DESTDIR}${base_prefix}/var/lib/opkg/status")
         new_name = d.expand("${SYSROOT_DESTDIR}${base_prefix}/var/lib/opkg/${PN}.status")
         os.rename(old_name, new_name)
-    opkg_extra_src = d.expand("${D}${base_prefix}/usr/lib/opkg/")
-    if os.path.exists(opkg_extra_src):
-        opkg_extra_dest = d.expand("${SYSROOT_DESTDIR}${base_prefix}/usr/lib/opkg")
-        bb.note("opkg_extra_dest : %s"%opkg_extra_dest)
-        shutil.copytree(opkg_extra_src, opkg_extra_dest)
-
     bb.utils.mkdirhier(provdir)
     pn = d.getVar("PN")
     for p in d.getVar("PROVIDES").split():

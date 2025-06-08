@@ -1015,7 +1015,9 @@ def check_file_provider_ipk(d, file, rdeps):
     ipk = ""
     layer_sysroot = d.getVar("RECIPE_SYSROOT")
     lpkgopkg_path = os.path.join(layer_sysroot,"usr/lib/opkg/alternatives")
+    lpkg_path = os.path.join(layer_sysroot,"usr/lib/alternatives")
     alternatives_file_path = os.path.join(lpkgopkg_path,file.split("/")[-1])
+    alternatives_check_file_path = os.path.join(lpkg_path,file.split("/")[-1])
     if os.path.exists(alternatives_file_path):
         with open(alternatives_file_path,"r", errors="ignore") as fd:
             lines = fd.readlines()
@@ -1027,6 +1029,13 @@ def check_file_provider_ipk(d, file, rdeps):
                 break
             else:
                 continue
+    elif os.path.exists(alternatives_check_file_path):
+        with open(alternatives_check_file_path,"r", errors="ignore") as fd:
+            lines = fd.readlines()
+        for l in lines:
+            ipk = l
+            parts = l.split()
+            break
     else:
         pkg = get_rdeps_provider_ipk(d, file.split("/")[-1])
         if pkg and pkg.split("(")[0].strip() in rdeps:
