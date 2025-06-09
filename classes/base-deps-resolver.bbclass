@@ -588,10 +588,8 @@ def get_version_info(d):
     pv = d.getVar('PV', True)
     pr = d.getVar('PR', True)
     version = "%s:%s-%s"%(pe,pv,pr) if pe else "%s-%s"%(pv,pr)
-    if "${SRCPV}" in version:
-        d.setVar("SRC_REV_VALUE", "${@bb.fetch2.get_srcrev(d)}")
-        src_rev = d.getVar("SRC_REV_VALUE")
-        version = version.replace("${SRCPV}",src_rev)
+    if "${SRCPV}" in version and "AUTOINC" in version:
+        version = version.replace("${SRCPV}",bb.fetch2.get_srcrev(d))
     version = version.replace("AUTOINC","0")
     return version
 
@@ -1594,7 +1592,7 @@ python get_pkgs_handler () {
                             update_check = True
                         bb.warn("%s version should update and rebuild. Dependency %s has changed with major version"%(source,dep))
     if update_check:
-        bb.fatal("Update version and required rebuild")
+        bb.warn("Update version and required rebuild")
 }
 addhandler get_pkgs_handler
 get_pkgs_handler[eventmask] = "bb.event.DepTreeGenerated"
