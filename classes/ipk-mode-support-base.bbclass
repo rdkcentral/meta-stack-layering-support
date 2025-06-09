@@ -41,6 +41,32 @@ def base_cmdline(d,cmd):
         msg = process.stderr.read()
         bb.fatal("CMD : %s : Failed %s"%(cmd,str(msg)))
 
+python do_get_alternative_pkg (){
+    pn = d.getVar("PN")
+    alternatives_path = d.expand("${ALTERNATIVES_PKGS_LIST}/${PN}")
+    alternatives = d.getVar("ALTERNATIVE:%s"%pn)
+    if alternatives:
+        for alt in alternatives.split(" "):
+            if alt:
+                if not os.path.exists(alternatives_path):
+                    bb.utils.mkdirhier(alternatives_path)
+                alter_file = os.path.join(alternatives_path, alt)
+                with open(alter_file, "w") as f:
+                    f.write(pn)
+    else:
+        bb.note("No alternative pkgs set for this")
+}
+SSTATETASKS += "do_get_alternative_pkg"
+do_get_alternative_pkg[dirs] = "${ALTERNATIVES_PKGS_LIST}"
+do_get_alternative_pkg[sstate-inputdirs] = "${ALTERNATIVES_PKGS_LIST}"
+do_get_alternative_pkg[sstate-outputdirs] = "${SYSROOT_ALTERNATIVES}"
+do_get_alternative[cleandirs] = "${SYSROOT_ALTERNATIVES}"
+
+python do_get_alternative_pkg_setscene () {
+    sstate_setscene(d)
+}
+addtask do_get_alternative_pkg_sysroot_setscene
+do_package_qa[recrdeptask] += "do_get_alternative_pkg"
 python do_ipk_download (){
     import subprocess
     import shutil
@@ -89,17 +115,6 @@ def ipk_sysroot_creation(d):
     cmd = '%s %s --volatile-cache --no-install-recommends --nodeps install ' % (opkg_cmd, opkg_args)
     ipk_install(d, cmd, ipk_install_list, install_dir)
     os.remove(opkg_conf)
-    pn = d.getVar("PN")
-    alternatives = d.getVar("ALTERNATIVE:%s"%pn)
-    if alternatives:
-        alter_dir = os.path.join(install_dir, "usr/lib/alternatives")
-        if not os.path.exists(alter_dir):
-            bb.utils.mkdirhier(alter_dir)
-        for alt in alternatives.split(" "):
-            if alt:
-                alter_file = os.path.join(alter_dir, alt)
-                with open(alter_file, "w") as f:
-                    f.write(pn)
     bb.build.exec_func("sysroot_stage_all", d)
     multiprov = d.getVar("BB_MULTI_PROVIDER_ALLOWED").split()
     provdir = d.expand("${SYSROOT_DESTDIR}${base_prefix}/sysroot-providers/")

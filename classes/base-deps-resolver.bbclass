@@ -665,6 +665,7 @@ python update_recipe_deps_handler() {
             open(manifest_file, 'w').close()
             e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
+            bb.build.addtask('do_get_alternative_pkg','do_populate_sysroot do_package_write_ipk', 'do_ipk_download',e.data)
         else:
             if os.path.exists(manifest_file):
                 os.remove(manifest_file)
@@ -1038,7 +1039,8 @@ def check_file_provider_ipk(d, file, rdeps):
     lpkgopkg_path = os.path.join(layer_sysroot,"usr/lib/opkg/alternatives")
     lpkg_path = os.path.join(layer_sysroot,"usr/lib/alternatives")
     alternatives_file_path = os.path.join(lpkgopkg_path,file.split("/")[-1])
-    alternatives_check_file_path = os.path.join(lpkg_path,file.split("/")[-1])
+    #alternatives_check_file_path = os.path.join(lpkg_path,file.split("/")[-1])
+    alternatives_check_file_path = d.getVar("SYSROOT_ALTERNATIVES")
     if os.path.exists(alternatives_file_path):
         with open(alternatives_file_path,"r", errors="ignore") as fd:
             lines = fd.readlines()
@@ -1051,12 +1053,13 @@ def check_file_provider_ipk(d, file, rdeps):
             else:
                 continue
     elif os.path.exists(alternatives_check_file_path):
-        with open(alternatives_check_file_path,"r", errors="ignore") as fd:
-            lines = fd.readlines()
-        for l in lines:
-            ipk = l
-            parts = l.split()
-            break
+        for rdep in rdeps:
+            alternative_rdep_path = os.path.join(alternatives_check_file_path,rdep)
+            if os.path.exists(alternative_rdep_path):
+                alternative_pkg = os.path.join(alternative_rdep_path, file.split('/')[-1])
+                if os.path.exists(alternative_pkg):
+                    ipk = rdep
+                    break
     else:
         pkg = get_rdeps_provider_ipk(d, file.split("/")[-1])
         if pkg and pkg.split("(")[0].strip() in rdeps:
