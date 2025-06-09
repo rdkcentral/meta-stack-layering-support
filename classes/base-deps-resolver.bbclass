@@ -588,8 +588,6 @@ def get_version_info(d):
     pv = d.getVar('PV', True)
     pr = d.getVar('PR', True)
     version = "%s:%s-%s"%(pe,pv,pr) if pe else "%s-%s"%(pv,pr)
-    if "${SRCPV}" in version and "AUTOINC" in version:
-        version = version.replace("${SRCPV}",bb.fetch2.get_srcrev(d))
     version = version.replace("AUTOINC","0")
     return version
 
@@ -678,7 +676,15 @@ python update_recipe_deps_handler() {
                     bb.utils.mkdirhier(feed_info_dir+"src_mode/")
                 open(feed_info_dir+"src_mode/%s"%pn, 'w').close()
                 if version_check and not check_targets(e.data, pn, variant):
-                    open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
+                    pref_version = d.getVar("PREFERRED_VERSION_%s"%pn)
+                    if not pref_version:
+                        pref_version = d.getVar("PREFERRED_VERSION:%s"%pn)
+                    if pref_version:
+                        pref_version = pref_version.split("%")[0]
+                        if pref_version in version:
+                            open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
+                    else:
+                        open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
             e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',e.data)
             e.data.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
@@ -816,7 +822,16 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
         else:
             src_dep_bpkg = dep_bpkg
         if version:
-            src_path = pkg_path + "source/%s_%s"%(src_dep_bpkg,version)
+            if "${SRCPV}" in version:
+                pattern = version.replace("${SRCPV}","*")
+                search_pattern = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{pattern}")
+                src_list = glob.glob(search_pattern)
+                if src_list:
+                    src_path = src_list[0]
+                else:
+                    src_path = pkg_path + "source/%s_%s"%(src_dep_bpkg,version)
+            else:
+                src_path = pkg_path + "source/%s_%s"%(src_dep_bpkg,version)
             if os.path.exists(src_path):
                 ipkmode = True
                 same_arch = True
@@ -1592,7 +1607,7 @@ python get_pkgs_handler () {
                             update_check = True
                         bb.warn("%s version should update and rebuild. Dependency %s has changed with major version"%(source,dep))
     if update_check:
-        bb.warn("Update version and required rebuild")
+        bb.fatal("Update version and required rebuild")
 }
 addhandler get_pkgs_handler
 get_pkgs_handler[eventmask] = "bb.event.DepTreeGenerated"
