@@ -116,6 +116,8 @@ python update_ipk_deps () {
     for line in (d.getVar('IPK_FEED_URIS') or "").split():
         feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
         if feed is not None:
+            if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
+                continue
             archs.append(feed.group(1))
 
     bb.note("[deps-resolver] Direct depends IPK list : %s " % layer_pkgs)
@@ -379,6 +381,8 @@ python do_install_ipk_recipe_sysroot () {
     for line in (d.getVar('IPK_FEED_URIS') or "").split():
         feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
         if feed is not None:
+            if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
+                continue
             archs.append(feed.group(1))
     if not archs:
         return
@@ -845,6 +849,8 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
         if feed is not None:
             if not oss_ipk_mode:
                 if "oss" in feed.group(1):
+                    continue
+                if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
                     continue
             archs.append(feed.group(1))
     if not archs:
@@ -1423,6 +1429,8 @@ python create_stack_layer_info () {
         for line in (e.data.getVar('IPK_FEED_URIS') or "").split():
             feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
             if feed is not None:
+                if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
+                    continue
                 arch_name = feed.group(1)
                 arch_uri = feed.group(2)
                 index_file = feed_info_dir+"index/"
