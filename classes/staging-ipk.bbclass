@@ -223,6 +223,8 @@ fakeroot python do_populate_ipk_sysroot(){
     for line in (d.getVar('IPK_FEED_URIS') or "").split():
         feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
         if feed is not None:
+            if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
+                continue
             archs.append(feed.group(1))
     if not archs:
         return
