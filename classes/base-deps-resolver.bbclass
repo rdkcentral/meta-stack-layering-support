@@ -360,13 +360,27 @@ python do_install_ipk_recipe_sysroot () {
             staging_copy_ipk_dir(srcdir,dstdir,seendirs)
 
     ldeps = (d.getVar('INSTALL_DEPENDS') or "").split(",")
-    bb.note("[deps-resolver] Updated with indirect IPK depends list : %s " % ldeps)
     pkgs = d.getVar('PACKAGES').split(" ")
     for pkg in pkgs:
         ipk_rdeps = d.getVar('INSTALL_RDEPENDS:' + pkg)
         if ipk_rdeps is not None:
             ldeps.extend(ipk_rdeps.split(","))
-    bb.note("[deps-resolver] Updated with indirect depends + rdepends list : %s " % ldeps)
+
+    for ipkdeps in (d.getVar('INSTALL_DEPENDS') or "").split(","):
+        ipkdepsfile = os.path.join(pkgdata_path,'%s' % ipkdeps)
+        if ipkdeps and os.path.exists(ipkdepsfile):
+            ipk_deps,ipk_rdeps = read_ipk_depends(d,ipkdepsfile)
+            for ipk_rdep in ipk_rdeps:
+                if ipk_rdep == "" or ipk_rdep == " ":
+                    continue
+                if ipk_rdep not in ldeps:
+                    ldeps.append(ipk_rdep)
+            for ipk_dep in ipk_deps:
+                if ipk_dep == "" or ipk_dep == " ":
+                    continue
+                if ipk_dep not in ldeps:
+                    ldeps.append(ipk_dep)
+    bb.note("[deps-resolver] Updated with all indirect dependency list : %s " % ldeps)
     archs = []
     for line in (d.getVar('IPK_FEED_URIS') or "").split():
         feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
@@ -559,7 +573,7 @@ def get_ipk_list(d, pkg_arch):
 def get_target_list(d):
     import bb.main
     feed_info_dir = d.getVar("FEED_INFO_DIR")
-    target_list = os.path.join(feed_info_dir,"target/pkg_list")
+    target_list = os.path.join(d.getVar("TOPDIR"),"target_pkg_list")
     if not os.path.exists(target_list):
         options, targets = bb.main.BitBakeConfigParameters.parseCommandLine(None)
         # Above fn return non bitbake targets in kirkstone
@@ -580,7 +594,7 @@ def check_targets(d, pkg, variant):
     is_target = False
     targets = get_target_list(d)
     for target in targets:
-        if target.startswith("lib32-") and not variant:
+        if target.startswith("lib32-"):
             target = target[6:]
         if pkg == target[:-1]:
             is_target = True
@@ -1369,10 +1383,13 @@ python create_stack_layer_info () {
     import shutil
     import gzip
     feed_info_dir = e.data.getVar("FEED_INFO_DIR")
-    index_check = os.path.join(e.data.getVar("TOPDIR")+"/index_created")
+    index_check = os.path.join(e.data.getVar("TOPDIR"),"index_created")
+    target_check = os.path.join(e.data.getVar("TOPDIR"),"target_pkg_list")
     if isinstance(e, bb.event.CacheLoadStarted):
         if os.path.exists(index_check):
             os.remove(index_check)
+        if os.path.exists(target_check):
+            os.remove(target_check)
     if isinstance(e, bb.event.MultiConfigParsed):
         # For multiconfig builds.
         if not os.path.exists(index_check):
