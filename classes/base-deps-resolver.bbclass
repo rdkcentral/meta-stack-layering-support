@@ -592,6 +592,8 @@ def get_target_list(d):
             bb.utils.mkdirhier(feed_info_dir+"target/")
         with open(target_list, 'w') as file:
             for target in targets:
+                if ":" in target:
+                    target = target.split(":")[-1]
                 file.write("%s\n"%target)
 
     with open(target_list,"r") as fd:
