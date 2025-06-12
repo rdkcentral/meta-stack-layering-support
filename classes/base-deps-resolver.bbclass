@@ -259,11 +259,21 @@ def update_build_tasks(d, arch, machine, manifest_name):
         open(manifest_file, 'w').close()
 
 do_package_write_ipk:prepend() {
+    manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
+    manifest_src_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".source_mode"
     manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
     if os.path.exists(manifest_name):
         copy_deploy_ipk(d)
+        open(manifest_pre_mode, 'w').close()
+        if os.path.exists(manifest_src_mode):
+            os.remove(manifest_src_mode)
         bb.note(" Copying Skipping do_package_write_ipk")
         return
+    if d.getVar("STACK_LAYER_EXTENSION"):
+        if d.getVar("PACKAGE_ARCH") in d.getVar("STACK_LAYER_EXTENSION").split():
+            open(manifest_src_mode, 'w').close()
+            if os.path.exists(manifest_pre_mode):
+                os.remove(manifest_pre_mode)
 }
 do_prepare_recipe_sysroot:prepend() {
     recipe_sysroot = d.getVar("RECIPE_SYSROOT")
@@ -286,15 +296,7 @@ do_populate_sysroot:prepend() {
         manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
         if os.path.exists(manifest_name):
             ipk_sysroot_creation(d)
-            open(manifest_pre_mode, 'w').close()
-            if os.path.exists(manifest_src_mode):
-                os.remove(manifest_src_mode)
             return
-    if d.getVar("STACK_LAYER_EXTENSION"):
-        if d.getVar("PACKAGE_ARCH") in d.getVar("STACK_LAYER_EXTENSION").split():
-            open(manifest_src_mode, 'w').close()
-            if os.path.exists(manifest_pre_mode):
-                os.remove(manifest_pre_mode)
 }
 
 def sls_generate_native_sysroot(d):
@@ -612,6 +614,23 @@ def check_targets(d, pkg, variant):
             break
     return is_target
 
+def check_depends_on_targets(d,variant):
+    deps = d.getVar("DEPENDS",True).split()
+    is_target = False
+    if d.getVar("DEPENDS_ON_TARGET") == "0":
+        return is_target
+    targets = get_target_list(d)
+    for dep in deps:
+        for target in targets:
+            if target.startswith("lib32-"):
+                target = target[6:]
+            if dep == target[:-1]:
+                is_target = True
+                break
+        if is_target:
+            break
+    return is_target
+
 def get_version_info(d):
     pe = d.getVar('PE', True)
     pv = d.getVar('PV', True)
@@ -685,7 +704,7 @@ python update_recipe_deps_handler() {
             e.data.appendVarFlag('do_deploy_setscene', 'prefuncs', ' do_clean_deploy_images')
         e.data.appendVar("DEPENDS", " pseudo-native")
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
-        if ipk_mode and not check_targets(e.data, pn, variant):
+        if ipk_mode and not check_targets(e.data, pn, variant) and not check_depends_on_targets(e.data, variant):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
             if not os.path.exists(skipped_pkg_dir):
                 bb.utils.mkdirhier(skipped_pkg_dir)
@@ -1465,7 +1484,7 @@ def print_pkgs_in_src_mode(d):
             for pkg in src_mode_pkgs:
                 file = pn_value = pkg[len(prefix):-12]
                 list_native_pkgs.append(file)
-            bb.note("Packages from %s in src mode"%arch)
+            bb.note("::: Packages from %s in src mode :::"%arch)
             for i in range(0, len(list_native_pkgs), 5):
                 bb.note(' '.join(list_native_pkgs[i:i+5]))
 
