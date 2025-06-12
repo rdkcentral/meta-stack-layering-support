@@ -20,6 +20,8 @@ SSTATE_MANFILEPREFIX_NATIVE_FILTER = "${SSTATE_MANIFESTS}/manifest-"
 SYSROOT_PREBUILT_DESTDIR = "${WORKDIR}/sysroot-prebuilt-destdir"
 PREBUILTDEPLOYDIR = "${COMPONENTS_DIR}/${PACKAGE_ARCH}"
 
+PSEUDO_IGNORE_PATHS .= ",${IPK_PKGDATA_RUNTIME_DIR},${IPK_PKGDATA_DIR}"
+
 do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
 inherit gir-ipk-qemuwrapper
@@ -262,6 +264,13 @@ do_package_write_ipk:prepend() {
         copy_deploy_ipk(d)
         bb.note(" Copying Skipping do_package_write_ipk")
         return
+}
+do_prepare_recipe_sysroot:prepend() {
+    recipe_sysroot = d.getVar("RECIPE_SYSROOT")
+    lpkgopkg_path = os.path.join(recipe_sysroot,"var/lib/opkg")
+    if os.path.exists(lpkgopkg_path):
+        import shutil
+        shutil.rmtree(lpkgopkg_path)
 }
 do_populate_sysroot:prepend() {
     manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
@@ -1385,9 +1394,12 @@ python create_stack_layer_info () {
     feed_info_dir = e.data.getVar("FEED_INFO_DIR")
     index_check = os.path.join(e.data.getVar("TOPDIR"),"index_created")
     target_check = os.path.join(e.data.getVar("TOPDIR"),"target_pkg_list")
+    dep_tree_check = os.path.join(d.getVar("TOPDIR"),"tree_generated")
     if isinstance(e, bb.event.CacheLoadStarted):
         if os.path.exists(index_check):
             os.remove(index_check)
+        if os.path.exists(dep_tree_check):
+            os.remove(dep_tree_check)
         if os.path.exists(target_check):
             os.remove(target_check)
     if isinstance(e, bb.event.MultiConfigParsed):
@@ -1399,10 +1411,6 @@ python create_stack_layer_info () {
             shutil.rmtree(feed_info_dir)
         if not os.path.exists(feed_info_dir+"index/"):
             bb.utils.mkdirhier(feed_info_dir+"index/")
-        if d.getVar("STACK_LAYER_EXTENSION"):
-            # To skip cache parsing and start recipe parsing
-            import random
-            e.data.setVar("TARGET_PARSING",random.randint(1, 50))
 
         ml_config = e.data.getVar("BBMULTICONFIG") or ""
         if not ml_config:
@@ -1546,6 +1554,15 @@ def generate_native_prebuilts_tar(d):
         oe.utils.multiprocess_launch(exec_sls_cmd, cmds, d)
 
 python feed_index_creation () {
+    if e.data.getVar("STACK_LAYER_EXTENSION"):
+        import shutil
+        cache_folder = os.path.join(d.getVar("TOPDIR"),"cache")
+        if os.path.exists(cache_folder):
+            shutil.rmtree(cache_folder)
+        cache_folder = os.path.join(d.getVar("TMPDIR"),"cache")
+        if os.path.exists(cache_folder):
+            shutil.rmtree(cache_folder)
+
     print_pkgs_in_src_mode(d)
     if e.data.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1":
         generate_native_prebuilts_tar(d)
@@ -1630,6 +1647,8 @@ python get_pkgs_handler () {
                     continue
 
                 for dep in dependencies:
+                    if dep.startswith("lib32-"):
+                        dep = dep[6:]
                     if os.path.exists(feed_info_dir+"src_mode/%s.major"%dep):
                         if not update_check:
                             update_check = True
