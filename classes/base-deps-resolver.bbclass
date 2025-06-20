@@ -614,7 +614,7 @@ def check_targets(d, pkg, variant):
             break
     return is_target
 
-def check_depends_on_targets(d,variant):
+def check_depends_on_targets(d):
     deps = d.getVar("DEPENDS",True).split()
     is_target = False
     if d.getVar("DEPENDS_ON_TARGET") == "0":
@@ -625,6 +625,37 @@ def check_depends_on_targets(d,variant):
             if target.startswith("lib32-"):
                 target = target[6:]
             if dep == target[:-1]:
+                is_target = True
+                break
+        if is_target:
+            break
+    return is_target
+
+def check_depends_version_change(d):
+    version_check = True
+    is_target = False
+    if d.getVar("DEPENDS_VERSION_CHECK") == "0":
+        return is_target
+    archs = []
+    if d.getVar("STACK_LAYER_EXTENSION"):
+        archs = d.getVar("STACK_LAYER_EXTENSION").split()
+    else:
+        return is_target
+
+    import glob
+    feed_info_dir = d.getVar("FEED_INFO_DIR")
+    deps = d.getVar("DEPENDS",True).split()
+    for dep in deps:
+        version = d.getVar("PV:pn-%s"%dep)
+        if not version:
+            continue
+        for arch in archs:
+            if not arch or  arch  == " ":
+                continue
+            pkg_path = feed_info_dir+"%s/"%arch
+            src_list = glob.glob(pkg_path + "source/%s_*"%(dep))
+            src_version = glob.glob(pkg_path + "source/%s_%s*"%(dep,version.split(".")[0]))
+            if src_list and not src_version:
                 is_target = True
                 break
         if is_target:
@@ -704,7 +735,7 @@ python update_recipe_deps_handler() {
             e.data.appendVarFlag('do_deploy_setscene', 'prefuncs', ' do_clean_deploy_images')
         e.data.appendVar("DEPENDS", " pseudo-native")
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
-        if ipk_mode and not check_targets(e.data, pn, variant) and not check_depends_on_targets(e.data, variant):
+        if ipk_mode and not check_targets(e.data, pn, variant) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
             if not os.path.exists(skipped_pkg_dir):
                 bb.utils.mkdirhier(skipped_pkg_dir)
@@ -1659,7 +1690,7 @@ python get_pkgs_handler () {
                 for deps in targetdeps:
                     f.writelines(deps+"\n")
 
-        if d.getVar("STACK_LAYER_EXTENSION"):
+        if d.getVar("STACK_LAYER_EXTENSION") and d.getVar("DEPENDS_VERSION_CHECK") and d.getVar("DEPENDS_VERSION_CHECK") == "1":
             for source, dependencies in ipk_mapping.items():
                 if os.path.exists(feed_info_dir+"src_mode/%s"%source):
                     continue
