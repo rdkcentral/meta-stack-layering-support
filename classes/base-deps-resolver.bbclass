@@ -275,13 +275,7 @@ do_package_write_ipk:prepend() {
             if os.path.exists(manifest_pre_mode):
                 os.remove(manifest_pre_mode)
 }
-do_prepare_recipe_sysroot:prepend() {
-    recipe_sysroot = d.getVar("RECIPE_SYSROOT")
-    lpkgopkg_path = os.path.join(recipe_sysroot,"var/lib/opkg")
-    if os.path.exists(lpkgopkg_path):
-        import shutil
-        shutil.rmtree(lpkgopkg_path)
-}
+
 do_populate_sysroot:prepend() {
     manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
     manifest_src_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".source_mode"
