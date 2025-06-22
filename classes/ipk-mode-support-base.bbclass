@@ -43,7 +43,7 @@ def base_cmdline(d,cmd):
 
 python do_get_alternative_pkg (){
     pn = d.getVar("PN")
-    alternatives_path = d.expand("${ALTERNATIVES_PKGS_LIST}/${PN}")
+    alternatives_path = d.expand("${ALTERNATIVES_PKGS_LIST}")
     alternatives = d.getVar("ALTERNATIVE:%s"%pn)
     if alternatives:
         for alt in alternatives.split(" "):
@@ -59,8 +59,8 @@ python do_get_alternative_pkg (){
 SSTATETASKS += "do_get_alternative_pkg"
 do_get_alternative_pkg[dirs] = "${ALTERNATIVES_PKGS_LIST}"
 do_get_alternative_pkg[sstate-inputdirs] = "${ALTERNATIVES_PKGS_LIST}"
-do_get_alternative_pkg[sstate-outputdirs] = "${SYSROOT_ALTERNATIVES}"
-do_get_alternative[cleandirs] = "${SYSROOT_ALTERNATIVES}"
+do_get_alternative_pkg[sstate-outputdirs] = "${SYSROOT_ALTERNATIVES}/${PN}"
+do_get_alternative[cleandirs] = "${SYSROOT_ALTERNATIVES}/${PN}"
 
 python do_get_alternative_pkg_setscene () {
     sstate_setscene(d)
@@ -164,6 +164,7 @@ def download_ipk(d, ipk, server_path):
     ipk_dl_path = os.path.join(download_dir,ipk)
     if not os.path.exists(ipk_dl_path):
         if server_path.startswith("file:"):
+            import shutil
             shutil.copy(server_path[5:]+"/"+ipk, download_dir)
         else:
             ipk_url = server_path+"/"+ipk
