@@ -36,4 +36,7 @@ Kernel image destination folder which is required for prebuilt consumption.
 Firmware destination folder which is required for prebuilt consumption.
 
 - EXCLUDE_IPK_FEEDS <br>
-Set this option to exclude specific feeds from the IPK package check. The corresponding feeds will then be excluded from IPK consumption.
+Set this option with archs to exclude specific feeds from the IPK package check. The corresponding feeds will then be excluded from IPK consumption.
+
+- STACK_LAYER_EXTENSION <br>
+Set this option with archs to enable IPK consumption for packages whose recipes are available. It will check the package versions in the recipes and the feeds, and if the versions match, all Yocto tasks will be skipped and the IPKs from the feeds will be used.
