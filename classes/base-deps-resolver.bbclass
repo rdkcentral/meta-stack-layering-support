@@ -876,21 +876,16 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
 
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     archs = []
-    oss_ipk_mode = True if "1" == d.getVar('OSS_IPK_MODE') or d.getVar("STACK_LAYER_EXTENSION") or ipkmode else False
     for line in (d.getVar('IPK_FEED_URIS') or "").split():
         feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
         if feed is not None:
-            if not oss_ipk_mode:
-                if "oss" in feed.group(1):
-                    continue
-                if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
-                    continue
+            if "oss" in feed.group(1) and feed.group(1) not in d.getVar("STACK_LAYER_EXTENSION").split():
+                continue
+            if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
+                continue
             archs.append(feed.group(1))
     if not archs:
         return (ipkmode, version_mismatch, same_arch)
-
-    if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
-        ipkmode = True if src_dep_bpkg in d.getVar("TOOLCHAIN_DEPS_PKGS").split(" ") or src_dep_bpkg in d.getVar("GLIBC_PKGS").split(" ") else False
 
     for arch in archs:
         pkg_path = feed_info_dir+"%s/"%arch
