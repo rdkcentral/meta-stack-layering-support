@@ -738,7 +738,8 @@ python update_recipe_deps_handler() {
             open(manifest_file, 'w').close()
             e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
-            bb.build.addtask('do_get_alternative_pkg','do_populate_sysroot do_package_write_ipk', 'do_ipk_download',e.data)
+            if bb.data.inherits_class('update-alternatives',e.data):
+                bb.build.addtask('do_get_alternative_pkg','do_populate_sysroot do_package_write_ipk', 'do_ipk_download',e.data)
         else:
             if os.path.exists(manifest_file):
                 os.remove(manifest_file)
@@ -1112,9 +1113,7 @@ def check_file_provider_ipk(d, file, rdeps):
     ipk = ""
     layer_sysroot = d.getVar("RECIPE_SYSROOT")
     lpkgopkg_path = os.path.join(layer_sysroot,"usr/lib/opkg/alternatives")
-    lpkg_path = os.path.join(layer_sysroot,"usr/lib/alternatives")
     alternatives_file_path = os.path.join(lpkgopkg_path,file.split("/")[-1])
-    #alternatives_check_file_path = os.path.join(lpkg_path,file.split("/")[-1])
     alternatives_check_file_path = d.getVar("SYSROOT_ALTERNATIVES")
     if os.path.exists(alternatives_file_path):
         with open(alternatives_file_path,"r", errors="ignore") as fd:
@@ -1127,7 +1126,7 @@ def check_file_provider_ipk(d, file, rdeps):
                 break
             else:
                 continue
-    elif os.path.exists(alternatives_check_file_path):
+    if not ipk and os.path.exists(alternatives_check_file_path):
         for rdep in rdeps:
             alternative_rdep_path = os.path.join(alternatives_check_file_path,rdep)
             if os.path.exists(alternative_rdep_path):
@@ -1135,7 +1134,7 @@ def check_file_provider_ipk(d, file, rdeps):
                 if os.path.exists(alternative_pkg):
                     ipk = rdep
                     break
-    else:
+    if not ipk:
         pkg = get_rdeps_provider_ipk(d, file.split("/")[-1])
         if pkg and pkg.split("(")[0].strip() in rdeps:
             ipk = pkg.split("(")[0].strip()
