@@ -84,8 +84,8 @@ python do_ipk_download (){
             if arch == arch_name:
                 server_path = arch_uri
 
-    if server_path:
-        download_ipks_in_parallel(d, ipk_list, server_path)
+    if server_path and ipk_list:
+        oe.utils.multiprocess_launch(download_ipk, ipk_list,d,extraargs=(server_path,d))
 }
 
 def ipk_sysroot_creation(d):
@@ -135,29 +135,8 @@ def ipk_sysroot_creation(d):
         with open(provdir + p, "w") as f:
             f.write(pn)
 
-# Function to download multiple ipk files in parallel
-def download_ipks_in_parallel(d, ipk_list, server_path):
-    import multiprocessing
-
-    def split_into_batches(lst, batch_size=10):
-        for i in range(0, len(lst), batch_size):
-            yield lst[i:i + batch_size]
-
-    if len(ipk_list) == 0:
-        return
-
-    batch_size = 100
-    for ipk_batch in split_into_batches(ipk_list, batch_size=batch_size):
-        processes = []
-        for ipk in ipk_batch:
-            p = multiprocessing.Process(target=download_ipk, args=(d, ipk, server_path, ))
-            processes.append(p)
-            p.start()
-        for process in processes:
-            process.join()
-
 # Do sequential ipk download
-def download_ipk(d, ipk, server_path):
+def download_ipk(ipk, server_path, d):
     download_dir = d.getVar("IPK_CACHE_DIR", True)
     if not os.path.exists(download_dir):
         bb.utils.mkdirhier(download_dir)
