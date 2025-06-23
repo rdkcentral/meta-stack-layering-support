@@ -879,11 +879,15 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     for line in (d.getVar('IPK_FEED_URIS') or "").split():
         feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
         if feed is not None:
-            if "oss" in feed.group(1) and feed.group(1) not in d.getVar("STACK_LAYER_EXTENSION").split():
-                continue
             if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
                 continue
-            archs.append(feed.group(1))
+            if "oss" in feed.group(1):
+                if d.getVar("STACK_LAYER_EXTENSION") and feed.group(1) in d.getVar("STACK_LAYER_EXTENSION").split():
+                    archs.append(feed.group(1))
+                else:
+                    continue
+            else:
+                archs.append(feed.group(1))
     if not archs:
         return (ipkmode, version_mismatch, same_arch)
 
