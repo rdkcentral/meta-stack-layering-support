@@ -26,7 +26,7 @@ List of packages to be excluded from IPK consumption.
 configure the priority of the IPK feed. Ex. OPKG_ARCH_PRIORITY:[arch] = "[priority]".<br/>
 Example: OPKG_ARCH_PRIORITY:armv7at2hf-neon = "100"
 
-- DOCKER_NATIVE_SYSROOT <br>   
+- DOCKER_NATIVE_SYSROOT <br>
 Path to the prebuilt toolchain and native packages.
 
 - KERNEL_IMAGEDEST <br>
@@ -43,3 +43,9 @@ Set this option with archs to enable IPK consumption of packages through recipe 
 
 - SKIP_RECIPE_IPK_PKGS <br>
 Set this option will skip the depends arch from STACK_LAYER_EXTENSION check. This will directly install the IPKs to the common staging area instead of processing through recipes.
+
+- DEPENDS_ON_TARGET <br>
+Setting this option to '1' will check if the package has dependencies on the target packages. If so, it will build the package from source instead of using prebuilt IPKs.
+
+- DEPENDS_VERSION_CHECK <br>
+Setting this option to '1' will check if any dependency package's major version has changed. If so, it will build the package from source instead of using prebuilt IPKs.  This works only for packages that have global PV values set. Example: PV:pn-openssl = "1.1.1l"."
