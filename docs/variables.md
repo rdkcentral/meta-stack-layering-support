@@ -48,4 +48,4 @@ Set this option will skip the depends arch from STACK_LAYER_EXTENSION check. Thi
 Setting this option to '1' will check if the package has dependencies on the target packages. If so, it will build the package from source instead of using prebuilt IPKs.
 
 - DEPENDS_VERSION_CHECK <br>
-Setting this option to '1' will check if any dependency package's major version has changed. If so, it will build the package from source instead of using prebuilt IPKs.  This works only for packages that have global PV values set. Example: PV:pn-openssl = "1.1.1l"."
+Setting this option to '1' will check if any dependency package's major version has changed. If so, it will build the package from source instead of using prebuilt IPKs.  This works only for packages that have global PV values set. Example: PV:pn-openssl = "1.1.1l".
