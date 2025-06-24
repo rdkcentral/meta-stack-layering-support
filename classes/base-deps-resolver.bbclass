@@ -245,7 +245,7 @@ def update_build_tasks(d, arch, machine, manifest_name):
     enable_task(d, "do_clean")
     enable_task(d, "do_cleanall")
     enable_task(d, "do_populate_sysroot")
-    if machine == "native":
+    if machine == "target":
         enable_task(d, "do_package_write_ipk")
 
     d.setVarFlag("do_populate_sysroot", "sstate-interceptfuncs", " ")
