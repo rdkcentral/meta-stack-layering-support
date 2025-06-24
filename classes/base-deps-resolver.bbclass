@@ -245,7 +245,8 @@ def update_build_tasks(d, arch, machine, manifest_name):
     enable_task(d, "do_clean")
     enable_task(d, "do_cleanall")
     enable_task(d, "do_populate_sysroot")
-    enable_task(d, "do_package_write_ipk")
+    if machine == "native":
+        enable_task(d, "do_package_write_ipk")
 
     d.setVarFlag("do_populate_sysroot", "sstate-interceptfuncs", " ")
     d.setVarFlag("do_populate_sysroot", "sstate-fixmedir", " ")
@@ -721,8 +722,6 @@ python update_recipe_deps_handler() {
         if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
             e.data.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
     else:
-        if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
-            update_build_tasks(e.data, arch, "native", manifest_name)
         # Skipping unrequired version of recipes
         if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
             e.data.appendVarFlag('do_deploy', 'prefuncs', ' do_clean_deploy_images')
@@ -740,6 +739,10 @@ python update_recipe_deps_handler() {
             bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
             if bb.data.inherits_class('update-alternatives',e.data):
                 bb.build.addtask('do_get_alternative_pkg','do_populate_sysroot do_package_write_ipk', 'do_ipk_download',e.data)
+        elif staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
+            update_build_tasks(e.data, arch, "native", manifest_name)
+        elif staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and "gcc-initial" in pn and not gcc_source_mode_check(e.data, pn, variant):
+            update_build_tasks(e.data, arch, "native", manifest_name)
         else:
             if os.path.exists(manifest_file):
                 os.remove(manifest_file)
