@@ -245,7 +245,8 @@ def update_build_tasks(d, arch, machine, manifest_name):
     enable_task(d, "do_clean")
     enable_task(d, "do_cleanall")
     enable_task(d, "do_populate_sysroot")
-    enable_task(d, "do_package_write_ipk")
+    if machine == "target":
+        enable_task(d, "do_package_write_ipk")
 
     d.setVarFlag("do_populate_sysroot", "sstate-interceptfuncs", " ")
     d.setVarFlag("do_populate_sysroot", "sstate-fixmedir", " ")
@@ -721,8 +722,6 @@ python update_recipe_deps_handler() {
         if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
             e.data.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
     else:
-        if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
-            update_build_tasks(e.data, arch, "native", manifest_name)
         # Skipping unrequired version of recipes
         if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
             e.data.appendVarFlag('do_deploy', 'prefuncs', ' do_clean_deploy_images')
@@ -740,6 +739,10 @@ python update_recipe_deps_handler() {
             bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
             if bb.data.inherits_class('update-alternatives',e.data):
                 bb.build.addtask('do_get_alternative_pkg','do_populate_sysroot do_package_write_ipk', 'do_ipk_download',e.data)
+        elif staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
+            update_build_tasks(e.data, arch, "native", manifest_name)
+        elif staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and "gcc-initial" in pn and not gcc_source_mode_check(e.data, pn, variant):
+            update_build_tasks(e.data, arch, "native", manifest_name)
         else:
             if os.path.exists(manifest_file):
                 os.remove(manifest_file)
@@ -875,22 +878,23 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
         return (ipkmode, version_mismatch, same_arch)
 
     feed_info_dir = d.getVar("FEED_INFO_DIR")
+    skip_recipe_ipk_pkgs = True if "1" == d.getVar('SKIP_RECIPE_IPK_PKGS') else False
+
     archs = []
-    oss_ipk_mode = True if "1" == d.getVar('OSS_IPK_MODE') or d.getVar("STACK_LAYER_EXTENSION") or ipkmode else False
     for line in (d.getVar('IPK_FEED_URIS') or "").split():
         feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
         if feed is not None:
-            if not oss_ipk_mode:
-                if "oss" in feed.group(1):
+            if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
+                continue
+            if not skip_recipe_ipk_pkgs and "oss" in feed.group(1):
+                if d.getVar("STACK_LAYER_EXTENSION") and feed.group(1) in d.getVar("STACK_LAYER_EXTENSION").split():
+                    archs.append(feed.group(1))
+                else:
                     continue
-                if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
-                    continue
-            archs.append(feed.group(1))
+            else:
+                archs.append(feed.group(1))
     if not archs:
         return (ipkmode, version_mismatch, same_arch)
-
-    if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
-        ipkmode = True if src_dep_bpkg in d.getVar("TOOLCHAIN_DEPS_PKGS").split(" ") or src_dep_bpkg in d.getVar("GLIBC_PKGS").split(" ") else False
 
     for arch in archs:
         pkg_path = feed_info_dir+"%s/"%arch
@@ -911,7 +915,8 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
                 src_path = pkg_path + "source/%s_%s"%(src_dep_bpkg,version)
             if os.path.exists(src_path):
                 ipkmode = True
-                same_arch = True
+                if arch == pkg_arch:
+                    same_arch = True
                 break
             # Check only the major version number
             src_list = glob.glob(pkg_path + "source/%s_%s*"%(src_dep_bpkg,version.split(".")[0]))
@@ -928,7 +933,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
                src_path = src_list[0]
 
             if os.path.exists(src_path) or os.path.exists(pkg_path + "rprovides/%s"%dep_bpkg) or os.path.exists(pkg_path + "package/%s"%dep_bpkg) or os.path.exists(pkg_path + "package/lib%s"%dep_bpkg):
-                if arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
+                if not skip_recipe_ipk_pkgs and arch in (d.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
                     same_arch = True
                 else:
                     ipkmode = True
@@ -1599,7 +1604,7 @@ def generate_native_prebuilts_tar(d):
         oe.utils.multiprocess_launch(exec_sls_cmd, cmds, d)
 
 python feed_index_creation () {
-    if e.data.getVar("STACK_LAYER_EXTENSION"):
+    if e.data.getVar("STACK_LAYER_EXTENSION") or e.data.getVar("TARGET_BASED_IPK_STAGING") == "1":
         import shutil
         cache_folder = os.path.join(d.getVar("TOPDIR"),"cache")
         if os.path.exists(cache_folder):
@@ -1678,7 +1683,7 @@ python get_pkgs_handler () {
                 targetdeps.append(deps)
         ipk_mapping = e.data.getVar("IPK_DEPS_MAPPING_LIST") or {}
 
-        if pkg_path and e.data.getVar("TARGET_BASED_IPK_INSTALL") == "1":
+        if pkg_path and e.data.getVar("TARGET_BASED_IPK_STAGING") == "1":
             with open(pkg_path, "w") as f:
                 for deps in targetdeps:
                     f.writelines(deps+"\n")
