@@ -764,6 +764,14 @@ python update_recipe_deps_handler() {
                     else:
                         open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
             e.data.appendVar("DEPENDS", " opkg-native ")
+            if bb.data.inherits_class('packagegroup', e.data):
+               gcc_pkgs = e.data.getVar("GCC_PKGS").split()
+               for gcc_pkg in gcc_pkgs:
+                   e.data.appendVar("DEPENDS", " %s "%gcc_pkg)
+               glibc_pkgs = e.data.getVar("GLIBC_PKGS").split()
+               for glibc_pkg in glibc_pkgs:
+                   e.data.appendVar("DEPENDS", " %s "%glibc_pkg)
+
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',e.data)
             e.data.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
             # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
