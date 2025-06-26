@@ -764,7 +764,7 @@ python update_recipe_deps_handler() {
                     else:
                         open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
             e.data.appendVar("DEPENDS", " opkg-native ")
-            if bb.data.inherits_class('packagegroup', e.data):
+            if bb.data.inherits_class('packagegroup', e.data) and not bb.data.inherits_class('nativesdk', e.data):
                gcc_pkgs = e.data.getVar("GCC_PKGS").split()
                for gcc_pkg in gcc_pkgs:
                    e.data.appendVar("DEPENDS", " %s "%gcc_pkg)
