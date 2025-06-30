@@ -738,7 +738,7 @@ python update_recipe_deps_handler() {
             e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
             if bb.data.inherits_class('update-alternatives',e.data):
-                bb.build.addtask('do_get_alternative_pkg','do_populate_sysroot do_package_write_ipk', 'do_ipk_download',e.data)
+                bb.build.addtask('do_get_alternative_pkg','do_package_write_ipk', 'do_ipk_download do_populate_sysroot',e.data)
         elif staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
             update_build_tasks(e.data, arch, "native", manifest_name)
         elif staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and "gcc-initial" in pn and not gcc_source_mode_check(e.data, pn, variant):
