@@ -42,20 +42,25 @@ def base_cmdline(d,cmd):
         bb.fatal("CMD : %s : Failed %s"%(cmd,str(msg)))
 
 python do_get_alternative_pkg (){
-    pn = d.getVar("PN")
+    import glob
     alternatives_path = d.expand("${ALTERNATIVES_PKGS_LIST}")
-    alternatives = d.getVar("ALTERNATIVE:%s"%pn)
-    if alternatives:
-        for alt in alternatives.split(" "):
-            if alt:
-                if not os.path.exists(alternatives_path):
-                    bb.utils.mkdirhier(alternatives_path)
-                alter_file = os.path.join(alternatives_path, alt)
-                with open(alter_file, "w") as f:
-                    f.write(pn)
+    sysroot_path = d.expand("${SYSROOT_DESTDIR}${base_prefix}/var/lib/opkg/info")
+    postinst_list = glob.glob(sysroot_path + "/*.postinst")
+    if postinst_list:
+        for p in postinst_list:
+            with open(p, 'r') as file:
+                for line in file:
+                    if "update-alternatives --install" in line:
+                        parts = line.split()
+                        alt = parts[3]
+                        if not os.path.exists(alternatives_path):
+                            bb.utils.mkdirhier(alternatives_path)
+                        alter_file = os.path.join(alternatives_path, alt)
+                        open(alter_file, 'w').close()
     else:
         bb.note("No alternative pkgs set for this")
 }
+
 SSTATETASKS += "do_get_alternative_pkg"
 do_get_alternative_pkg[dirs] = "${ALTERNATIVES_PKGS_LIST}"
 do_get_alternative_pkg[sstate-inputdirs] = "${ALTERNATIVES_PKGS_LIST}"
