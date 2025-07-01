@@ -1,4 +1,4 @@
-# ipk mode support [Experimental feature]
+# ipk mode within stack layer
 With the help of IPK mode support, we can switch the components between source and IPK mode.
 
 IPK mode means, build will skip the corresponding package recipe from executing its default tasks and use the IPK of that package to resolve both build time and runtime dependencies.
@@ -33,9 +33,10 @@ Adopting fully tested released version IPKs provides a controlled and stable dev
 - Or if there is a version mismatch from the previous release feed. 
 
 ## To enable IPK consumption:
-- Define STACK_LAYER_EXTENSION variable with the IPK feed arch name.<br /> e.g.<br /> STACK_LAYER_EXTENSION = "armv7at2hf-neon"<br /> IPK_FEED_URIS += " ${STACK_LAYER_EXTENSION}##<Artifactory/ipk feed path> "<br /><br />  This will consume all the packages available from the feed URI defined for "armv7at2hf-neon" as IPKs, unless the conditions mentioned in "To trigger build from source" are met.
-- Inherit "kernel-devel" in linux recipes.<br /> This will generate the kernel devel IPK package with the required build artifacts. These build artifacts help to compile kernel modules without using the Linux source.
-- Update and verify that all package IPKs are created with the proper dependencies.
+- Define STACK_LAYER_EXTENSION variable with the IPK feed arch name.<br /> e.g.<br /> STACK_LAYER_EXTENSION = "armv7at2hf-neon"<br /> IPK_FEED_URIS += " ${STACK_LAYER_EXTENSION}##<Artifactory/ipk feed path> "<br /><br />  This will consume all the packages available from the feed URI defined for "armv7at2hf-neon" as IPKs, unless the conditions mentioned in "To trigger build from source" are met. We can set multiple arch feeds in STACK_LAYER_EXTENSION.
 - Ensure proper version updates while reviewing each change in the components.
 
-
+## Additional info
+- EXCLUDE_IPK_FEEDS : This will skip the corresponding arch feed from the IPK consumption. <br /> EXCLUDE_IPK_FEEDS = "armv7at2hf-neon all", this will skip all the packages from "armv7at2hf-neon" and "all" archs from IPK consumption and process the recipes.<br /> 
+- DEPENDS_VERSION_CHECK :  If set to "1", it will build the package from source, if a dependency's major version has changed. This will work only with packages set with global PV and PR . Example PV:pn-[openssl] = "1.1.1" <br />
+- DEPENDS_ON_TARGET : If set to "1", it will build pkg from source, if it depends on target package <br />
