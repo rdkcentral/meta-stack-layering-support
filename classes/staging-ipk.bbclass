@@ -93,39 +93,6 @@ def cmdline(command, path):
     import subprocess
     bb.process.run(command, stderr=subprocess.STDOUT, cwd=path)
 
-def ipk_install(d, cmd, pkgs, sysroot_destdir):
-    import subprocess
-
-    command = cmd + " ".join(pkgs)
-    env_bkp = os.environ.copy()
-    os.environ['D'] = sysroot_destdir
-    os.environ['OFFLINE_ROOT'] = sysroot_destdir
-    os.environ['IPKG_OFFLINE_ROOT'] = sysroot_destdir
-    os.environ['OPKG_OFFLINE_ROOT'] = sysroot_destdir
-    os.environ['NATIVE_ROOT'] = d.getVar('STAGING_DIR_NATIVE')
-    try:
-        bb.note("[staging-ipk] Installing the following packages: %s" % ' '.join(pkgs))
-        bb.note("Command: %s"%command)
-
-        # Run the command and decode the result
-        result = subprocess.check_output(command.split(), stderr=subprocess.STDOUT).decode("utf-8")
-        bb.note(result)
-
-        # Identify packages with failed postinstall scripts
-        failed_pkgs = [
-            line.split(".")[0]
-            for line in result.splitlines()
-            if line.endswith("configuration required on target.")
-        ]
-
-        if failed_pkgs:
-            bb.note("Post installation of %s failed"%failed_pkgs)
-    except subprocess.CalledProcessError as e:
-        error_msg = e.output.decode("utf-8")
-        bb.fatal("Packages installation failed. Command : %s \n%s"%(command, error_msg))
-    os.environ.clear()
-    os.environ.update(env_bkp)
-
 def get_base_pkg_name(pkg_name):
     tmp_pkg_name = pkg_name
     if pkg_name.endswith('-dev') or pkg_name.endswith('-dbg') or pkg_name.endswith('-src') or pkg_name.endswith('-bin'):
@@ -227,7 +194,7 @@ fakeroot python do_populate_ipk_sysroot(){
     if not os.path.exists(feed_info_dir):
         return
     target_list_path = d.getVar("TARGET_DEPS_LIST")
-    if target_list_path and os.path.exists(target_list_path) and d.getVar("TARGET_BASED_IPK_INSTALL") == "1":
+    if target_list_path and os.path.exists(target_list_path) and d.getVar("TARGET_BASED_IPK_STAGING") == "1":
         bb.note("ipk installation based on target build only")
         with open(target_list_path,"r") as fd:
             files = fd.readlines()

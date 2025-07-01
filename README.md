@@ -14,6 +14,7 @@ Sreejith Ravi
 │   ├── base-deps-resolver.bbclass
 │   ├── custom-rootfs-creation.bbclass
 │   ├── gir-ipk-qemuwrapper.bbclass
+│   ├── ipk-mode-support-base.bbclass
 │   ├── kernel-devel.bbclass
 │   ├── staging-ipk.bbclass
 │   └── update-base-files-hostname.bbclass
@@ -54,8 +55,8 @@ Central to this functionality are several BBClasses that automate dependency res
 
 - [Key BBClasses & Their Roles](#key-bbclasses--their-roles)  
 - [Recipes (.bb)](#recipes-bb)  
-- [IPK Mode Support](#ipk-mode-support)  
-- [Native Toolchain Support](#nativepkg-toolchain-prebuilt-mode)  
+- [IPK Mode within stack layer](#ipk-mode-within-stack-layer)  
+- [Native Pkgs and Toolchain Prebuilt Mode](#nativepkg-toolchain-prebuilt-mode)  
 - [Custom Rootfs Creation & IPK Dependency Resolution](#custom-rootfs-creation--ipk-dependency-resolution)  
 - [Configuration Variables](#configuration-variables)  
 - [Prerequisites](#prerequisites)  
@@ -96,7 +97,7 @@ These classes drive the IPK-based layering logic. They are globally inherited or
 
 ---
 
-## Native Toolchain Support
+## Native Pkgs and Toolchain Prebuilt Mode
 
 **Purpose:** Prebuild and reuse native packages within VM/Docker workflows.
 
@@ -118,14 +119,14 @@ _For design details and log locations, see [Stack Layering Support](https://gith
 
 ---
 
-## IPK Mode Support - experimental
+## IPK Mode within stack layer
 
 **Purpose:** Dynamically switch between source builds and IPK consumption based on version continuity.
 
 - Skip BitBake tasks and fetch prebuilt `.ipk` feeds when package versions align with previous releases.  
 - Trigger a rebuild from source if a package or any dependency experiences a major version bump, providing clear parse-time errors with guidance for resolution.
 
-_For detailed steps and examples, see [IPK Mode Support](https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/ipk-mode-support.md)._
+_For detailed steps and examples, see [IPK Mode within stack layer](https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/ipk-mode-within-stack-layer.md)._
 
 ---
 
@@ -145,7 +146,10 @@ _For detailed steps and examples, see [IPK Mode Support](https://github.com/rdkc
 | `DOCKER_NATIVE_SYSROOT`   | Path to the prebuilt toolchain and native packages.                                |
 | `KERNEL_IMAGEDEST`        | Kernel image destination folder which is required for prebuilt consumption.        |
 | `FIRMWARE_IMAGEDEST`      | Firmware destination folder which is required for prebuilt consumption.            |
-
+| `TARGET_BASED_IPK_STAGING`| To create target based IPK staging instead of processing all avilable recipes.     |
+| `GENERATE_NATIVE_PKG_PREBUILT`| To generate version native prebuilts.     |
+| `DEPENDS_ON_TARGET`| To build pkg from source, if it depends on target package.     |
+| `DEPENDS_VERSION_CHECK`| To build the package from source, if a dependency's major version has changed.     |
 
 _Refer to the full variable guide: [Variables](https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/variables.md)._
 
@@ -161,8 +165,8 @@ _See the detailed prerequisites checklist: [Prerequisite](https://github.com/rdk
 
 ## Further Reading
 
-- **IPK Mode Support**: Version-based source vs. IPK builds.  
-  https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/ipk-mode-support.md  
+- **IPK Mode within stack layer**: Version-based source vs. IPK builds.  
+  https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/ipk-mode-within-stack-layer.md
 - **Native Pkgs and Toolchain Prebuilt Mode**: VM/Docker native package staging.  
   https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/nativepkg-toolchain-prebuilt-mode.md  
 - **Prerequisite**: Yocto version and layer setup.  
