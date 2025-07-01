@@ -1,4 +1,4 @@
-# ipk mode support [Experimental feature]
+# ipk mode within stack layer
 With the help of IPK mode support, we can switch the components between source and IPK mode.
 
 IPK mode means, build will skip the corresponding package recipe from executing its default tasks and use the IPK of that package to resolve both build time and runtime dependencies.
@@ -37,7 +37,6 @@ Adopting fully tested released version IPKs provides a controlled and stable dev
 - Ensure proper version updates while reviewing each change in the components.
 
 ## Additional info
-- EXCLUDE_IPK_FEEDS : This will skip the corresponding arch feed from the IPK consumption. <br /> EXCLUDE_IPK_FEEDS = "armv7at2hf-neon all" <br /> This will skip all the packages from armv7at2hf-neon and all archs from IPK consumption and process the recipes.
+- EXCLUDE_IPK_FEEDS : This will skip the corresponding arch feed from the IPK consumption. <br /> EXCLUDE_IPK_FEEDS = "armv7at2hf-neon all", this will skip all the packages from "armv7at2hf-neon" and "all" archs from IPK consumption and process the recipes.<br /> 
 - DEPENDS_VERSION_CHECK :  If set to "1", it will build the package from source, if a dependency's major version has changed. This will work only with packages set with global PV and PR . Example PV:pn-[openssl] = "1.1.1" <br />
 - DEPENDS_ON_TARGET : If set to "1", it will build pkg from source, if it depends on target package <br />
--
