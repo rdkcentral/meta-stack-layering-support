@@ -56,7 +56,7 @@ Central to this functionality are several BBClasses that automate dependency res
 - [Key BBClasses & Their Roles](#key-bbclasses--their-roles)  
 - [Recipes (.bb)](#recipes-bb)  
 - [IPK Mode within stack layer](#ipk-mode-within-stack-layer)  
-- [Native Toolchain Support](#nativepkg-toolchain-prebuilt-mode)  
+- [Native Pkgs and Toolchain Prebuilt Mode](#nativepkg-toolchain-prebuilt-mode)  
 - [Custom Rootfs Creation & IPK Dependency Resolution](#custom-rootfs-creation--ipk-dependency-resolution)  
 - [Configuration Variables](#configuration-variables)  
 - [Prerequisites](#prerequisites)  
@@ -97,7 +97,7 @@ These classes drive the IPK-based layering logic. They are globally inherited or
 
 ---
 
-## Native Toolchain Support
+## Native Pkgs and Toolchain Prebuilt Mode
 
 **Purpose:** Prebuild and reuse native packages within VM/Docker workflows.
 
