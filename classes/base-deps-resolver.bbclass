@@ -1545,15 +1545,18 @@ def generate_packages_and_versions_md(d):
 
         # Collect and filter package names and versions
         packages = []
+        exclude_suffixes = ("-dbg_", "-dev_", "-static_", "-staticdev_", "-src_")
         for file in os.listdir(target_dir):
             # Filter out unwanted packages and process only valid .ipk files
-            if file.endswith(".ipk") and not any(
-                suffix in file for suffix in ("-dbg", "-dev", "-static", "-staticdev", "-src")
-            ):
+            if file.endswith(".ipk"):
                 # Split the filename at the first "_" for package name and the rest for version
                 split_index = file.find("_")
                 if split_index != -1:
                     pkg_name = file[:split_index]
+                    # Exclude if pkg_name ends with any of the exclude_suffixes
+                    if any(pkg_name.endswith(suf[:-1]) for suf in exclude_suffixes):
+                        continue
+
                     pkg_version = file[split_index + 1:].rsplit(".ipk", 1)[0]
 
                     # Remove architecture suffix from version
