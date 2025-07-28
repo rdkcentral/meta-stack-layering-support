@@ -342,6 +342,7 @@ def sls_generate_native_sysroot(d):
 python do_install_ipk_recipe_sysroot () {
     import shutil
     import re
+    import glob
     ildeps = []
     seendirs = set()
     counts, devpkgcount = ({} for i in range(2))
@@ -354,16 +355,6 @@ python do_install_ipk_recipe_sysroot () {
     lpkgopkg_path = os.path.join(layer_sysroot,"var/lib/opkg")
     lpkginfo_path = os.path.join(lpkgopkg_path,"info")
     pkgdata_path = d.getVar("DEPS_IPK_DIR")
-    for walkroot, dirs, files in os.walk(lpkgopkg_path):
-        for file in files:
-            srcfile = os.path.join(walkroot, file)
-            if not srcfile.endswith(".lock"):
-                dstfile = srcfile.replace(layer_sysroot, recipe_sysroot)
-                staging_copy_ipk_file(srcfile,dstfile,seendirs)
-        for dir in dirs:
-            srcdir = os.path.join(walkroot, dir)
-            dstdir = srcdir.replace(layer_sysroot, recipe_sysroot)
-            staging_copy_ipk_dir(srcdir,dstdir,seendirs)
 
     ldeps = (d.getVar('INSTALL_DEPENDS') or "").split(",")
     pkgs = d.getVar('PACKAGES').split(" ")
@@ -514,6 +505,15 @@ python do_install_ipk_recipe_sysroot () {
                 g_ir_cc_support(d,recipe_sysroot,pkg_pn)
         else:
             bb.note("[deps-resolver] Skipped PKG - %s - from recipe sysroot"%pkg)
+        info_list = glob.glob(lpkginfo_path + "/%s.*"%(pkg))
+        if info_list:
+            for p in info_list :
+                if p.endswith(".lock"):
+                    continue
+                dstfile = p.replace(layer_sysroot, recipe_sysroot)
+                bb.note("[deps-resolver] copying info - %s "%dstfile)
+                staging_copy_ipk_file(p,dstfile,seendirs)
+
     if bb.data.inherits_class('useradd', d):
         p =  d.getVar('RECIPE_SYSROOT', True)+f"/var/lib/opkg/info/{d.getVar('MLPREFIX')}base-passwd.preinst"
         if os.path.exists(p):
@@ -1092,7 +1092,7 @@ def get_rdeps_provider_ipk(d, rdep):
     import re
     ipk_pkg = " "
 
-    reciepe_sysroot = d.getVar("RECIPE_SYSROOT")
+    reciepe_sysroot = d.getVar("SYSROOT_IPK")
     opkg_cmd = bb.utils.which(os.getenv('PATH'), "opkg")
 
     opkg_conf = d.getVar("IPKGCONF_LAYERING")
