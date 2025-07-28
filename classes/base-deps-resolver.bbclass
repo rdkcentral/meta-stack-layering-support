@@ -508,6 +508,8 @@ python do_install_ipk_recipe_sysroot () {
         info_list = glob.glob(lpkginfo_path + "/%s.*"%(pkg))
         if info_list:
             for p in info_list :
+                if p.endswith(".lock"):
+                    continue
                 dstfile = p.replace(layer_sysroot, recipe_sysroot)
                 bb.note("[deps-resolver] copying info - %s "%dstfile)
                 staging_copy_ipk_file(p,dstfile,seendirs)
@@ -1090,7 +1092,7 @@ def get_rdeps_provider_ipk(d, rdep):
     import re
     ipk_pkg = " "
 
-    reciepe_sysroot = d.getVar("RECIPE_SYSROOT")
+    reciepe_sysroot = d.getVar("SYSROOT_IPK")
     opkg_cmd = bb.utils.which(os.getenv('PATH'), "opkg")
 
     opkg_conf = d.getVar("IPKGCONF_LAYERING")
