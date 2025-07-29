@@ -1092,7 +1092,8 @@ def get_rdeps_provider_ipk(d, rdep):
     import re
     ipk_pkg = " "
 
-    reciepe_sysroot = d.getVar("SYSROOT_IPK")
+    staging_sysroot = d.getVar("SYSROOT_IPK")
+    reciepe_sysroot = d.getVar("RECIPE_SYSROOT")
     opkg_cmd = bb.utils.which(os.getenv('PATH'), "opkg")
 
     opkg_conf = d.getVar("IPKGCONF_LAYERING")
@@ -1117,7 +1118,21 @@ def get_rdeps_provider_ipk(d, rdep):
         ipk_pkg += pkg + " (>=" + ver + ") "
 
     if ipk_pkg == " ":
-        bb.note("[deps-resolver] rdep - %s - not available in IPK pkgs "%rdep)
+        bb.note("[deps-resolver] rdep - %s - couldn't find from reciepe_sysroot. Checking staging ipk sysroot "%rdep)
+        opkg_args = "-f %s -t %s -o %s " % (opkg_conf, info_file_path ,staging_sysroot)
+
+        cmd = '%s %s -A search "'"*/%s"'"' % (opkg_cmd, opkg_args,rdep.strip()) + " 2>/dev/null"
+        fd = os.popen(cmd)
+        lines = fd.readlines()
+        fd.close()
+        for line in lines:
+            pkg = line.split(" - ")[0]
+            ver = line.split(" - ")[1]
+            ver = ver.split("-")[0]
+            ipk_pkg += pkg + " (>=" + ver + ") "
+        if ipk_pkg == " ":
+            bb.note("[deps-resolver] rdep - %s - not available in IPK pkgs "%rdep)
+
     else:
         bb.note("[deps-resolver] rdep - %s - available in IPK pkg %s"%(rdep, ipk_pkg))
     return ipk_pkg
