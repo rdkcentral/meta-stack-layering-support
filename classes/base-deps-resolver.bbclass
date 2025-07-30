@@ -342,6 +342,7 @@ def sls_generate_native_sysroot(d):
 python do_install_ipk_recipe_sysroot () {
     import shutil
     import re
+    import glob
     ildeps = []
     seendirs = set()
     counts, devpkgcount = ({} for i in range(2))
@@ -354,16 +355,6 @@ python do_install_ipk_recipe_sysroot () {
     lpkgopkg_path = os.path.join(layer_sysroot,"var/lib/opkg")
     lpkginfo_path = os.path.join(lpkgopkg_path,"info")
     pkgdata_path = d.getVar("DEPS_IPK_DIR")
-    for walkroot, dirs, files in os.walk(lpkgopkg_path):
-        for file in files:
-            srcfile = os.path.join(walkroot, file)
-            if not srcfile.endswith(".lock"):
-                dstfile = srcfile.replace(layer_sysroot, recipe_sysroot)
-                staging_copy_ipk_file(srcfile,dstfile,seendirs)
-        for dir in dirs:
-            srcdir = os.path.join(walkroot, dir)
-            dstdir = srcdir.replace(layer_sysroot, recipe_sysroot)
-            staging_copy_ipk_dir(srcdir,dstdir,seendirs)
 
     ldeps = (d.getVar('INSTALL_DEPENDS') or "").split(",")
     pkgs = d.getVar('PACKAGES').split(" ")
@@ -514,6 +505,15 @@ python do_install_ipk_recipe_sysroot () {
                 g_ir_cc_support(d,recipe_sysroot,pkg_pn)
         else:
             bb.note("[deps-resolver] Skipped PKG - %s - from recipe sysroot"%pkg)
+        info_list = glob.glob(lpkginfo_path + "/%s.*"%(pkg))
+        if info_list:
+            for p in info_list :
+                if p.endswith(".lock"):
+                    continue
+                dstfile = p.replace(layer_sysroot, recipe_sysroot)
+                bb.note("[deps-resolver] copying info - %s "%dstfile)
+                staging_copy_ipk_file(p,dstfile,seendirs)
+
     if bb.data.inherits_class('useradd', d):
         p =  d.getVar('RECIPE_SYSROOT', True)+f"/var/lib/opkg/info/{d.getVar('MLPREFIX')}base-passwd.preinst"
         if os.path.exists(p):
@@ -1092,6 +1092,7 @@ def get_rdeps_provider_ipk(d, rdep):
     import re
     ipk_pkg = " "
 
+    staging_sysroot = d.getVar("SYSROOT_IPK")
     reciepe_sysroot = d.getVar("RECIPE_SYSROOT")
     opkg_cmd = bb.utils.which(os.getenv('PATH'), "opkg")
 
@@ -1117,7 +1118,21 @@ def get_rdeps_provider_ipk(d, rdep):
         ipk_pkg += pkg + " (>=" + ver + ") "
 
     if ipk_pkg == " ":
-        bb.note("[deps-resolver] rdep - %s - not available in IPK pkgs "%rdep)
+        bb.note("[deps-resolver] rdep - %s - couldn't find from reciepe_sysroot. Checking staging ipk sysroot "%rdep)
+        opkg_args = "-f %s -t %s -o %s " % (opkg_conf, info_file_path ,staging_sysroot)
+
+        cmd = '%s %s -A search "'"*/%s"'"' % (opkg_cmd, opkg_args,rdep.strip()) + " 2>/dev/null"
+        fd = os.popen(cmd)
+        lines = fd.readlines()
+        fd.close()
+        for line in lines:
+            pkg = line.split(" - ")[0]
+            ver = line.split(" - ")[1]
+            ver = ver.split("-")[0]
+            ipk_pkg += pkg + " (>=" + ver + ") "
+        if ipk_pkg == " ":
+            bb.note("[deps-resolver] rdep - %s - not available in IPK pkgs "%rdep)
+
     else:
         bb.note("[deps-resolver] rdep - %s - available in IPK pkg %s"%(rdep, ipk_pkg))
     return ipk_pkg
@@ -1545,15 +1560,18 @@ def generate_packages_and_versions_md(d):
 
         # Collect and filter package names and versions
         packages = []
+        exclude_suffixes = ("-dbg_", "-dev_", "-static_", "-staticdev_", "-src_")
         for file in os.listdir(target_dir):
             # Filter out unwanted packages and process only valid .ipk files
-            if file.endswith(".ipk") and not any(
-                suffix in file for suffix in ("-dbg", "-dev", "-static", "-staticdev", "-src")
-            ):
+            if file.endswith(".ipk"):
                 # Split the filename at the first "_" for package name and the rest for version
                 split_index = file.find("_")
                 if split_index != -1:
                     pkg_name = file[:split_index]
+                    # Exclude if pkg_name ends with any of the exclude_suffixes
+                    if any(pkg_name.endswith(suf[:-1]) for suf in exclude_suffixes):
+                        continue
+
                     pkg_version = file[split_index + 1:].rsplit(".ipk", 1)[0]
 
                     # Remove architecture suffix from version
