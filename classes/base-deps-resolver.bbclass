@@ -389,8 +389,6 @@ python do_install_ipk_recipe_sysroot () {
         return
 
     have_ipk_inclusion = True
-    if bb.data.inherits_class('multilib_global', d) and not d.getVar('MLPREFIX'):
-        have_ipk_inclusion = False
     if have_ipk_inclusion:
         for ipk in (d.getVar("IPK_INCLUSION_LIST") or "").split():
             ldeps.append(ipk)
@@ -1080,8 +1078,6 @@ def update_dep_pkgs(e):
             if f == "read_shlibdeps":
                 e.data.appendVar('PACKAGEFUNCS'," do_update_rdeps_ipk")
 
-    if bb.data.inherits_class('multilib_global', d) and not d.getVar('MLPREFIX'):
-        have_ipk_deps = False
     if have_ipk_deps:
         e.data.appendVar("DEPENDS", " ${MLPREFIX}staging-ipk-pkgs")
         create_ipk_deps_pkgdata(e,pkg_pn)
@@ -1314,8 +1310,6 @@ python deps_taskhandler() {
                     pkg = preferred_provider
                 (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pkg)
                 if ipk_mode:
-                    if bb.data.inherits_class('multilib_global', d) and not e.data.getVar('MLPREFIX'):
-                        have_ipk_deps = False
                     if have_ipk_deps and staging_ipk_task not in pkgs_list:
                         pkgs_list.append(staging_ipk_task)
                     continue
