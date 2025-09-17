@@ -313,7 +313,7 @@ fakeroot python do_populate_ipk_sysroot(){
 
             if not dev_pkgs and not staticdev_pkgs and not rel_pkgs:
                 continue
-            if dev_pkgs:
+            if dev_pkgs and not (bb.data.inherits_class('nativesdk', d) or bb.data.inherits_class('native', d)):
                 for dev_pkg in dev_pkgs:
                     if pkg_ver:
                         dev_pkg = dev_pkg+pkg_ver.strip("()")
@@ -345,7 +345,7 @@ fakeroot python do_populate_ipk_sysroot(){
     for arch in archs:
         arch_check =  False
         pkg_path = feed_info_dir+"%s/"%arch
-        if os.path.exists(pkg_path + "rprovides/kernel-image"):
+        if not (bb.data.inherits_class('nativesdk', d) or bb.data.inherits_class('native', d)):
             inst_list.append("kernel-image")
             if os.path.exists(pkg_path + "package/kernel-devicetree"):
                 inst_list.append("kernel-devicetree")
