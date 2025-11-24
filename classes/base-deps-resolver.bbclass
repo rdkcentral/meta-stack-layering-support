@@ -897,6 +897,8 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
             if not skip_recipe_ipk_pkgs and "oss" in feed.group(1):
                 if d.getVar("STACK_LAYER_EXTENSION") and feed.group(1) in d.getVar("STACK_LAYER_EXTENSION").split():
                     archs.append(feed.group(1))
+                elif src_dep_bpkg in d.getVar("GCC_PKGS").split(" ") or src_dep_bpkg in d.getVar("GLIBC_PKGS").split(" "):
+                    archs.append(feed.group(1))
                 else:
                     continue
             else:
