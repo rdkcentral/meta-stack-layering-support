@@ -145,13 +145,14 @@ def download_ipk(ipk, server_path, d):
     if not os.path.exists(download_dir):
         bb.utils.mkdirhier(download_dir)
     ipk_dl_path = os.path.join(download_dir,ipk)
+    opkg_cmd = bb.utils.which(os.getenv('PATH'), "opkg")
     if not os.path.exists(ipk_dl_path):
         if server_path.startswith("file:"):
             import shutil
             shutil.copy(server_path[5:]+"/"+ipk, download_dir)
         else:
             ipk_url = server_path + "/" + ipk
-            cmd = f"curl -fSL '{ipk_url}' -o '{ipk_dl_path}'"
+            cmd = f"{opkg_cmd} --volatile-cache -o {download_dir} --force-depends --download-only install {ipk}"
             base_cmdline(d, cmd)
 
 def copy_deploy_ipk(d):
