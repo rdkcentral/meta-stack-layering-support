@@ -38,7 +38,7 @@ def base_cmdline(d,cmd):
     if process.returncode == 0:
         bb.note("CMD : %s : Success" % cmd)
     else:
-        bb.fatal("CMD : %s : Failed %s" % (cmd, stderr.decode('utf-8')))
+        bb.fatal("CMD : %s : Failed %s" % (cmd, stderr.decode('utf-8', errors='replace')))
 
 python do_get_alternative_pkg (){
     import glob
