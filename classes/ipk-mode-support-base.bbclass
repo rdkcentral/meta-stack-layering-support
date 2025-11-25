@@ -150,8 +150,8 @@ def download_ipk(ipk, server_path, d):
             import shutil
             shutil.copy(server_path[5:]+"/"+ipk, download_dir)
         else:
-            ipk_url = server_path + "/" + ipk
-            cmd = f"curl -fSL '{ipk_url}' -o '{ipk_dl_path}'
+            ipk_url = server_path+"/"+ipk
+            cmd = "wget %s --directory-prefix=%s"%(ipk_url,download_dir)
             base_cmdline(d, cmd)
 
 def copy_deploy_ipk(d):
