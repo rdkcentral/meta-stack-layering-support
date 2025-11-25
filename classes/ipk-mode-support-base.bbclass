@@ -34,12 +34,11 @@ def ipk_install(d, cmd, pkgs, sysroot_destdir):
 def base_cmdline(d,cmd):
     import subprocess
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    msg = process.communicate()[0]
+    stdout, stderr = process.communicate()
     if process.returncode == 0:
-        bb.note("CMD : %s : Sucess"%(cmd))
+        bb.note("CMD : %s : Success" % cmd)
     else:
-        msg = process.stderr.read()
-        bb.fatal("CMD : %s : Failed %s"%(cmd,str(msg)))
+        bb.fatal("CMD : %s : Failed %s" % (cmd, stderr.decode('utf-8', errors='replace')))
 
 python do_get_alternative_pkg (){
     import glob
