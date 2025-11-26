@@ -36,7 +36,7 @@ def base_cmdline(d,cmd):
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     stdout, stderr = process.communicate()
     if process.returncode == 0:
-        bb.note("CMD : %s : Success" % cmd)
+        bb.warn("CMD : %s : Success" % cmd)
     else:
         bb.fatal("CMD : %s : Failed %s" % (cmd, stderr.decode('utf-8', errors='replace')))
 
