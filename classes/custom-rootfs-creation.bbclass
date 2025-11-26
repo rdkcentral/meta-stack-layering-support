@@ -24,7 +24,7 @@ def get_pkg_install_version(d,release_data_file, pkggrp):
         for l in lines:
             m = r.match(l)
             if m:
-                pkgdata[m.group(1)] = decode(m.group(2))
+                pkgdata[m.group(1)] = m.group(2).encode()
     with open(release_data_file,"a") as fw:
         for pkg in pkggrp:
             if pkg in pkgdata:
@@ -109,12 +109,12 @@ python do_update_install_pkgs_with_version() {
                 for l in lines:
                     m = r.match(l)
                     if m:
-                        pkgdata[m.group(1)] = decode(m.group(2))
+                        pkgdata[m.group(1)] = m.group(2).encode()
                 if "PV" in pkgdata and "PR" in pkgdata:
-                    pv = pkgdata["PV"]
-                    pr = pkgdata["PR"]
+                    pv = pkgdata["PV"].decode()
+                    pr = pkgdata["PR"].decode()
                     if "PE" in pkgdata:
-                        pe = pkgdata["PE"]
+                        pe = pkgdata["PE"].decode()
                         version += pe+":"
                     version += pv + "-" + pr
                 fw.write(pkg +"=" +version+"\n")
