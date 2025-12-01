@@ -348,6 +348,10 @@ python do_install_ipk_recipe_sysroot () {
     lpkginfo_path = os.path.join(lpkgopkg_path,"info")
     pkgdata_path = d.getVar("DEPS_IPK_DIR")
 
+    manifest_file = d.getVar("SSTATE_MANFILEPREFIX", True)+".ipk_download"
+    if os.path.exists(manifest_file):
+        os.remove(manifest_file)
+
     ldeps = (d.getVar('INSTALL_DEPENDS') or "").split(",")
     pkgs = d.getVar('PACKAGES').split(" ")
     for pkg in pkgs:
