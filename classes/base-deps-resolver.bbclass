@@ -703,9 +703,9 @@ python update_recipe_deps_handler() {
                     if prebuilt_native_pkg_path_list:
                         prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
             if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(e.data, pn,variant) and pn not in exclusion_list :
-                update_build_tasks(e.data, arch, "native", manifest_name)
+                update_build_tasks(e.data, arch, "native")
             elif pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant) :
-                update_build_tasks(d, arch, "native", manifest_name)
+                update_build_tasks(d, arch, "native")
         if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
             e.data.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
     else:
@@ -720,15 +720,15 @@ python update_recipe_deps_handler() {
             if not os.path.exists(skipped_pkg_dir):
                 bb.utils.mkdirhier(skipped_pkg_dir)
             open(skipped_pkg_dir+pn, 'w').close()
-            update_build_tasks(e.data, arch, "target", manifest_name)
+            update_build_tasks(e.data, arch, "target")
             e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
             if bb.data.inherits_class('update-alternatives',e.data):
                 bb.build.addtask('do_get_alternative_pkg','do_package_write_ipk', 'do_ipk_download do_populate_sysroot',e.data)
         elif staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
-            update_build_tasks(e.data, arch, "native", manifest_name)
+            update_build_tasks(e.data, arch, "native")
         elif staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and "gcc-initial" in pn and not gcc_source_mode_check(e.data, pn, variant):
-            update_build_tasks(e.data, arch, "native", manifest_name)
+            update_build_tasks(e.data, arch, "native")
         else:
             if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', e.data):
                 e.data.appendVarFlag('do_packagedata', 'prefuncs', ' do_clean_pkgdata')
