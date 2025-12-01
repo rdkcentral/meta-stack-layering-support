@@ -10,7 +10,6 @@
 
 STACK_LAYER_SYSROOT_DIRS = "${includedir} ${exec_prefix}/${baselib} ${base_libdir} ${nonarch_base_libdir} ${datadir} "
 SYSROOT_DIRS_BIN_REQUIRED = "${MLPREFIX}gobject-introspection"
-SSTATE_IPK_MANFILEPREFIX = "${SSTATE_MANIFESTS}/manifest-${SSTATE_MANMACH}-"
 
 # Pkgdata directory to store runtime IPK dependency details.
 IPK_PKGDATA_RUNTIME_DIR = "${WORKDIR}/pkgdata/ipk"
@@ -233,7 +232,7 @@ def enable_task(d, task):
     if d.getVarFlag(task, "noexec", False) != None:
         d.delVarFlag(task, "noexec")
 
-def update_build_tasks(d, arch, machine, manifest_name):
+def update_build_tasks(d, arch, machine):
     # Disable all tasks
     for e in bb.data.keys(d):
         if d.getVarFlag(e, 'task', False):
@@ -251,13 +250,6 @@ def update_build_tasks(d, arch, machine, manifest_name):
     d.setVarFlag("do_populate_sysroot", "sstate-interceptfuncs", " ")
     d.setVarFlag("do_populate_sysroot", "sstate-fixmedir", " ")
     d.setVarFlag("do_populate_sysroot_setscene", "sstate-interceptfuncs", " ")
-
-    if machine == "target":
-        manifest_path = d.getVar("SSTATE_MANIFESTS", True)
-        if not os.path.exists(manifest_path):
-            bb.utils.mkdirhier(manifest_path)
-        manifest_file = manifest_name+".packagedata"
-        open(manifest_file, 'w').close()
 
 do_package_write_ipk:prepend() {
     manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
@@ -698,11 +690,6 @@ python update_recipe_deps_handler() {
     variant = e.data.getVar("BBEXTENDVARIANT")
     arch = e.data.getVar('PACKAGE_ARCH')
     pn = e.data.getVar('PN')
-    if variant:
-        manifest_name = e.data.getVar("SSTATE_IPK_MANFILEPREFIX", True)+variant+"-"+pn
-    else:
-        manifest_name = e.data.getVar("SSTATE_IPK_MANFILEPREFIX", True)+pn
-    manifest_file = manifest_name + ".ipk_download"
     version = get_version_info(e.data)
     if bb.data.inherits_class('native', e.data) or bb.data.inherits_class('cross', e.data):
         if staging_native_prebuilt_path:
@@ -734,7 +721,6 @@ python update_recipe_deps_handler() {
                 bb.utils.mkdirhier(skipped_pkg_dir)
             open(skipped_pkg_dir+pn, 'w').close()
             update_build_tasks(e.data, arch, "target", manifest_name)
-            open(manifest_file, 'w').close()
             e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
             if bb.data.inherits_class('update-alternatives',e.data):
@@ -744,8 +730,6 @@ python update_recipe_deps_handler() {
         elif staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and "gcc-initial" in pn and not gcc_source_mode_check(e.data, pn, variant):
             update_build_tasks(e.data, arch, "native", manifest_name)
         else:
-            if os.path.exists(manifest_file):
-                os.remove(manifest_file)
             if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', e.data):
                 e.data.appendVarFlag('do_packagedata', 'prefuncs', ' do_clean_pkgdata')
                 e.data.appendVarFlag('do_packagedata_setscene', 'prefuncs', ' do_clean_pkgdata')
