@@ -91,7 +91,7 @@ python do_ipk_download (){
 
     manifest_file = d.getVar("SSTATE_MANFILEPREFIX", True)+".ipk_download"
     open(manifest_file, 'w').close()
-    manifest_file = manifest_name+".packagedata"
+    manifest_file = d.getVar("SSTATE_MANFILEPREFIX", True)+".packagedata"
     open(manifest_file, 'w').close()
     if server_path and ipk_list:
         oe.utils.multiprocess_launch(download_ipk, ipk_list,d,extraargs=(server_path,d))
