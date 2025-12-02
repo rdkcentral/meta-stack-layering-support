@@ -330,7 +330,16 @@ def sls_generate_native_sysroot(d):
         return False
     return True
 
-do_install_ipk_recipe_sysroot[vardepsexclude] += " SSTATE_MANFILEPREFIX"
+python sysroot_cleanup_ipk_download () {
+    import os
+    manifest_ipk_download = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
+    if os.path.exists(manifest_ipk_download):
+        os.remove(manifest_ipk_download)
+}
+
+do_install_ipk_recipe_sysroot[postfuncs] += "sysroot_cleanup_ipk_download"
+sysroot_cleanup_ipk_download[vardepsexclude] += " SSTATE_MANFILEPREFIX"
+
 # Install the dev ipks to the component sysroot
 python do_install_ipk_recipe_sysroot () {
     import shutil
@@ -348,10 +357,6 @@ python do_install_ipk_recipe_sysroot () {
     lpkgopkg_path = os.path.join(layer_sysroot,"var/lib/opkg")
     lpkginfo_path = os.path.join(lpkgopkg_path,"info")
     pkgdata_path = d.getVar("DEPS_IPK_DIR")
-
-    manifest_ipk_download = d.getVar("SSTATE_MANFILEPREFIX", True)+".ipk_download"
-    if os.path.exists(manifest_ipk_download):
-        os.remove(manifest_ipk_download)
 
     ldeps = (d.getVar('INSTALL_DEPENDS') or "").split(",")
     pkgs = d.getVar('PACKAGES').split(" ")
