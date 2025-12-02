@@ -76,6 +76,7 @@ python do_ipk_download (){
     import subprocess
     import shutil
     import re
+    import os
 
     arch = d.getVar('PACKAGE_ARCH')
 
@@ -89,6 +90,11 @@ python do_ipk_download (){
             if arch == arch_name:
                 server_path = arch_uri
 
+    manifest_file = d.getVar("SSTATE_MANFILEPREFIX", True)+".ipk_download"
+    bb.utils.mkdirhier(os.path.dirname(manifest_file))
+    open(manifest_file, 'w').close()
+    manifest_file = d.getVar("SSTATE_MANFILEPREFIX", True)+".packagedata"
+    open(manifest_file, 'w').close()
     if server_path and ipk_list:
         oe.utils.multiprocess_launch(download_ipk, ipk_list,d,extraargs=(server_path,d))
 }
