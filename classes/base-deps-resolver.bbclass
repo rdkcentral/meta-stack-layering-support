@@ -252,7 +252,6 @@ def update_build_tasks(d, arch, machine):
 do_ipk_download:prepend() {
     manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
     manifest_src_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".source_mode"
-    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
     if d.getVar("STACK_LAYER_EXTENSION"):
         if d.getVar("PACKAGE_ARCH") in d.getVar("STACK_LAYER_EXTENSION").split():
             open(manifest_src_mode, 'w').close()

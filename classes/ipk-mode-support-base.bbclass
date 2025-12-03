@@ -72,7 +72,6 @@ python do_get_alternative_pkg_setscene () {
 addtask do_get_alternative_pkg_sysroot_setscene
 do_package_qa[recrdeptask] += "do_get_alternative_pkg"
 do_ipk_download[network] = "1"
-do_ipk_download[nostamp] = "1"
 python do_ipk_download (){
     import subprocess
     import shutil
