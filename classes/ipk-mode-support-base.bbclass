@@ -100,6 +100,20 @@ python do_ipk_download (){
         oe.utils.multiprocess_launch(download_ipk, ipk_list,d,extraargs=(server_path,d))
 }
 
+SSTATETASKS += "do_ipk_download"
+do_ipk_download[dirs] = "${PKGWRITEDIRIPK}"
+do_ipk_download[sstate-inputdirs] = "${PKGWRITEDIRIPK}"
+do_ipk_download[sstate-outputdirs] = "${DEPLOY_DIR_IPK}"
+do_ipk_download[cleandirs] = "${PKGWRITEDIRIPK}"
+
+python do_ipk_download_setscene () {
+    manifest_file = d.getVar("SSTATE_MANFILEPREFIX", True)+".packagedata"
+    bb.utils.mkdirhier(os.path.dirname(manifest_file))
+    open(manifest_file, 'w').close()
+    sstate_setscene(d)
+}
+addtask do_populate_ipk_setscene
+
 def ipk_sysroot_creation(d):
     import subprocess
     import shutil
@@ -149,7 +163,7 @@ def ipk_sysroot_creation(d):
 
 # Do sequential ipk download
 def download_ipk(ipk, server_path, d):
-    download_dir = d.getVar("IPK_CACHE_DIR", True)
+    download_dir = d.getVar("PKGWRITEDIRIPK", True)
     if not os.path.exists(download_dir):
         bb.utils.mkdirhier(download_dir)
     ipk_dl_path = os.path.join(download_dir,ipk)
