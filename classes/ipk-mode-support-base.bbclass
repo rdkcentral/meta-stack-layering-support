@@ -121,7 +121,8 @@ def ipk_sysroot_creation(d):
     import shutil
     install_dir = d.getVar("D", True)
     arch = d.getVar('PACKAGE_ARCH')
-    download_dir =  d.getVar("IPK_CACHE_DIR", True)
+    pkgoutdir = d.getVar("PKGWRITEDIRIPK", True)
+    download_dir = "%s/%s" % (pkgoutdir, arch)
     if os.path.exists(install_dir):
         shutil.rmtree(install_dir)
     ipk_install_list = []
