@@ -96,7 +96,7 @@ python do_ipk_download (){
     manifest_file = d.getVar("SSTATE_MANFILEPREFIX", True)+".package_write_ipk"
     open(manifest_file, 'w').close()
     if server_path and ipk_list:
-        oe.utils.multiprocess_launch(download_ipk, ipk_list,d,extraargs=(server_path,d))
+        oe.utils.multiprocess_launch(download_ipk, ipk_list,d,extraargs=(server_path, arch,d))
 }
 
 SSTATETASKS += "do_ipk_download"
@@ -164,8 +164,9 @@ def ipk_sysroot_creation(d):
             f.write(pn)
 
 # Do sequential ipk download
-def download_ipk(ipk, server_path, d):
-    download_dir = d.getVar("PKGWRITEDIRIPK", True)
+def download_ipk(ipk, server_path, arch, d):
+    pkgoutdir = d.getVar("PKGWRITEDIRIPK", True)
+    download_dir = "%s/%s" % (pkgoutdir, arch)
     if not os.path.exists(download_dir):
         bb.utils.mkdirhier(download_dir)
     ipk_dl_path = os.path.join(download_dir,ipk)
