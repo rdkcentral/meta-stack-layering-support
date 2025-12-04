@@ -269,6 +269,10 @@ do_populate_sysroot:prepend() {
             if os.path.exists(manifest_src_mode):
                 os.remove(manifest_src_mode)
             return
+        if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
+            open(manifest_src_mode, 'w').close()
+            if os.path.exists(manifest_pre_mode):
+                os.remove(manifest_pre_mode)
     else:
         manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
         if os.path.exists(manifest_name):
