@@ -79,14 +79,6 @@ python do_ipk_download (){
     import re
     import os
 
-    manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
-    manifest_src_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".source_mode"
-    if d.getVar("STACK_LAYER_EXTENSION"):
-        if d.getVar("PACKAGE_ARCH") in d.getVar("STACK_LAYER_EXTENSION").split():
-            open(manifest_src_mode, 'w').close()
-            if os.path.exists(manifest_pre_mode):
-                os.remove(manifest_pre_mode)
-
     arch = d.getVar('PACKAGE_ARCH')
 
     ipk_list = get_ipk_list(d,arch)
