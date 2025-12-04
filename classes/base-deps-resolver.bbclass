@@ -263,13 +263,14 @@ do_populate_sysroot:prepend() {
     manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
     manifest_src_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".source_mode"
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
-        skip = sls_generate_native_sysroot (d)
-        if skip:
-            open(manifest_pre_mode, 'w').close()
-            if os.path.exists(manifest_src_mode):
-                os.remove(manifest_src_mode)
-            return
+        staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
         if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
+            skip = sls_generate_native_sysroot (d, staging_native_prebuilt_path)
+            if skip:
+                open(manifest_pre_mode, 'w').close()
+                if os.path.exists(manifest_src_mode):
+                    os.remove(manifest_src_mode)
+                return
             open(manifest_src_mode, 'w').close()
             if os.path.exists(manifest_pre_mode):
                 os.remove(manifest_pre_mode)
@@ -280,14 +281,11 @@ do_populate_sysroot:prepend() {
             return
 }
 
-def sls_generate_native_sysroot(d):
+def sls_generate_native_sysroot(d, staging_native_prebuilt_path):
     import os
     import shutil
     import subprocess
     pn = d.getVar("PN", True)
-    staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
-    if not staging_native_prebuilt_path:
-        return False
 
     prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
     prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")

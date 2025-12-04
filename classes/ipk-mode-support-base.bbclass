@@ -96,7 +96,7 @@ python do_ipk_download (){
     manifest_file = d.getVar("SSTATE_MANFILEPREFIX", True)+".package_write_ipk"
     open(manifest_file, 'w').close()
     if server_path and ipk_list:
-        oe.utils.multiprocess_launch(download_ipk, ipk_list,d,extraargs=(server_path, arch,d))
+        oe.utils.multiprocess_launch(download_ipk, ipk_list, d, extraargs=(server_path, arch,d))
 }
 
 SSTATETASKS += "do_ipk_download"
@@ -114,7 +114,7 @@ python do_ipk_download_setscene () {
     open(manifest_file, 'w').close()
     sstate_setscene(d)
 }
-addtask do_populate_ipk_setscene
+addtask do_ipk_download_setscene
 
 def ipk_sysroot_creation(d):
     import subprocess
