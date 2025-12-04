@@ -249,7 +249,7 @@ def update_build_tasks(d, arch, machine):
     d.setVarFlag("do_populate_sysroot", "sstate-fixmedir", " ")
     d.setVarFlag("do_populate_sysroot_setscene", "sstate-interceptfuncs", " ")
 
-do_populate_sysroot:prepend() {
+python do_populate_sysroot:prepend() {
     import os
     manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
     manifest_src_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".source_mode"
