@@ -71,12 +71,21 @@ python do_get_alternative_pkg_setscene () {
 }
 addtask do_get_alternative_pkg_sysroot_setscene
 do_package_qa[recrdeptask] += "do_get_alternative_pkg"
+
 do_ipk_download[network] = "1"
 python do_ipk_download (){
     import subprocess
     import shutil
     import re
     import os
+
+    manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
+    manifest_src_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".source_mode"
+    if d.getVar("STACK_LAYER_EXTENSION"):
+        if d.getVar("PACKAGE_ARCH") in d.getVar("STACK_LAYER_EXTENSION").split():
+            open(manifest_src_mode, 'w').close()
+            if os.path.exists(manifest_pre_mode):
+                os.remove(manifest_pre_mode)
 
     arch = d.getVar('PACKAGE_ARCH')
 

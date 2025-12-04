@@ -249,17 +249,8 @@ def update_build_tasks(d, arch, machine):
     d.setVarFlag("do_populate_sysroot", "sstate-fixmedir", " ")
     d.setVarFlag("do_populate_sysroot_setscene", "sstate-interceptfuncs", " ")
 
-do_ipk_download:prepend() {
-    manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
-    manifest_src_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".source_mode"
-    if d.getVar("STACK_LAYER_EXTENSION"):
-        if d.getVar("PACKAGE_ARCH") in d.getVar("STACK_LAYER_EXTENSION").split():
-            open(manifest_src_mode, 'w').close()
-            if os.path.exists(manifest_pre_mode):
-                os.remove(manifest_pre_mode)
-}
-
-do_populate_sysroot:prepend() {
+python do_populate_sysroot:prepend() {
+    import os
     manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
     manifest_src_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".source_mode"
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
