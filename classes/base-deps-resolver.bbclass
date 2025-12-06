@@ -43,37 +43,6 @@ def is_excluded_pkg(d, pkg):
         is_excluded = True
     return is_excluded
 
-# base-deps-resolver.py (helper)
-def mark_src_mode(d, pn):
-    feed_info_dir = d.getVar("FEED_INFO_DIR")
-    src_mode_dir = os.path.join(feed_info_dir, "src_mode")
-    bb.utils.mkdirhier(src_mode_dir)
-    open(os.path.join(src_mode_dir, pn), 'w').close()
-
-# base-deps-resolver.py (near other helpers)
-def ipk_can_consume(d):
-    """
-    Return True if there are IPKs in the feed exactly matching this recipe's PN, PV-PR and PACKAGE_ARCH.
-    """
-    import os
-    arch = d.getVar('PACKAGE_ARCH')
-    ipks = get_ipk_list(d, arch)  # uses PV-PR and arch
-    if not ipks:
-        return False
-
-    # Verify presence in the indexed feed (FEED_INFO_DIR/source) and in DEPLOY_DIR_IPK/<arch>
-    feed_info_dir = d.getVar("FEED_INFO_DIR")
-    deploy_dir_ipk = d.getVar("DEPLOY_DIR_IPK")
-    pn = d.getVar("PN")
-    pv = d.getVar("PV")
-    pr = d.getVar("PR") or "r0"
-    version = ("%s-%s" % (pv, pr)).replace("AUTOINC", "0")
-
-    src_path = os.path.join(feed_info_dir, arch, "source", "%s_%s" % (pn, version))
-    ipk_dir = os.path.join(deploy_dir_ipk, arch)
-
-    return (os.path.exists(src_path) and all(os.path.exists(os.path.join(ipk_dir, ipk)) for ipk in ipks))
-
 # Function reads indirect build and runtime dependencies 
 # from the pkgdata directory
 def read_ipk_depends(d, pkg):
@@ -738,23 +707,22 @@ python update_recipe_deps_handler() {
             e.data.appendVarFlag('do_deploy', 'prefuncs', ' do_clean_deploy_images')
             e.data.appendVarFlag('do_deploy_setscene', 'prefuncs', ' do_clean_deploy_images')
         e.data.appendVar("DEPENDS", " pseudo-native")
-        deps_will_rebuild = check_depends_on_targets(e.data) or check_depends_version_change(e.data)
-        if ipk_can_consume(e.data) and not deps_will_rebuild and not check_targets(e.data, pn, variant):
-            # SAFE IPK path: mark skipped, add do_ipk_download, alternatives, etc.
-            skipped_pkg_dir = os.path.join(feed_info_dir, "%s/skipped/" % arch)
-            bb.utils.mkdirhier(skipped_pkg_dir)
-            open(os.path.join(skipped_pkg_dir, pn), 'w').close()
+        (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
+        if ipk_mode and not check_targets(e.data, pn, variant) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data):
+            skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
+            if not os.path.exists(skipped_pkg_dir):
+                bb.utils.mkdirhier(skipped_pkg_dir)
+            open(skipped_pkg_dir+pn, 'w').close()
             update_build_tasks(e.data, arch, "target")
             e.data.appendVar("DEPENDS", " opkg-native ")
-            bb.build.addtask('do_ipk_download','do_populate_sysroot', None, e.data)
-            if bb.data.inherits_class('update-alternatives', e.data):
-                bb.build.addtask('do_get_alternative_pkg','do_build', 'do_ipk_download do_populate_sysroot', e.data)
+            bb.build.addtask('do_ipk_download','do_populate_sysroot', None,e.data)
+            if bb.data.inherits_class('update-alternatives',e.data):
+                bb.build.addtask('do_get_alternative_pkg','do_build', 'do_ipk_download do_populate_sysroot',e.data)
         elif staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
             update_build_tasks(e.data, arch, "native")
         elif staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and "gcc-initial" in pn and not gcc_source_mode_check(e.data, pn, variant):
             update_build_tasks(e.data, arch, "native")
         else:
-            mark_src_mode(e.data, pn)
             if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', e.data):
                 e.data.appendVarFlag('do_packagedata', 'prefuncs', ' do_clean_pkgdata')
                 e.data.appendVarFlag('do_packagedata_setscene', 'prefuncs', ' do_clean_pkgdata')
@@ -1741,13 +1709,7 @@ python get_pkgs_handler () {
                             update_check = True
                         bb.warn("%s version should update and rebuild. Dependency %s has changed with major version"%(source,dep))
     if update_check:
-        # Switch to source mode for packages that have deps with major version change
-        # so they rebuild instead of using IPKs.
-        for source, _ in ipk_mapping.items():
-            src_mode_path = os.path.join(feed_info_dir, "src_mode", source)
-            if not os.path.exists(src_mode_path):
-                mark_src_mode(d, source)
-        bb.warn("Dependency major version changed; switching affected sources to rebuild (source mode).")
+        bb.fatal("Update version and required rebuild")
 }
 addhandler get_pkgs_handler
 get_pkgs_handler[eventmask] = "bb.event.DepTreeGenerated"
