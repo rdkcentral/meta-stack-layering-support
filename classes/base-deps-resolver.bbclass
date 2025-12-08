@@ -245,9 +245,20 @@ def update_build_tasks(d, arch, machine):
     enable_task(d, "do_cleanall")
     enable_task(d, "do_populate_sysroot")
 
+    if machine == "target":
+        enable_task(d, "do_package_write_ipk")
+
     d.setVarFlag("do_populate_sysroot", "sstate-interceptfuncs", " ")
     d.setVarFlag("do_populate_sysroot", "sstate-fixmedir", " ")
     d.setVarFlag("do_populate_sysroot_setscene", "sstate-interceptfuncs", " ")
+
+python do_package_write_ipk:prepend() {
+    manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
+    if os.path.exists(manifest_name):
+        copy_deploy_ipk(d)
+        bb.note(" Copying Skipping do_package_write_ipk")
+        return
+}
 
 python do_populate_sysroot:prepend() {
     import os
@@ -269,7 +280,13 @@ python do_populate_sysroot:prepend() {
         manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
         if os.path.exists(manifest_name):
             ipk_sysroot_creation(d)
+            open(manifest_pre_mode, 'w').close()
+            if os.path.exists(manifest_src_mode):
+                os.remove(manifest_src_mode)
             return
+        open(manifest_src_mode, 'w').close()
+        if os.path.exists(manifest_pre_mode):
+            os.remove(manifest_pre_mode)
 }
 
 def sls_generate_native_sysroot(d, staging_native_prebuilt_path):
@@ -715,9 +732,9 @@ python update_recipe_deps_handler() {
             open(skipped_pkg_dir+pn, 'w').close()
             update_build_tasks(e.data, arch, "target")
             e.data.appendVar("DEPENDS", " opkg-native ")
-            bb.build.addtask('do_ipk_download','do_populate_sysroot', None,e.data)
+            bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
             if bb.data.inherits_class('update-alternatives',e.data):
-                bb.build.addtask('do_get_alternative_pkg','do_build', 'do_ipk_download do_populate_sysroot',e.data)
+                bb.build.addtask('do_get_alternative_pkg','do_package_write_ipk', 'do_ipk_download do_populate_sysroot',e.data)
         elif staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
             update_build_tasks(e.data, arch, "native")
         elif staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and "gcc-initial" in pn and not gcc_source_mode_check(e.data, pn, variant):
@@ -1714,4 +1731,4 @@ python get_pkgs_handler () {
 addhandler get_pkgs_handler
 get_pkgs_handler[eventmask] = "bb.event.DepTreeGenerated"
 
-do_build[recrdeptask] += "do_package_write_ipk do_ipk_download"
+do_build[recrdeptask] += "do_package_write_ipk"

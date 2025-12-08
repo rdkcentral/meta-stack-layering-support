@@ -1,3 +1,4 @@
+PKGWRITECACHEIPK = "${WORKDIR}/deploy-cache-ipks"
 def ipk_install(d, cmd, pkgs, sysroot_destdir):
     import subprocess
 
@@ -79,14 +80,6 @@ python do_ipk_download (){
     import re
     import os
 
-    manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
-    manifest_src_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".source_mode"
-    if d.getVar("STACK_LAYER_EXTENSION"):
-        if d.getVar("PACKAGE_ARCH") in d.getVar("STACK_LAYER_EXTENSION").split():
-            open(manifest_src_mode, 'w').close()
-            if os.path.exists(manifest_pre_mode):
-                os.remove(manifest_pre_mode)
-
     arch = d.getVar('PACKAGE_ARCH')
 
     ipk_list = get_ipk_list(d,arch)
@@ -102,24 +95,20 @@ python do_ipk_download (){
     manifest_file = d.getVar("SSTATE_MANFILEPREFIX", True)+".packagedata"
     bb.utils.mkdirhier(os.path.dirname(manifest_file))
     open(manifest_file, 'w').close()
-    manifest_file = d.getVar("SSTATE_MANFILEPREFIX", True)+".package_write_ipk"
-    open(manifest_file, 'w').close()
     if server_path and ipk_list:
         oe.utils.multiprocess_launch(download_ipk, ipk_list, d, extraargs=(server_path, arch,d))
 }
 
 SSTATETASKS += "do_ipk_download"
-do_ipk_download[dirs] = "${PKGWRITEDIRIPK}"
-do_ipk_download[sstate-inputdirs] = "${PKGWRITEDIRIPK}"
-do_ipk_download[sstate-outputdirs] = "${DEPLOY_DIR_IPK}"
-do_ipk_download[cleandirs] = "${PKGWRITEDIRIPK}"
+do_ipk_download[dirs] = "${IPK_CACHE_DIR_PN}"
+do_ipk_download[sstate-inputdirs] = "${IPK_CACHE_DIR_PN}"
+do_ipk_download[sstate-outputdirs] = "${PKGWRITECACHEIPK}"
+do_ipk_download[cleandirs] = "${IPK_CACHE_DIR_PN}"
 do_ipk_download[vardeps] += "PV PR"
 
 python do_ipk_download_setscene () {
     manifest_file = d.getVar("SSTATE_MANFILEPREFIX", True)+".packagedata"
     bb.utils.mkdirhier(os.path.dirname(manifest_file))
-    open(manifest_file, 'w').close()
-    manifest_file = d.getVar("SSTATE_MANFILEPREFIX", True)+".package_write_ipk"
     open(manifest_file, 'w').close()
     sstate_setscene(d)
 }
@@ -130,8 +119,9 @@ def ipk_sysroot_creation(d):
     import shutil
     install_dir = d.getVar("D", True)
     arch = d.getVar('PACKAGE_ARCH')
-    pkgoutdir = d.getVar("PKGWRITEDIRIPK", True)
-    download_dir = "%s/%s" % (pkgoutdir, arch)
+    #pkgoutdir = d.getVar("PKGWRITEDIRIPK", True)
+    #download_dir = "%s/%s" % (pkgoutdir, arch)
+    download_dir = d.getVar("PKGWRITECACHEIPK", True)
     if os.path.exists(install_dir):
         shutil.rmtree(install_dir)
     ipk_install_list = []
@@ -175,8 +165,7 @@ def ipk_sysroot_creation(d):
 
 # Do sequential ipk download
 def download_ipk(ipk, server_path, arch, d):
-    pkgoutdir = d.getVar("PKGWRITEDIRIPK", True)
-    download_dir = "%s/%s" % (pkgoutdir, arch)
+    download_dir = d.getVar("IPK_CACHE_DIR_PN", True)
     if not os.path.exists(download_dir):
         bb.utils.mkdirhier(download_dir)
     ipk_dl_path = os.path.join(download_dir,ipk)
@@ -196,7 +185,7 @@ def copy_deploy_ipk(d):
     if not os.path.exists(ipk_outdir):
         bb.utils.mkdirhier(ipk_outdir)
 
-    download_dir = d.getVar("IPK_CACHE_DIR", True)
+    download_dir = d.getVar("PKGWRITECACHEIPK", True)
 
     ipk_list = get_ipk_list(d,arch)
     bb.note("[copy_deploy_ipk] ipk list : %s"%ipk_list)
