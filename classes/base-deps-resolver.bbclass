@@ -256,7 +256,7 @@ python do_package_write_ipk:prepend() {
     manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
     if os.path.exists(manifest_name):
         copy_deploy_ipk(d)
-        bb.note(" Copying Skipping do_package_write_ipk")
+        bb.note("Skipping do_package_write_ipk, copying from cache")
         return
 }
 
