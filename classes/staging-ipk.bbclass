@@ -134,12 +134,13 @@ def check_staging_exclusion(d, pkg, pkg_path):
     pkg = pkg.strip()
     prefix = d.getVar('MLPREFIX') or ""
     if prefix and pkg.startswith(prefix):
-        pkg = pkg[len(prefix):]
-    if pkg in (d.getVar("IPK_STAGING_EXCLUSION_LIST") or "").split():
+        non_prefix_pkg = pkg[len(prefix):]
+    if non_prefix_pkg in (d.getVar("IPK_STAGING_EXCLUSION_LIST") or "").split():
         is_excluded = True
     else:
         import glob
         for skip_pkg in (d.getVar("IPK_STAGING_EXCLUSION_LIST") or "").split():
+            skip_pkg = prefix+skip_pkg
             recipe_info = glob.glob(pkg_path + "/source/%s_*"%(skip_pkg))
             if recipe_info:
                 recipe_info = recipe_info[0]

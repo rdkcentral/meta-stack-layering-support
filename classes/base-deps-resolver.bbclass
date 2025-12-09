@@ -422,10 +422,7 @@ python do_install_ipk_recipe_sysroot () {
                 else :
                     break
         recipe_info = ""
-        if prefix and ldep.startswith(prefix):
-            src_name = ldep[len(prefix):]
-        else:
-            src_name = ldep
+        src_name = ldep
 
         feed_info_dir = d.getVar("FEED_INFO_DIR")
         for arch in archs:
@@ -559,9 +556,6 @@ def get_ipk_list(d, pkg_arch):
     version = "%s-%s" % (d.getVar('PV'), d.getVar('PR'))
     pkg_ver = version.replace("AUTOINC","0")
     feed_info_dir = d.getVar("FEED_INFO_DIR")
-    prefix = d.getVar('MLPREFIX') or ""
-    if prefix and pn.startswith(prefix):
-       pn = pn[len(prefix):]
     src_path = os.path.join(feed_info_dir, pkg_arch)
     recipe_info = glob.glob(src_path + "/source/%s_*"%(pn))
     if recipe_info:
@@ -902,10 +896,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
 
     for arch in archs:
         pkg_path = feed_info_dir+"%s/"%arch
-        if prefix and dep_bpkg.startswith(prefix):
-            src_dep_bpkg = dep_bpkg[len(prefix):]
-        else:
-            src_dep_bpkg = dep_bpkg
+        src_dep_bpkg = dep_bpkg
         if version:
             if "${SRCPV}" in version:
                 pattern = version.replace("${SRCPV}","*")
@@ -1385,6 +1376,8 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
             line = line.strip()
             if not line:  # Blank line indicates the end of a package entry
                 if package != None:
+                    if variant:
+                        source = variant+source
                     if not package.endswith("-dev") and not package.endswith("-dbg") and not package.endswith("-staticdev") and not package.endswith("-doc") and not package.endswith("-src"):
                         package_info[package] = (source, dependencies)
                     if not package.endswith("-doc") and not package.endswith("-src"):
@@ -1411,9 +1404,12 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
                             create_version_info(d,version,package)
                         package = provides = source = None
                 continue
-
             if line.startswith('Package:'):
                 package = line.split('Package: ', 1)[1]
+                if package.startswith("lib32-"):
+                    variant= "lib32-"
+                else:
+                    variant= ""
             elif line.startswith('Provides:'):
                 provides = line.split('Provides: ', 1)[1]
             elif line.startswith('Source:'):
@@ -1432,6 +1428,8 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
         d.setVar("IPK_DEPS_MAPPING_LIST",ipk_deps_mapping)
 
     if package != None:
+        if variant:
+            source = variant+source
         if not package.endswith("-doc") and not package.endswith("-src"):
             pkg_path = os.path.join(ipk_pkgdata_dir+"%s/"%arch_name, ("package/%s")%(package))
             src_path = os.path.join(ipk_pkgdata_dir+"%s/"%arch_name, "source/%s"%source)
