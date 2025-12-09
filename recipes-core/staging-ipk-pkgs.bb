@@ -1,6 +1,7 @@
 SUMMARY = "Install the IPK packages to the common staging directory."
 
 LICENSE = "MIT"
+PR = "r1"
 
 inherit staging-ipk
 

@@ -371,10 +371,10 @@ do_populate_ipk_sysroot[sstate-inputdirs] = "${IPK_SYSDIR}"
 do_populate_ipk_sysroot[sstate-outputdirs] = "${SYSROOT_IPK}"
 do_populate_ipk_sysroot[cleandirs] = "${SYSROOT_IPK}"
 
-python do_populate_ipk_sysroot_setscene () {
-    sstate_setscene(d)
+do_ipk_sysroot_clean() {
+    rm -rf "${IPK_SYSDIR}" "${SYSROOT_IPK}"
 }
-addtask do_populate_ipk_sysroot_setscene
+addtask ipk_sysroot_clean before do_clean
 
 python __anonymous() {
     feed_index_dir = os.path.join(d.getVar("FEED_INFO_DIR"),"index")
