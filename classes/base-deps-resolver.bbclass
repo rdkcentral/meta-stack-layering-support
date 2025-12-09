@@ -552,6 +552,7 @@ def get_ipk_list(d, pkg_arch):
     import shutil
     ipk_list = []
     pn = d.getVar("PN")
+    prefix = d.getVar('MLPREFIX') or ""
     pkg_arch = d.getVar("PACKAGE_ARCH")
     version = "%s-%s" % (d.getVar('PV'), d.getVar('PR'))
     pkg_ver = version.replace("AUTOINC","0")
