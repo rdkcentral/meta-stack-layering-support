@@ -10,3 +10,5 @@ INSANE_SKIP:${PN} += " already-stripped "
 
 #Enable nativesdk support for the recipe.
 BBCLASSEXTEND = "nativesdk"
+
+SSTATE_SKIP_CREATION = "1"
