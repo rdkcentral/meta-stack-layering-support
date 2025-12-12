@@ -865,10 +865,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     if not dep_bpkg:
         return (ipkmode, version_mismatch, same_arch)
     # Check dep package is in IPK mode
-    if prefix and dep_bpkg.startswith(prefix):
-        src_dep_bpkg = dep_bpkg[len(prefix):]
-    else:
-        src_dep_bpkg = dep_bpkg
+    src_dep_bpkg = dep_bpkg
     staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
 
     if is_excluded_pkg(d, dep_bpkg):
@@ -886,8 +883,6 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
             if not skip_recipe_ipk_pkgs and "oss" in feed.group(1):
                 if d.getVar("STACK_LAYER_EXTENSION") and feed.group(1) in d.getVar("STACK_LAYER_EXTENSION").split():
                     archs.append(feed.group(1))
-                elif src_dep_bpkg in (d.getVar("GCC_PKGS") or "").split() or src_dep_bpkg in (d.getVar("GLIBC_PKGS") or "").split():
-                    archs.append(feed.group(1))
                 else:
                     continue
             else:
@@ -897,7 +892,6 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
 
     for arch in archs:
         pkg_path = feed_info_dir+"%s/"%arch
-        src_dep_bpkg = dep_bpkg
         if version:
             if "${SRCPV}" in version:
                 pattern = version.replace("${SRCPV}","*")
