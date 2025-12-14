@@ -860,7 +860,6 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     version_mismatch = True
     same_arch = False
     pkg_arch = d.getVar("PACKAGE_ARCH")
-    prefix = d.getVar('MLPREFIX') or ""
     ipkmode = False
     if not dep_bpkg:
         return (ipkmode, version_mismatch, same_arch)
@@ -893,6 +892,9 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     for arch in archs:
         pkg_path = feed_info_dir+"%s/"%arch
         if version:
+            prefix = d.getVar("BBEXTENDVARIANT")
+            if prefix and  not src_dep_bpkg.startswith(prefix):
+                src_dep_bpkg = prefix + "-" +src_dep_bpkg
             if "${SRCPV}" in version:
                 pattern = version.replace("${SRCPV}","*")
                 search_pattern = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{pattern}")
