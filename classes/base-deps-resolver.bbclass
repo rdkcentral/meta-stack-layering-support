@@ -1374,7 +1374,7 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
             if not line:  # Blank line indicates the end of a package entry
                 if package != None:
                     if variant:
-                        source = variant+source
+                        source = variant + source
                     if not package.endswith("-dev") and not package.endswith("-dbg") and not package.endswith("-staticdev") and not package.endswith("-doc") and not package.endswith("-src"):
                         package_info[package] = (source, dependencies)
                     if not package.endswith("-doc") and not package.endswith("-src"):
@@ -1404,9 +1404,9 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
             if line.startswith('Package:'):
                 package = line.split('Package: ', 1)[1]
                 if package.startswith("lib32-"):
-                    variant= "lib32-"
+                    variant = "lib32-"
                 else:
-                    variant= ""
+                    variant = ""
             elif line.startswith('Provides:'):
                 provides = line.split('Provides: ', 1)[1]
             elif line.startswith('Source:'):
@@ -1426,7 +1426,7 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
 
     if package != None:
         if variant:
-            source = variant+source
+            source = variant + source
         if not package.endswith("-doc") and not package.endswith("-src"):
             pkg_path = os.path.join(ipk_pkgdata_dir+"%s/"%arch_name, ("package/%s")%(package))
             src_path = os.path.join(ipk_pkgdata_dir+"%s/"%arch_name, "source/%s"%source)
