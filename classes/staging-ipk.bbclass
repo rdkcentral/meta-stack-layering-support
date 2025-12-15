@@ -126,32 +126,6 @@ python do_kernel_devel_create(){
         bb.note("kernel devel build artifacts is not present in IPK feeds")
 }
 
-def check_staging_exclusion(d, pkg, pkg_path):
-    is_excluded = False
-    skip_pkgs = []
-    if not pkg or not d.getVar("IPK_STAGING_EXCLUSION_LIST"):
-        return is_excluded
-    pkg = pkg.strip()
-    prefix = d.getVar('MLPREFIX') or ""
-    if prefix and pkg.startswith(prefix):
-        non_prefix_pkg = pkg[len(prefix):]
-    if non_prefix_pkg in (d.getVar("IPK_STAGING_EXCLUSION_LIST") or "").split():
-        is_excluded = True
-    else:
-        import glob
-        for skip_pkg in (d.getVar("IPK_STAGING_EXCLUSION_LIST") or "").split():
-            skip_pkg = prefix+skip_pkg
-            recipe_info = glob.glob(pkg_path + "/source/%s_*"%(skip_pkg))
-            if recipe_info:
-                recipe_info = recipe_info[0]
-                with open(recipe_info, 'r') as file:
-                    lines = file.readlines()
-                for line in lines:
-                    skip_pkgs.append(line[:-1])
-        if pkg in skip_pkgs:
-            is_excluded = True
-    return is_excluded
-
 # Install the dependent ipks to the component sysroot
 fakeroot python do_populate_ipk_sysroot(){
     import re
@@ -230,7 +204,6 @@ fakeroot python do_populate_ipk_sysroot(){
         return
 
     for pkg in ipk_pkgs:
-        is_excluded = False
         dev_pkgs, staticdev_pkgs, rel_pkgs = ([] for i in range(3))
         pkg_ver = ""
         recipe_info = ""
@@ -297,8 +270,6 @@ fakeroot python do_populate_ipk_sysroot(){
                             arch_check =  True
                 if arch_check:
                     break
-            if check_staging_exclusion(d,pkg, pkg_path):
-                is_excluded = True
 
             if recipe_info:
                 with open(recipe_info, 'r') as file:
@@ -320,8 +291,7 @@ fakeroot python do_populate_ipk_sysroot(){
                     if prefix and not dev_pkg.startswith(prefix) and "firmware" not in dev_pkg:
                             continue
                     if dev_pkg not in inst_list:
-                        if not is_excluded:
-                            inst_list.append(dev_pkg)
+                        inst_list.append(dev_pkg)
             if staticdev_pkgs :
                 for staticdev_pkg in staticdev_pkgs:
                     if pkg_ver:
@@ -329,8 +299,7 @@ fakeroot python do_populate_ipk_sysroot(){
                     if prefix and not staticdev_pkg.startswith(prefix) and "firmware" not in staticdev_pkg:
                             continue
                     if staticdev_pkg not in inst_list:
-                        if not is_excluded:
-                            inst_list.append(staticdev_pkg)
+                        inst_list.append(staticdev_pkg)
             if rel_pkgs:
                 for rel_pkg in rel_pkgs:
                     if pkg_ver:
@@ -338,8 +307,7 @@ fakeroot python do_populate_ipk_sysroot(){
                     if prefix and not rel_pkg.startswith(prefix) and "firmware" not in rel_pkg:
                             continue
                     if rel_pkg not in inst_list:
-                        if not is_excluded:
-                            inst_list.append(rel_pkg)
+                        inst_list.append(rel_pkg)
 
     #Check and Install kernel and device tree
     for arch in archs:
