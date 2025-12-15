@@ -893,7 +893,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
         pkg_path = feed_info_dir+"%s/"%arch
         if version:
             prefix = d.getVar("BBEXTENDVARIANT")
-            if prefix and  not src_dep_bpkg.startswith(prefix):
+            if prefix and not src_dep_bpkg.startswith(prefix):
                 src_dep_bpkg = prefix + "-" +src_dep_bpkg
             if "${SRCPV}" in version:
                 pattern = version.replace("${SRCPV}","*")
