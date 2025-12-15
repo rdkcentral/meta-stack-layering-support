@@ -1357,6 +1357,7 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
     import os
     package_info = {}
     dependencies = []
+    prefixes = []
     source = None
     package = None
     provides = None
@@ -1368,6 +1369,14 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
         bb.utils.mkdirhier(ipk_pkgdata_dir+"%s/package/"%arch_name)
     if not os.path.exists(ipk_pkgdata_dir+"%s/source/"%arch_name):
         bb.utils.mkdirhier(ipk_pkgdata_dir+"%s/source/"%arch_name)
+
+    multilibs = d.getVar('MULTILIBS') or ""
+    if multilibs:
+        for ext in multilibs.split():
+            eext = ext.split(':')
+            if len(eext) > 1 and eext[0] == 'multilib':
+                prefixes.append(eext[1])
+
     with open(file_path, 'r', encoding='utf-8') as file:
         for line in file:
             line = line.strip()
@@ -1403,10 +1412,13 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
                 continue
             if line.startswith('Package:'):
                 package = line.split('Package: ', 1)[1]
-                if package.startswith("lib32-"):
-                    variant = "lib32-"
-                else:
-                    variant = ""
+                variant = ""
+                if prefixes:
+                    for p in prefixes:
+                        p = p + "-"
+                        if package.startswith(p):
+                            variant = p
+                            break
             elif line.startswith('Provides:'):
                 provides = line.split('Provides: ', 1)[1]
             elif line.startswith('Source:'):
