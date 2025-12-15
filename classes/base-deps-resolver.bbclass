@@ -422,10 +422,7 @@ python do_install_ipk_recipe_sysroot () {
                 else :
                     break
         recipe_info = ""
-        if prefix and ldep.startswith(prefix):
-            src_name = ldep[len(prefix):]
-        else:
-            src_name = ldep
+        src_name = ldep
 
         feed_info_dir = d.getVar("FEED_INFO_DIR")
         for arch in archs:
@@ -555,13 +552,11 @@ def get_ipk_list(d, pkg_arch):
     import shutil
     ipk_list = []
     pn = d.getVar("PN")
+    prefix = d.getVar('MLPREFIX') or ""
     pkg_arch = d.getVar("PACKAGE_ARCH")
     version = "%s-%s" % (d.getVar('PV'), d.getVar('PR'))
     pkg_ver = version.replace("AUTOINC","0")
     feed_info_dir = d.getVar("FEED_INFO_DIR")
-    prefix = d.getVar('MLPREFIX') or ""
-    if prefix and pn.startswith(prefix):
-       pn = pn[len(prefix):]
     src_path = os.path.join(feed_info_dir, pkg_arch)
     recipe_info = glob.glob(src_path + "/source/%s_*"%(pn))
     if recipe_info:
@@ -865,15 +860,11 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     version_mismatch = True
     same_arch = False
     pkg_arch = d.getVar("PACKAGE_ARCH")
-    prefix = d.getVar('MLPREFIX') or ""
     ipkmode = False
     if not dep_bpkg:
         return (ipkmode, version_mismatch, same_arch)
     # Check dep package is in IPK mode
-    if prefix and dep_bpkg.startswith(prefix):
-        src_dep_bpkg = dep_bpkg[len(prefix):]
-    else:
-        src_dep_bpkg = dep_bpkg
+    src_dep_bpkg = dep_bpkg
     staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
 
     if is_excluded_pkg(d, dep_bpkg):
@@ -891,8 +882,6 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
             if not skip_recipe_ipk_pkgs and "oss" in feed.group(1):
                 if d.getVar("STACK_LAYER_EXTENSION") and feed.group(1) in d.getVar("STACK_LAYER_EXTENSION").split():
                     archs.append(feed.group(1))
-                elif src_dep_bpkg in (d.getVar("GCC_PKGS") or "").split() or src_dep_bpkg in (d.getVar("GLIBC_PKGS") or "").split():
-                    archs.append(feed.group(1))
                 else:
                     continue
             else:
@@ -902,11 +891,10 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
 
     for arch in archs:
         pkg_path = feed_info_dir+"%s/"%arch
-        if prefix and dep_bpkg.startswith(prefix):
-            src_dep_bpkg = dep_bpkg[len(prefix):]
-        else:
-            src_dep_bpkg = dep_bpkg
         if version:
+            prefix = d.getVar("BBEXTENDVARIANT")
+            if prefix and not src_dep_bpkg.startswith(prefix):
+                src_dep_bpkg = prefix + "-" + src_dep_bpkg
             if "${SRCPV}" in version:
                 pattern = version.replace("${SRCPV}","*")
                 search_pattern = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{pattern}")
@@ -1369,6 +1357,7 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
     import os
     package_info = {}
     dependencies = []
+    prefixes = []
     source = None
     package = None
     provides = None
@@ -1380,11 +1369,21 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
         bb.utils.mkdirhier(ipk_pkgdata_dir+"%s/package/"%arch_name)
     if not os.path.exists(ipk_pkgdata_dir+"%s/source/"%arch_name):
         bb.utils.mkdirhier(ipk_pkgdata_dir+"%s/source/"%arch_name)
+
+    multilibs = d.getVar('MULTILIBS') or ""
+    if multilibs:
+        for ext in multilibs.split():
+            eext = ext.split(':')
+            if len(eext) > 1 and eext[0] == 'multilib':
+                prefixes.append(eext[1])
+
     with open(file_path, 'r', encoding='utf-8') as file:
         for line in file:
             line = line.strip()
             if not line:  # Blank line indicates the end of a package entry
                 if package != None:
+                    if variant:
+                        source = variant + source
                     if not package.endswith("-dev") and not package.endswith("-dbg") and not package.endswith("-staticdev") and not package.endswith("-doc") and not package.endswith("-src"):
                         package_info[package] = (source, dependencies)
                     if not package.endswith("-doc") and not package.endswith("-src"):
@@ -1411,9 +1410,15 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
                             create_version_info(d,version,package)
                         package = provides = source = None
                 continue
-
             if line.startswith('Package:'):
                 package = line.split('Package: ', 1)[1]
+                variant = ""
+                if prefixes:
+                    for p in prefixes:
+                        p = p + "-"
+                        if package.startswith(p):
+                            variant = p
+                            break
             elif line.startswith('Provides:'):
                 provides = line.split('Provides: ', 1)[1]
             elif line.startswith('Source:'):
@@ -1432,6 +1437,8 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
         d.setVar("IPK_DEPS_MAPPING_LIST",ipk_deps_mapping)
 
     if package != None:
+        if variant:
+            source = variant + source
         if not package.endswith("-doc") and not package.endswith("-src"):
             pkg_path = os.path.join(ipk_pkgdata_dir+"%s/"%arch_name, ("package/%s")%(package))
             src_path = os.path.join(ipk_pkgdata_dir+"%s/"%arch_name, "source/%s"%source)
