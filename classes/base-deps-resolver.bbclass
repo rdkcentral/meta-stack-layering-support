@@ -635,12 +635,16 @@ def check_depends_version_change(d):
         return is_target
 
     import glob
+    prefix = d.getVar('MLPREFIX') or ""
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     deps = d.getVar("DEPENDS",True).split()
     for dep in deps:
         version = d.getVar("PV:pn-%s"%dep)
         if not version:
-            continue
+            if prefix and dep.startswith(prefix):
+                version = d.getVar("PV:pn-%s"%dep[len(prefix):])
+            if not version:
+                continue
         for arch in archs:
             if not arch or  arch  == " ":
                 continue
