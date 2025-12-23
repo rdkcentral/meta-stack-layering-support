@@ -1534,7 +1534,7 @@ def print_pkgs_in_src_mode(d):
         if src_mode_pkgs:
             list_native_pkgs = []
             for pkg in src_mode_pkgs:
-                file = pn_value = pkg[len(prefix):-19]
+                file = pkg[len(prefix):-19]
                 list_native_pkgs.append(file)
             bb.note("::: Packages from %s in src mode :::"%arch)
             for i in range(0, len(list_native_pkgs), 5):
