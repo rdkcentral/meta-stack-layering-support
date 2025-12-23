@@ -629,12 +629,16 @@ def check_depends_version_change(d):
         return is_target
 
     import glob
+    prefix = d.getVar('MLPREFIX') or ""
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     deps = d.getVar("DEPENDS",True).split()
     for dep in deps:
         version = d.getVar("PV:pn-%s"%dep)
         if not version:
-            continue
+            if prefix and dep.startswith(prefix):
+                version = d.getVar("PV:pn-%s"%dep[len(prefix):])
+            if not version:
+                continue
         for arch in archs:
             if not arch or  arch  == " ":
                 continue
@@ -735,13 +739,16 @@ python update_recipe_deps_handler() {
                 e.data.appendVarFlag('do_packagedata', 'prefuncs', ' do_clean_pkgdata')
                 e.data.appendVarFlag('do_packagedata_setscene', 'prefuncs', ' do_clean_pkgdata')
             if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
+                pn_orig = pn
+                if variant:
+                    pn  = f"{variant}-{pn}"
                 if not os.path.exists(feed_info_dir+"src_mode/"):
                     bb.utils.mkdirhier(feed_info_dir+"src_mode/")
                 open(feed_info_dir+"src_mode/%s"%pn, 'w').close()
-                if version_check and not check_targets(e.data, pn, variant):
-                    pref_version = d.getVar("PREFERRED_VERSION_%s"%pn)
+                if version_check and not check_targets(e.data, pn_orig, variant):
+                    pref_version = d.getVar("PREFERRED_VERSION_%s"%pn_orig)
                     if not pref_version:
-                        pref_version = d.getVar("PREFERRED_VERSION:%s"%pn)
+                        pref_version = d.getVar("PREFERRED_VERSION:%s"%pn_orig)
                     if pref_version:
                         pref_version = pref_version.split("%")[0]
                         if pref_version in version:
@@ -1723,8 +1730,6 @@ python get_pkgs_handler () {
                     continue
 
                 for dep in dependencies:
-                    if dep.startswith("lib32-"):
-                        dep = dep[6:]
                     if os.path.exists(feed_info_dir+"src_mode/%s.major"%dep):
                         if not update_check:
                             update_check = True
