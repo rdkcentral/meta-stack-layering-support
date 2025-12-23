@@ -260,33 +260,27 @@ python do_package_write_ipk:prepend() {
         return
 }
 
+python do_src_build_metadata (){
+    bb.note("%s is running as source mode"%d.getVar("PN"))
+}
+SSTATETASKS += "do_src_build_metadata"
+python do_src_build_metadata_setscene () {
+    sstate_setscene(d)
+}
+
 python do_populate_sysroot:prepend() {
     import os
-    manifest_pre_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".prebuilt_mode"
-    manifest_src_mode = d.getVar("SSTATE_MANFILEPREFIX", True) + ".source_mode"
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
         staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
         if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
             skip = sls_generate_native_sysroot (d, staging_native_prebuilt_path)
             if skip:
-                open(manifest_pre_mode, 'w').close()
-                if os.path.exists(manifest_src_mode):
-                    os.remove(manifest_src_mode)
                 return
-            open(manifest_src_mode, 'w').close()
-            if os.path.exists(manifest_pre_mode):
-                os.remove(manifest_pre_mode)
     else:
         manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".ipk_download"
         if os.path.exists(manifest_name):
             ipk_sysroot_creation(d)
-            open(manifest_pre_mode, 'w').close()
-            if os.path.exists(manifest_src_mode):
-                os.remove(manifest_src_mode)
             return
-        open(manifest_src_mode, 'w').close()
-        if os.path.exists(manifest_pre_mode):
-            os.remove(manifest_pre_mode)
 }
 
 def sls_generate_native_sysroot(d, staging_native_prebuilt_path):
@@ -711,6 +705,8 @@ python update_recipe_deps_handler() {
                 update_build_tasks(e.data, arch, "native")
             elif pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant) :
                 update_build_tasks(d, arch, "native")
+            else:
+                bb.build.addtask('do_src_build_metadata','do_populate_sysroot',None,e.data)
         if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
             e.data.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
     else:
@@ -762,6 +758,7 @@ python update_recipe_deps_handler() {
                    e.data.appendVar("DEPENDS", " %s "%glibc_pkg)
 
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',e.data)
+            bb.build.addtask('do_src_build_metadata','do_package_write_ipk','do_populate_sysroot',e.data)
             e.data.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
             # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
             postfuncs = (e.data.getVarFlag('do_prepare_recipe_sysroot', 'postfuncs') or "").split()
@@ -1533,11 +1530,11 @@ def print_pkgs_in_src_mode(d):
     bb.note("List of Archs checking in source mode: %s"%checklist)
     for arch in checklist:
         prefix = d.getVar("SSTATE_MANFILEPREFIX_NATIVE_FILTER", True) + arch +"-"
-        src_mode_pkgs = glob.glob(prefix+"*.source_mode")
+        src_mode_pkgs = glob.glob(prefix+"*.src_build_metadata")
         if src_mode_pkgs:
             list_native_pkgs = []
             for pkg in src_mode_pkgs:
-                file = pn_value = pkg[len(prefix):-12]
+                file = pkg[len(prefix):-19]
                 list_native_pkgs.append(file)
             bb.note("::: Packages from %s in src mode :::"%arch)
             for i in range(0, len(list_native_pkgs), 5):
@@ -1738,4 +1735,4 @@ python get_pkgs_handler () {
 addhandler get_pkgs_handler
 get_pkgs_handler[eventmask] = "bb.event.DepTreeGenerated"
 
-do_build[recrdeptask] += "do_package_write_ipk"
+do_build[recrdeptask] += "do_package_write_ipk do_src_build_metadata"
