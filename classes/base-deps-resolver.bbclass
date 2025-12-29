@@ -617,7 +617,7 @@ def check_depends_on_targets(d):
             break
     return is_target
 
-def check_depends_version_change(d):
+def check_depends_version_change(d, variant):
     version_check = True
     is_target = False
     if d.getVar("DEPENDS_VERSION_CHECK") == "0":
@@ -629,16 +629,14 @@ def check_depends_version_change(d):
         return is_target
 
     import glob
-    prefix = d.getVar('MLPREFIX') or ""
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     deps = d.getVar("DEPENDS",True).split()
     for dep in deps:
         version = d.getVar("PV:pn-%s"%dep)
         if not version:
-            if prefix and dep.startswith(prefix):
-                version = d.getVar("PV:pn-%s"%dep[len(prefix):])
-            if not version:
-                continue
+            continue
+        if variant:
+            dep = f"{variant}-{dep}"
         for arch in archs:
             if not arch or  arch  == " ":
                 continue
@@ -720,7 +718,7 @@ python update_recipe_deps_handler() {
             e.data.appendVarFlag('do_deploy_setscene', 'prefuncs', ' do_clean_deploy_images')
         e.data.appendVar("DEPENDS", " pseudo-native")
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
-        if ipk_mode and not check_targets(e.data, pn, variant) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data):
+        if ipk_mode and not check_targets(e.data, pn, variant) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data, variant):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
             if not os.path.exists(skipped_pkg_dir):
                 bb.utils.mkdirhier(skipped_pkg_dir)
@@ -746,15 +744,7 @@ python update_recipe_deps_handler() {
                     bb.utils.mkdirhier(feed_info_dir+"src_mode/")
                 open(feed_info_dir+"src_mode/%s"%pn, 'w').close()
                 if version_check and not check_targets(e.data, pn_orig, variant):
-                    pref_version = d.getVar("PREFERRED_VERSION_%s"%pn_orig)
-                    if not pref_version:
-                        pref_version = d.getVar("PREFERRED_VERSION:%s"%pn_orig)
-                    if pref_version:
-                        pref_version = pref_version.split("%")[0]
-                        if pref_version in version:
-                            open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
-                    else:
-                        open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
+                    open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
             e.data.appendVar("DEPENDS", " opkg-native ")
             if bb.data.inherits_class('packagegroup', e.data) and not bb.data.inherits_class('nativesdk', e.data) and not bb.data.inherits_class('allarch', d):
                gcc_pkgs = e.data.getVar("GCC_PKGS").split()
@@ -765,7 +755,7 @@ python update_recipe_deps_handler() {
                    e.data.appendVar("DEPENDS", " %s "%glibc_pkg)
 
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',e.data)
-            bb.build.addtask('do_src_build_metadata','do_package_write_ipk','do_populate_sysroot',e.data)
+            bb.build.addtask('do_src_build_metadata','do_package_write_ipk',None,e.data)
             e.data.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
             # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
             postfuncs = (e.data.getVarFlag('do_prepare_recipe_sysroot', 'postfuncs') or "").split()
@@ -861,7 +851,7 @@ def get_base_pkg_name(pkg_name):
 def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     import re
     import glob
-    version_mismatch = True
+    version_mismatch = False
     same_arch = False
     pkg_arch = d.getVar("PACKAGE_ARCH")
     ipkmode = False
@@ -896,6 +886,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     for arch in archs:
         pkg_path = feed_info_dir+"%s/"%arch
         if version:
+            version_mismatch = True
             prefix = d.getVar("BBEXTENDVARIANT")
             if prefix and not src_dep_bpkg.startswith(prefix):
                 src_dep_bpkg = prefix + "-" + src_dep_bpkg
@@ -913,6 +904,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
                 ipkmode = True
                 if arch == pkg_arch:
                     same_arch = True
+                version_mismatch = False
                 break
             # Check only the major version number
             src_list = glob.glob(pkg_path + "source/%s_%s*"%(src_dep_bpkg,version.split(".")[0]))
@@ -1700,7 +1692,6 @@ feed_index_creation[eventmask] = "bb.event.BuildCompleted"
 
 python get_pkgs_handler () {
     feed_info_dir = d.getVar("FEED_INFO_DIR")
-    update_check = False
     if isinstance(e,bb.event.DepTreeGenerated):
         pkg_path = d.getVar("TARGET_DEPS_LIST")
         targetdeps = []
@@ -1731,11 +1722,7 @@ python get_pkgs_handler () {
 
                 for dep in dependencies:
                     if os.path.exists(feed_info_dir+"src_mode/%s.major"%dep):
-                        if not update_check:
-                            update_check = True
                         bb.warn("%s version should update and rebuild. Dependency %s has changed with major version"%(source,dep))
-    if update_check:
-        bb.fatal("Update version and required rebuild")
 }
 addhandler get_pkgs_handler
 get_pkgs_handler[eventmask] = "bb.event.DepTreeGenerated"
