@@ -630,7 +630,11 @@ def check_depends_version_change(d, variant):
 
     import glob
     feed_info_dir = d.getVar("FEED_INFO_DIR")
-    deps = d.getVar("DEPENDS",True).split()
+    deps = []
+    for var in ("DEPENDS", "RDEPENDS"):
+        val = d.getVar(var, True)
+        if val:
+            deps.extend(val.split())
     for dep in deps:
         version = d.getVar("PV:pn-%s"%dep)
         if not version:
