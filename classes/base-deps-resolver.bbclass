@@ -891,7 +891,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
         version_mismatch = True
         if d.getVar("STACK_LAYER_EXTENSION") and pkg_arch in d.getVar("STACK_LAYER_EXTENSION").split():
             pkg_path = feed_info_dir+"%s/"%pkg_arch
-        else
+        else:
             return (ipkmode, version_mismatch, same_arch)
         prefix = d.getVar("BBEXTENDVARIANT")
         if prefix and not src_dep_bpkg.startswith(prefix):
