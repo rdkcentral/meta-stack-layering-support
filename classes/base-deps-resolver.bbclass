@@ -887,29 +887,30 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
     if not archs:
         return (ipkmode, version_mismatch, same_arch)
 
-    for arch in archs:
-        pkg_path = feed_info_dir+"%s/"%arch
-        if version:
-            version_mismatch = True
-            prefix = d.getVar("BBEXTENDVARIANT")
-            if prefix and not src_dep_bpkg.startswith(prefix):
-                src_dep_bpkg = prefix + "-" + src_dep_bpkg
-            if "${SRCPV}" in version:
-                pattern = version.replace("${SRCPV}","*")
-                search_pattern = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{pattern}")
-                src_list = glob.glob(search_pattern)
-                if src_list:
-                    src_path = src_list[0]
-                else:
-                    src_path = pkg_path + "source/%s_%s"%(src_dep_bpkg,version)
+    if version:
+        version_mismatch = True
+        if d.getVar("STACK_LAYER_EXTENSION") and pkg_arch in d.getVar("STACK_LAYER_EXTENSION").split():
+            pkg_path = feed_info_dir+"%s/"%pkg_arch
+        else
+            return (ipkmode, version_mismatch, same_arch)
+        prefix = d.getVar("BBEXTENDVARIANT")
+        if prefix and not src_dep_bpkg.startswith(prefix):
+            src_dep_bpkg = prefix + "-" + src_dep_bpkg
+        if "${SRCPV}" in version:
+            pattern = version.replace("${SRCPV}","*")
+            search_pattern = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{pattern}")
+            src_list = glob.glob(search_pattern)
+            if src_list:
+                src_path = src_list[0]
             else:
                 src_path = pkg_path + "source/%s_%s"%(src_dep_bpkg,version)
-            if os.path.exists(src_path):
-                ipkmode = True
-                if arch == pkg_arch:
-                    same_arch = True
-                version_mismatch = False
-                break
+        else:
+            src_path = pkg_path + "source/%s_%s"%(src_dep_bpkg,version)
+        if os.path.exists(src_path):
+            ipkmode = True
+            same_arch = True
+            version_mismatch = False
+        else:
             # Check only the major version number
             src_list = glob.glob(pkg_path + "source/%s_%s*"%(src_dep_bpkg,version.split(".")[0]))
             if src_list:
@@ -917,8 +918,9 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
                 if os.path.exists(src_path):
                     # Build from source
                     version_mismatch = False
-                    break
-        else:
+    else:
+        for arch in archs:
+            pkg_path = feed_info_dir+"%s/"%arch
             src_path = pkg_path + "source/%s"%src_dep_bpkg
             src_list = glob.glob(pkg_path + "source/%s_*"%src_dep_bpkg)
             if src_list:
