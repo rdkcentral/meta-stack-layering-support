@@ -10,17 +10,26 @@ STAGING_BINDIR_TOOLCHAIN = "${STAGING_DIR_NATIVE}${bindir_native}/${TARGET_ARCH}
 To ensure that the prebuilt libraries are usable across all stack layers, we should standardize the TARGET_VENDOR value across the entire system.<br />
 If we do not use a common value for this variable, we won't be able to use the toolchain's prebuilt libraries, such as libgcc.<br />
 
+By default TARGET_VENDOR is set with "-rdk".<br />
+
 ### Steps to generate the prebuilt native packages support in VM/docker:
+- Add meta-stack-layering-support to your project. <br />
+     Use the meta-stack-layering-support tag 2.0.3 or higher
 - Set GENERATE_NATIVE_PKG_PREBUILT to "1". <br />
      Default value is "0" <br /> 
-- Build the required native packages using bitbake command. Example "bitbake opkg-native".<br />
-     It will generate the [pkg-name]-[version].tar.gz file in "${NATIVE_PREBUILT_DIR}".<br /> 
+- Create a packagegroup recipe for native packages with the list of all required native packages.
+- Build the packagegroup using bitbake command. <br />
+     It will generate the [pkg-name]-[version].tar.gz file  for each native packages lisyed in the packagegroup in "${NATIVE_PREBUILT_DIR}".<br /> 
      Default is NATIVE_PREBUILT_DIR = "${TMPDIR}/native-pre-pkgs <br /> 
+     We can update single packagegroup alos.
+     Example: build-rdk-arm64/tmp/native-pre-pkgs/openssl-native_3.0.15-r0.tar.gz <br /> 
+     Build the required native packages using bitbake command. <br />
+     Example "bitbake opkg-native".<br />
+     It will generate the [pkg-name]-[version].tar.gz file  for openssl-native package in "${NATIVE_PREBUILT_DIR}".<br /> 
      Example: build-rdk-arm64/tmp/native-pre-pkgs/openssl-native_3.0.15-r0.tar.gz <br /> 
 - Copy the native prebuilt package tar files from build directory "${NATIVE_PREBUILT_DIR}" to the Docker or VM path "${DOCKER_NATIVE_SYSROOT}". <br />
      The default path is "/opt/staging-native/x86_64". <br /> 
      If you need to copy to a different path, you should update the path variable "DOCKER_NATIVE_SYSROOT" using new path. <br />
-- Use the meta-stack-layering-support tag 2.0.3 or higher
 
 ### Advantages
 - Traceability: Packages can be tracked using version information.
