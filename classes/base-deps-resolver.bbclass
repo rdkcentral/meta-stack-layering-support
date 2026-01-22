@@ -385,10 +385,12 @@ python do_install_ipk_recipe_sysroot () {
         return
 
     have_ipk_inclusion = True
-    if bb.data.inherits_class('multilib_global', d) and not d.getVar('MLPREFIX'):
+    if bb.data.inherits_class('multilib_global', d) and not prefix:
         have_ipk_inclusion = False
     if have_ipk_inclusion:
         for ipk in (d.getVar("IPK_INCLUSION_LIST") or "").split():
+            if prefix:
+                ipk = prefix+ipk
             ldeps.append(ipk)
 
     dev_list = ["-dev","-staticdev"]
