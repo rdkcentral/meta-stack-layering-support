@@ -191,6 +191,8 @@ fakeroot python do_populate_ipk_sysroot(){
                 ipk_pkgs.append(dep)
 
     for ipk in (d.getVar("IPK_INCLUSION_LIST") or "").split():
+        if prefix:
+            ipk = prefix+ipk
         ipk_pkgs.append(ipk)
 
     archs = []
