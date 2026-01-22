@@ -272,7 +272,7 @@ python do_populate_sysroot:prepend() {
     import os
     if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
         staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
-        if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
+        if d.getVar("PREBUILT_NATIVE_SUPPORT") == "1" and staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
             skip = sls_generate_native_sysroot (d, staging_native_prebuilt_path)
             if skip:
                 return
@@ -385,10 +385,12 @@ python do_install_ipk_recipe_sysroot () {
         return
 
     have_ipk_inclusion = True
-    if bb.data.inherits_class('multilib_global', d) and not d.getVar('MLPREFIX'):
+    if bb.data.inherits_class('multilib_global', d) and not prefix:
         have_ipk_inclusion = False
     if have_ipk_inclusion:
         for ipk in (d.getVar("IPK_INCLUSION_LIST") or "").split():
+            if prefix:
+                ipk = prefix+ipk
             ldeps.append(ipk)
 
     dev_list = ["-dev","-staticdev"]
@@ -697,7 +699,7 @@ python update_recipe_deps_handler() {
     pn = e.data.getVar('PN')
     version = get_version_info(e.data)
     if bb.data.inherits_class('native', e.data) or bb.data.inherits_class('cross', e.data):
-        if staging_native_prebuilt_path:
+        if staging_native_prebuilt_path and d.getVar("PREBUILT_NATIVE_SUPPORT") == "1":
             exclusion_list = (e.data.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
             prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
             if not os.path.exists(prebuilt_native_pkg_path):
@@ -732,9 +734,9 @@ python update_recipe_deps_handler() {
             bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
             if bb.data.inherits_class('update-alternatives',e.data):
                 bb.build.addtask('do_get_alternative_pkg','do_package_write_ipk', 'do_ipk_download do_populate_sysroot',e.data)
-        elif staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
+        elif d.getVar("PREBUILT_NATIVE_SUPPORT") == "1" and staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
             update_build_tasks(e.data, arch, "native")
-        elif staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and "gcc-initial" in pn and not gcc_source_mode_check(e.data, pn, variant):
+        elif d.getVar("PREBUILT_NATIVE_SUPPORT") == "1" and staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and "gcc-initial" in pn and not gcc_source_mode_check(e.data, pn, variant):
             update_build_tasks(e.data, arch, "native")
         else:
             if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', e.data):
@@ -863,7 +865,6 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
         return (ipkmode, version_mismatch, same_arch)
     # Check dep package is in IPK mode
     src_dep_bpkg = dep_bpkg
-    staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
 
     if is_excluded_pkg(d, dep_bpkg):
         return (ipkmode, version_mismatch, same_arch)
