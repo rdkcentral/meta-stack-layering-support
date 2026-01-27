@@ -1612,10 +1612,18 @@ def generate_packages_and_versions_md(d):
 OPKG_UTILS_SYSROOT = "${COMPONENTS_DIR}/${BUILD_ARCH}/opkg-utils-native"
 OPKG_INDEX_FILE = "${OPKG_UTILS_SYSROOT}${bindir_native}/opkg-make-index"
 
-def generate_native_prebuilts_tar(d):
+def generate_native_prebuilts_tar(d, deploy_dir):
+    import os
+    import shutil
+    feed_src_path = ""
     sys_dir = d.expand("${COMPONENTS_DIR}/${BUILD_ARCH}/")
     dest_path = d.getVar("NATIVE_PREBUILT_DIR")
-    bb.utils.mkdirhier(dest_path)
+    if not os.path.exists(dest_path):
+        bb.utils.mkdirhier(dest_path)
+    toolchain_arch = d.getVar("TOOLCHAIN_LAYER_ARCH")
+    if toolchain_arch:
+        feed_src_path = os.path.join(deploy_dir, toolchain_arch)
+        feed_dst_path = os.path.join(dest_path, "ipk-feeds/%s"%toolchain_arch)
     if os.path.exists(sys_dir):
         cmds = []
         for item in os.listdir(sys_dir):
@@ -1630,8 +1638,14 @@ def generate_native_prebuilts_tar(d):
                             lines = fd.readlines()
                         version = "_"+lines[0]
                     tar_file = os.path.join(dest_path,"%s%s.tar.gz"%(item,version))
-                    cmds.append('cd %s && tar --exclude="fixmepath.cmd" -czf %s %s' %(sys_dir,tar_file, item))
-        oe.utils.multiprocess_launch(exec_sls_cmd, cmds, d)
+                    if not os.path.exists(tar_file):
+                        cmds.append('cd %s && tar --exclude="fixmepath.cmd" -czf %s %s' %(sys_dir,tar_file, item))
+        if cmds:
+            oe.utils.multiprocess_launch(exec_sls_cmd, cmds, d)
+    if os.path.isdir(feed_src_path):
+        if not os.path.exists(feed_dst_path):
+            bb.utils.mkdirhier(feed_dst_path)
+            shutil.copytree(feed_src_path, feed_dst_path, dirs_exist_ok=True)
 
 python feed_index_creation () {
     if e.data.getVar("STACK_LAYER_EXTENSION") or e.data.getVar("TARGET_BASED_IPK_STAGING") == "1":
@@ -1644,13 +1658,11 @@ python feed_index_creation () {
             shutil.rmtree(cache_folder)
 
     print_pkgs_in_src_mode(d)
-    if e.data.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1":
-        generate_native_prebuilts_tar(d)
 
     if e.data.getVar('GENERATE_IPK_VERSION_DOC') == "1":
         generate_packages_and_versions_md(d)
 
-    if e.data.getVar("DEPLOY_IPK_FEED") == "0":
+    if e.data.getVar("DEPLOY_IPK_FEED") == "0" and not e.data.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1":
         return
     cmds = set()
     opkg_index_cmd = bb.utils.which(os.getenv('PATH'), "opkg-make-index")
@@ -1690,6 +1702,8 @@ python feed_index_creation () {
         return
 
     oe.utils.multiprocess_launch(exec_sls_cmd, cmds, e.data)
+    if e.data.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1":
+        generate_native_prebuilts_tar(d, deploy_dir)
 }
 
 addhandler feed_index_creation
