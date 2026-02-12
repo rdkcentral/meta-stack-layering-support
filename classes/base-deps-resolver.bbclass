@@ -1027,7 +1027,6 @@ def update_dep_pkgs(e):
 
     # Handle IMAGE_INSTALL which needs recipe to process
     if bb.data.inherits_class('image', d):
-        ipk_pkg_inst = []
         gen_debugfs = d.getVar('IMAGE_GEN_DEBUGFS')
         if gen_debugfs == "1":
             pkgs_inst = (e.data.getVar('PACKAGE_INSTALL') or "").strip()
