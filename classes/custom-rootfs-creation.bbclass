@@ -32,24 +32,8 @@ def get_pkg_install_version(d,release_data_file, pkggrp):
                 fw.write(pkg +"=" +pkgdata[pkg]+"\n")
 
 python do_update_install_pkgs_with_version() {
-    ipk_pkg_install = (d.getVar('IPK_IMAGE_INSTALL') or "").strip()
     m_pkggrp = []
-    if ipk_pkg_install:
-        ipk_install = ipk_pkg_install.split()
-        for ipk in ipk_install:
-            if ipk == " ":
-                continue
-            pkg_install = d.getVar("IMAGE_INSTALL")
-            d.setVar('IMAGE_INSTALL', ipk +" " +pkg_install)
-            bb.note("[custom-rootfs] Updated IMAGE_INSTALL with ipk pkgs : %s"%ipk)
     prefix = d.getVar('MLPREFIX') or ""
-    gen_debugfs = d.getVar('IMAGE_GEN_DEBUGFS')
-    if ipk_pkg_install and gen_debugfs == "1":
-        pkgs_list = ipk_pkg_install.split()
-        for pkg in pkgs_list:
-            if prefix and not pkg.startswith(prefix):
-                pkg = prefix+pkg
-            d.appendVar("IMAGE_INSTALL_DEBUGFS", " %s-dbg"%pkg)
 
     ipk_pkg_install = (d.getVar('IPK_ROOTFS_BOOTSTRAP_INSTALL') or "").strip()
     if ipk_pkg_install:

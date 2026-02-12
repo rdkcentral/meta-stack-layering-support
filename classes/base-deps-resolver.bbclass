@@ -1027,14 +1027,16 @@ def update_dep_pkgs(e):
 
     # Handle IMAGE_INSTALL which needs recipe to process
     if bb.data.inherits_class('image', d):
+        gen_debugfs = d.getVar('IMAGE_GEN_DEBUGFS')
+        if gen_debugfs == "1":
+            pkgs_inst = (e.data.getVar('PACKAGE_INSTALL') or "").strip()
+            if pkgs_inst:
+                for pkg in pkgs_inst.split():
+                    dbg_pkg = pkg + "-dbg"
+                    (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, dbg_pkg)
+                    if ipk_mode:
+                        e.data.appendVar("IMAGE_INSTALL_DEBUGFS", " "+ dbg_pkg)
 
-        ipk_pkg_inst = []
-        pkgs_inst = (e.data.getVar('IMAGE_INSTALL') or "").strip()
-        if pkgs_inst:
-            ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False)
-            e.data.setVar("IMAGE_INSTALL", ' '.join(src_pkgs))
-            if ipk_pkgs:
-                e.data.setVar('IPK_IMAGE_INSTALL',' '.join(ipk_pkgs))
         pkgs_inst = (e.data.getVar('RDEPENDS') or "").strip()
         if pkgs_inst:
             ipk_pkgs,src_pkgs = get_inter_layer_pkgs(e, pkg_pn, pkgs_inst, False)
