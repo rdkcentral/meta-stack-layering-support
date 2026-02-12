@@ -33,7 +33,6 @@ def get_pkg_install_version(d,release_data_file, pkggrp):
 
 python do_update_install_pkgs_with_version() {
     m_pkggrp = []
-    gen_debugfs = d.getVar('IMAGE_GEN_DEBUGFS')
     prefix = d.getVar('MLPREFIX') or ""
 
     ipk_pkg_install = (d.getVar('IPK_ROOTFS_BOOTSTRAP_INSTALL') or "").strip()
