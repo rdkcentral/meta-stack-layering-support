@@ -274,5 +274,5 @@ python do_update_sdk_opkg_config () {
     d.setVar('BUILD_IMAGES_FROM_FEEDS', "1")
 }
 do_populate_sdk[prefuncs] += "do_update_sdk_opkg_config"
-do_populate_sdk[depends] += "depmodwrapper-cross:do_populate_sysroot"
+do_populate_sdk[depends] += "depmodwrapper-cross:do_populate_sysroot nss-native:do_populate_sysroot qemuwrapper-cross:do_populate_sysroot"
 do_populate_sdk[network] = "1"
