@@ -235,15 +235,6 @@ python do_update_sdk_opkg_config () {
     import re
 
     pkg_archs = d.getVar("ALL_MULTILIB_PACKAGE_ARCHS")
-    pn = d.getVar("PN")
-
-    availabe_archs = []
-    deploy_dir = d.getVar("DEPLOY_DIR_IPK")
-    if os.path.exists(deploy_dir):
-        entries = os.listdir(deploy_dir)
-        for entry in entries:
-            if os.path.isdir(os.path.join(deploy_dir, entry)):
-                availabe_archs.append(entry)
 
     ipk_feed_uris = []
     feed_uri = ""
