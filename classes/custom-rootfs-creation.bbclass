@@ -230,3 +230,40 @@ do_rootfs[prefuncs] += "do_update_opkg_config"
 do_rootfs[depends] += "shadow-native:do_populate_sysroot"
 do_rootfs[network] = "1"
 do_copy_boot_files[nostamp] = "1"
+
+python do_update_sdk_opkg_config () {
+    import re
+
+    pkg_archs = d.getVar("ALL_MULTILIB_PACKAGE_ARCHS")
+
+    ipk_feed_uris = []
+    feed_uri = ""
+    entry = (d.getVar("STACK_LAYER_EXTENSION") or "").split(" ")
+
+    for arch in pkg_archs.split():
+        feed_from_server = False
+        for line in (d.getVar('IPK_FEED_URIS') or "").split():
+            feed_match = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
+            if feed_match is not None:
+                feed_name = feed_match.group(1)
+                if feed_name == arch and  arch not in entry:
+                    feed_from_server = True
+                    ipk_feed_uris.append(line)
+                    break
+        if feed_from_server:
+            continue
+        pkgs_dir = os.path.join(d.getVar("DEPLOY_DIR_IPK"), arch)
+        if os.path.exists(pkgs_dir):
+            pkgs_dir = os.path.join(d.getVar('WORKDIR'),"oe-sdk-repo/%s"%arch)
+            if not os.path.exists(pkgs_dir):
+                bb.utils.mkdirhier(pkgs_dir)
+            feed_uri = arch+"##"+"file:"+pkgs_dir+"\n"
+            ipk_feed_uris.append(feed_uri)
+
+    d.setVar("IPK_FEED_URIS"," ".join(ipk_feed_uris))
+
+    d.setVar('BUILD_IMAGES_FROM_FEEDS', "1")
+}
+do_populate_sdk[prefuncs] += "do_update_sdk_opkg_config"
+do_populate_sdk[depends] += "depmodwrapper-cross:do_populate_sysroot nss-native:do_populate_sysroot qemuwrapper-cross:do_populate_sysroot"
+do_populate_sdk[network] = "1"
