@@ -870,6 +870,12 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
         return (ipkmode, version_mismatch, same_arch)
 
     feed_info_dir = d.getVar("FEED_INFO_DIR")
+    
+    # --- Force source mode when version uses SRCPV ---
+
+    if version and ("SRCPV" in version):
+        return (False, False, False)
+
     skip_recipe_ipk_pkgs = True if "1" == d.getVar('SKIP_RECIPE_IPK_PKGS') else False
 
     archs = []
