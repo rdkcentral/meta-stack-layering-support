@@ -922,10 +922,10 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
                     src_path = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
             else:
                 src_path = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
-                if os.path.exists(src_path):
-                     ipkmode = True
-                     if arch == pkg_arch:
-                         same_arch = True
+            if os.path.exists(src_path):
+                ipkmode = True
+                if arch == pkg_arch:
+                    same_arch = True
                 version_mismatch = False
                 break
                                    
