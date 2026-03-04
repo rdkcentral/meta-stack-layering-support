@@ -898,7 +898,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
             if "${SRCPV}" in version:
                 pn = d.getVar("PN")
                 srcrev = d.getVar("SRCREV") or ""
-		if len(srcrev) > 10:
+		        if len(srcrev) > 10:
                     srcrev = "AUTOINC+" + srcrev[:10]
                 pe = d.getVar("PE", True)
                 pr = d.getVar("PR", True)
