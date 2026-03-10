@@ -896,24 +896,11 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
             if prefix and not src_dep_bpkg.startswith(prefix):
                 src_dep_bpkg = prefix + "-" + src_dep_bpkg
             if "${SRCPV}" in version:
-                pn = d.getVar("PN")
                 srcrev = d.getVar("SRCREV") or ""
                 if len(srcrev) > 10:
                     srcrev = "AUTOINC+" + srcrev[:10]
-                pe = d.getVar("PE", True)
-                pr = d.getVar("PR", True)
-                pv = d.getVar("PV", True)
-                if pn == "broadcast-hal-api-github":
-                    bb.note(f"[check_deps_ipk_mode] PN={pn} ,PE={pe} , PV={pv} , PR={pr}, SRCPV={srcrev}, version='{version}'")
-                if "${SRCPV}" in pv:
-                    pv = pv.replace("${SRCPV}", srcrev)
-                    if pe:
-                        version = "%s:%s-%s" % (pe, pv, pr)
-                    else:
-                        version = "%s-%s" % (pv, pr)
-                    version = version.replace("AUTOINC","0")
-                    if pn == "broadcast-hal-api-github":
-                        bb.note(f"[check_deps_ipk_mode] PN={pn} ,PE={pe} , PV={pv} , PR={pr}, get_srcrev()='{srcrev}' , version={version}")
+                srcrev = srcrev.replace("AUTOINC","0")
+                version = version.replace("${SRCPV}",srcrev)
                 search_pattern = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
                 src_list = glob.glob(search_pattern)
                 if src_list:
