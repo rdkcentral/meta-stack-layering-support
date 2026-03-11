@@ -897,7 +897,10 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
                 src_dep_bpkg = prefix + "-" + src_dep_bpkg
             if "${SRCPV}" in version:
                 srcrev = d.getVar("SRCREV") or ""
-                if len(srcrev) > 10:
+                if srcrev in ("AUTOREV", "AUTOINC", ""):
+                    import bb.fetch2
+                    srcrev = bb.fetch2.get_srcrev(d)
+                elif len(srcrev) > 10:
                     srcrev = "AUTOINC+" + srcrev[:10]
                 srcrev = srcrev.replace("AUTOINC","0")
                 version = version.replace("${SRCPV}",srcrev)
