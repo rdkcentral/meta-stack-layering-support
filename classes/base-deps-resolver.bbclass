@@ -918,7 +918,6 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
                     same_arch = True
                 version_mismatch = False
                 break
-                                   
         else:
             src_path = pkg_path + "source/%s"%src_dep_bpkg
             src_list = glob.glob(pkg_path + "source/%s_*"%src_dep_bpkg)
