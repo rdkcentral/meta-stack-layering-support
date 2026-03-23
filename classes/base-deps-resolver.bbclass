@@ -896,29 +896,28 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
             if prefix and not src_dep_bpkg.startswith(prefix):
                 src_dep_bpkg = prefix + "-" + src_dep_bpkg
             if "${SRCPV}" in version:
-                pattern = version.replace("${SRCPV}","*")
-                search_pattern = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{pattern}")
+                srcrev = d.getVar("SRCREV") or ""
+                if srcrev in ("AUTOREV", "AUTOINC", ""):
+                    import bb.fetch2
+                    srcrev = bb.fetch2.get_srcrev(d)
+                elif len(srcrev) > 10:
+                    srcrev = "AUTOINC+" + srcrev[:10]
+                srcrev = srcrev.replace("AUTOINC","0")
+                version = version.replace("${SRCPV}",srcrev)
+                search_pattern = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
                 src_list = glob.glob(search_pattern)
                 if src_list:
                     src_path = src_list[0]
                 else:
-                    src_path = pkg_path + "source/%s_%s"%(src_dep_bpkg,version)
+                    src_path = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
             else:
-                src_path = pkg_path + "source/%s_%s"%(src_dep_bpkg,version)
+                src_path = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
             if os.path.exists(src_path):
                 ipkmode = True
                 if arch == pkg_arch:
                     same_arch = True
                 version_mismatch = False
                 break
-            # Check only the major version number
-            src_list = glob.glob(pkg_path + "source/%s_%s*"%(src_dep_bpkg,version.split(".")[0]))
-            if src_list:
-                src_path = src_list[0]
-                if os.path.exists(src_path):
-                    # Build from source
-                    version_mismatch = False
-                    break
         else:
             src_path = pkg_path + "source/%s"%src_dep_bpkg
             src_list = glob.glob(pkg_path + "source/%s_*"%src_dep_bpkg)
