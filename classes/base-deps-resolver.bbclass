@@ -690,6 +690,44 @@ python do_add_version(){
     with open(version_file, "w") as f:
         f.writelines(version)
 }
+def set_gcc_glibc_pkg_arch(d, pn):
+    import os
+    # --- Package lists (suffixes) ---
+    gcc_suffixes   = [(s or '').strip() for s in (d.getVar('GCC_PKGS')   or '').split() if s.strip()]
+    glibc_suffixes = [(s or '').strip() for s in (d.getVar('GLIBC_PKGS') or '').split() if s.strip()]
+
+    # --- Helper: does PN match any suffix (covers multilib like lib32-*) ---
+    def pn_matches_any_suffix(pn_val, suffixes):
+        return any(pn_val.endswith(sfx) for sfx in suffixes)
+
+    # --- Early return: only proceed for gcc/glibc packages ---
+    if not (pn_matches_any_suffix(pn, gcc_suffixes) or pn_matches_any_suffix(pn, glibc_suffixes)):
+        # Not a gcc/glibc package → do nothing
+        return
+
+    # --- Feed availability (remote or local) ---
+    enable = d.getVar('ENABLE_DOCKER_TARGET_TOOLCHAIN_FEED') == '1'
+    gcc_remote_feed = (d.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED')   or '').strip()
+    glibc_remote_feed = (d.getVar('PREBUILT_GLIBC_TARGET_REMOTE_FEED') or '').strip()
+
+    # FIX: use the correct local feed variables for each
+    gcc_local_feed   = d.getVar('PREBUILT_GCC_TARGET_DOCKER_FEED')   or ''
+    glibc_local_feed = d.getVar('PREBUILT_GLIBC_TARGET_DOCKER_FEED') or ''
+
+    set_gcc_arch   = bool(gcc_remote_feed)   or (enable and os.path.isdir(gcc_local_feed)) or d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1"
+    set_glibc_arch = bool(glibc_remote_feed) or (enable and os.path.isdir(glibc_local_feed)) or d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1"
+
+    # --- Set PACKAGE_ARCH based on which feed is available ---
+    gcc_arch   = d.getVar('GCC_LAYER_ARCH')
+    glibc_arch = d.getVar('GLIBC_LAYER_ARCH')
+
+    if set_gcc_arch and gcc_arch and pn_matches_any_suffix(pn, gcc_suffixes):
+        d.setVar('PACKAGE_ARCH', gcc_arch)
+        return
+
+    if set_glibc_arch and glibc_arch and pn_matches_any_suffix(pn, glibc_suffixes):
+        d.setVar('PACKAGE_ARCH', glibc_arch)
+        return
 
 python update_recipe_deps_handler() {
     staging_native_prebuilt_path = e.data.getVar("PREBUILT_NATIVE_SYSROOT")
@@ -718,6 +756,7 @@ python update_recipe_deps_handler() {
         if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
             e.data.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
     else:
+        set_gcc_glibc_pkg_arch(d, pn)
         # Skipping unrequired version of recipes
         if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
             e.data.appendVarFlag('do_deploy', 'prefuncs', ' do_clean_deploy_images')
