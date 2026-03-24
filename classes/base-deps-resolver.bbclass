@@ -1656,15 +1656,10 @@ OPKG_INDEX_FILE = "${OPKG_UTILS_SYSROOT}${bindir_native}/opkg-make-index"
 def generate_native_prebuilts_tar(d, deploy_dir):
     import os
     import shutil
-    feed_src_path = ""
     sys_dir = d.expand("${COMPONENTS_DIR}/${BUILD_ARCH}/")
     dest_path = d.getVar("NATIVE_PREBUILT_DIR")
     if not os.path.exists(dest_path):
         bb.utils.mkdirhier(dest_path)
-    toolchain_arch = d.getVar("TOOLCHAIN_LAYER_ARCH")
-    if toolchain_arch:
-        feed_src_path = os.path.join(deploy_dir, toolchain_arch)
-        feed_dst_path = os.path.join(dest_path, "ipk-feeds/%s"%toolchain_arch)
     if os.path.exists(sys_dir):
         cmds = []
         for item in os.listdir(sys_dir):
@@ -1683,6 +1678,20 @@ def generate_native_prebuilts_tar(d, deploy_dir):
                         cmds.append('cd %s && tar --exclude="fixmepath.cmd" -czf %s %s' %(sys_dir,tar_file, item))
         if cmds:
             oe.utils.multiprocess_launch(exec_sls_cmd, cmds, d)
+    feed_src_path = ""
+    glibc_arch = d.getVar("GLIBC_LAYER_ARCH")
+    if glibc_arch:
+        feed_src_path = os.path.join(deploy_dir, glibc_arch)
+        feed_dst_path = os.path.join(dest_path, "ipk-feeds/%s"%glibc_arch)
+    if os.path.isdir(feed_src_path):
+        if not os.path.exists(feed_dst_path):
+            bb.utils.mkdirhier(feed_dst_path)
+            shutil.copytree(feed_src_path, feed_dst_path, dirs_exist_ok=True)
+    feed_src_path = ""
+    gcc_arch = d.getVar("GCC_LAYER_ARCH")
+    if gcc_arch:
+        feed_src_path = os.path.join(deploy_dir, gcc_arch)
+        feed_dst_path = os.path.join(dest_path, "ipk-feeds/%s"%gcc_arch)
     if os.path.isdir(feed_src_path):
         if not os.path.exists(feed_dst_path):
             bb.utils.mkdirhier(feed_dst_path)
