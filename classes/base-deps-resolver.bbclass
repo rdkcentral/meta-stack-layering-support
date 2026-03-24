@@ -690,6 +690,45 @@ python do_add_version(){
     with open(version_file, "w") as f:
         f.writelines(version)
 }
+def set_gcc_glibc_pkg_arch(d, pn):
+    import os
+    # --- Package lists (suffixes) ---
+    gcc_suffixes   = [(s or '').strip() for s in (d.getVar('GCC_PKGS')   or '').split() if s.strip()]
+    glibc_suffixes = [(s or '').strip() for s in (d.getVar('GLIBC_PKGS') or '').split() if s.strip()]
+
+    # --- Helper: does PN match any suffix (covers multilib like lib32-*) ---
+    def pn_matches_any_suffix(pn_val, suffixes):
+        return any(pn_val.endswith(sfx) for sfx in suffixes)
+
+    # --- Early return: only proceed for gcc/glibc packages ---
+    if not (pn_matches_any_suffix(pn, gcc_suffixes) or pn_matches_any_suffix(pn, glibc_suffixes)):
+        # Not a gcc/glibc package → do nothing
+        return
+
+    # --- Feed availability (remote or local) ---
+    gcc_enable = d.getVar('ENABLE_DOCKER_TARGET_GCC_FEED') == '1'
+    glibc_enable = d.getVar('ENABLE_DOCKER_TARGET_GLIBC_FEED') == '1'
+    gcc_remote_feed = (d.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED')   or '').strip()
+    glibc_remote_feed = (d.getVar('PREBUILT_GLIBC_TARGET_REMOTE_FEED') or '').strip()
+
+    # Use separate gcc/glibc local feed variables to keep their prebuilt package feeds distinct
+    gcc_local_feed   = d.getVar('PREBUILT_GCC_TARGET_DOCKER_FEED')   or ''
+    glibc_local_feed = d.getVar('PREBUILT_GLIBC_TARGET_DOCKER_FEED') or ''
+
+    set_gcc_arch   = bool(gcc_remote_feed)   or (gcc_enable and os.path.isdir(gcc_local_feed)) or d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1"
+    set_glibc_arch = bool(glibc_remote_feed) or (glibc_enable and os.path.isdir(glibc_local_feed)) or d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1"
+
+    # --- Set PACKAGE_ARCH based on which feed is available ---
+    gcc_arch   = d.getVar('GCC_LAYER_ARCH')
+    glibc_arch = d.getVar('GLIBC_LAYER_ARCH')
+
+    if set_gcc_arch and gcc_arch and pn_matches_any_suffix(pn, gcc_suffixes):
+        d.setVar('PACKAGE_ARCH', gcc_arch)
+        return
+
+    if set_glibc_arch and glibc_arch and pn_matches_any_suffix(pn, glibc_suffixes):
+        d.setVar('PACKAGE_ARCH', glibc_arch)
+        return
 
 python update_recipe_deps_handler() {
     staging_native_prebuilt_path = e.data.getVar("PREBUILT_NATIVE_SYSROOT")
@@ -718,6 +757,8 @@ python update_recipe_deps_handler() {
         if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
             e.data.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
     else:
+        set_gcc_glibc_pkg_arch(e.data, pn)
+        arch = e.data.getVar('PACKAGE_ARCH')
         # Skipping unrequired version of recipes
         if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
             e.data.appendVarFlag('do_deploy', 'prefuncs', ' do_clean_deploy_images')
@@ -1616,15 +1657,10 @@ OPKG_INDEX_FILE = "${OPKG_UTILS_SYSROOT}${bindir_native}/opkg-make-index"
 def generate_native_prebuilts_tar(d, deploy_dir):
     import os
     import shutil
-    feed_src_path = ""
     sys_dir = d.expand("${COMPONENTS_DIR}/${BUILD_ARCH}/")
     dest_path = d.getVar("NATIVE_PREBUILT_DIR")
     if not os.path.exists(dest_path):
         bb.utils.mkdirhier(dest_path)
-    toolchain_arch = d.getVar("TOOLCHAIN_LAYER_ARCH")
-    if toolchain_arch:
-        feed_src_path = os.path.join(deploy_dir, toolchain_arch)
-        feed_dst_path = os.path.join(dest_path, "ipk-feeds/%s"%toolchain_arch)
     if os.path.exists(sys_dir):
         cmds = []
         for item in os.listdir(sys_dir):
@@ -1643,6 +1679,20 @@ def generate_native_prebuilts_tar(d, deploy_dir):
                         cmds.append('cd %s && tar --exclude="fixmepath.cmd" -czf %s %s' %(sys_dir,tar_file, item))
         if cmds:
             oe.utils.multiprocess_launch(exec_sls_cmd, cmds, d)
+    feed_src_path = ""
+    glibc_arch = d.getVar("GLIBC_LAYER_ARCH")
+    if glibc_arch:
+        feed_src_path = os.path.join(deploy_dir, glibc_arch)
+        feed_dst_path = os.path.join(dest_path, "ipk-feeds/%s"%glibc_arch)
+    if os.path.isdir(feed_src_path):
+        if not os.path.exists(feed_dst_path):
+            bb.utils.mkdirhier(feed_dst_path)
+            shutil.copytree(feed_src_path, feed_dst_path, dirs_exist_ok=True)
+    feed_src_path = ""
+    gcc_arch = d.getVar("GCC_LAYER_ARCH")
+    if gcc_arch:
+        feed_src_path = os.path.join(deploy_dir, gcc_arch)
+        feed_dst_path = os.path.join(dest_path, "ipk-feeds/%s"%gcc_arch)
     if os.path.isdir(feed_src_path):
         if not os.path.exists(feed_dst_path):
             bb.utils.mkdirhier(feed_dst_path)
