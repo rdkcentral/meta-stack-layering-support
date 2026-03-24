@@ -706,7 +706,8 @@ def set_gcc_glibc_pkg_arch(d, pn):
         return
 
     # --- Feed availability (remote or local) ---
-    enable = d.getVar('ENABLE_DOCKER_TARGET_TOOLCHAIN_FEED') == '1'
+    gcc_enable = d.getVar('ENABLE_DOCKER_TARGET_GCC_FEED') == '1'
+    glibc_enable = d.getVar('ENABLE_DOCKER_TARGET_GLIBC_FEED') == '1'
     gcc_remote_feed = (d.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED')   or '').strip()
     glibc_remote_feed = (d.getVar('PREBUILT_GLIBC_TARGET_REMOTE_FEED') or '').strip()
 
@@ -714,8 +715,8 @@ def set_gcc_glibc_pkg_arch(d, pn):
     gcc_local_feed   = d.getVar('PREBUILT_GCC_TARGET_DOCKER_FEED')   or ''
     glibc_local_feed = d.getVar('PREBUILT_GLIBC_TARGET_DOCKER_FEED') or ''
 
-    set_gcc_arch   = bool(gcc_remote_feed)   or (enable and os.path.isdir(gcc_local_feed)) or d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1"
-    set_glibc_arch = bool(glibc_remote_feed) or (enable and os.path.isdir(glibc_local_feed)) or d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1"
+    set_gcc_arch   = bool(gcc_remote_feed)   or (gcc_enable and os.path.isdir(gcc_local_feed)) or d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1"
+    set_glibc_arch = bool(glibc_remote_feed) or (glibc_enable and os.path.isdir(glibc_local_feed)) or d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1"
 
     # --- Set PACKAGE_ARCH based on which feed is available ---
     gcc_arch   = d.getVar('GCC_LAYER_ARCH')
