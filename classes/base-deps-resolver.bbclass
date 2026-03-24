@@ -711,7 +711,7 @@ def set_gcc_glibc_pkg_arch(d, pn):
     gcc_remote_feed = (d.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED')   or '').strip()
     glibc_remote_feed = (d.getVar('PREBUILT_GLIBC_TARGET_REMOTE_FEED') or '').strip()
 
-    # FIX: use the correct local feed variables for each
+    # Use separate gcc/glibc local feed variables to keep their prebuilt package feeds distinct
     gcc_local_feed   = d.getVar('PREBUILT_GCC_TARGET_DOCKER_FEED')   or ''
     glibc_local_feed = d.getVar('PREBUILT_GLIBC_TARGET_DOCKER_FEED') or ''
 
@@ -757,7 +757,8 @@ python update_recipe_deps_handler() {
         if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
             e.data.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
     else:
-        set_gcc_glibc_pkg_arch(d, pn)
+        set_gcc_glibc_pkg_arch(e.data, pn)
+        arch = e.data.getVar('PACKAGE_ARCH')
         # Skipping unrequired version of recipes
         if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
             e.data.appendVarFlag('do_deploy', 'prefuncs', ' do_clean_deploy_images')
