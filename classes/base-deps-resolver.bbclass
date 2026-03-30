@@ -793,13 +793,6 @@ python update_recipe_deps_handler() {
                 if version_check and not check_targets(e.data, pn_orig, variant):
                     open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
             e.data.appendVar("DEPENDS", " opkg-native ")
-            if bb.data.inherits_class('packagegroup', e.data) and not bb.data.inherits_class('nativesdk', e.data) and not bb.data.inherits_class('allarch', d):
-               gcc_pkgs = e.data.getVar("GCC_PKGS").split()
-               for gcc_pkg in gcc_pkgs:
-                   e.data.appendVar("DEPENDS", " %s "%gcc_pkg)
-               glibc_pkgs = e.data.getVar("GLIBC_PKGS").split()
-               for glibc_pkg in glibc_pkgs:
-                   e.data.appendVar("DEPENDS", " %s "%glibc_pkg)
 
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',e.data)
             bb.build.addtask('do_src_build_metadata','do_package_write_ipk',None,e.data)
