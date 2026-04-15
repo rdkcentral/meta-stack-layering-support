@@ -28,18 +28,18 @@ inherit ipk-mode-support-base
 
 python () {
     import re
-
     raw = d.getVar("IPK_FEED_URIS", False) or ""
     refs = re.findall(r"\${([^}]+)}", raw)
+    exclude_vars = (d.getVar("IPK_FEED_EXCLUDE_VARS") or "").split()
 
     for var in refs:
         if var.startswith("@"):
             continue
-
+        var = var.split(":")[0]
         val = d.getVar(var, False) or ""
-
-        if "BUILD_VARIANT" in val:
-            d.appendVarFlag(var, "vardepsexclude", " BUILD_VARIANT")
+        for ex in exclude_vars:
+            if ex in val:
+                d.appendVarFlag(var, "vardepsexclude", " " + ex)
 }
 
 def decode(str):
