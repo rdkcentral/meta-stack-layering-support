@@ -21,12 +21,26 @@ PREBUILTDEPLOYDIR = "${COMPONENTS_DIR}/${PACKAGE_ARCH}"
 
 PSEUDO_IGNORE_PATHS .= ",${IPK_PKGDATA_RUNTIME_DIR},${IPK_PKGDATA_DIR}"
 
-BB_BASEHASH_IGNORE_VARS += "BUILD_VARIANT"
-
 do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
 inherit gir-ipk-qemuwrapper
 inherit ipk-mode-support-base
+
+python () {
+    import re
+
+    raw = d.getVar("IPK_FEED_URIS", False) or ""
+    refs = re.findall(r"\${([^}]+)}", raw)
+
+    for var in refs:
+        if var.startswith("@"):
+            continue
+
+        val = d.getVar(var, False) or ""
+
+        if "BUILD_VARIANT" in val:
+            d.appendVarFlag(var, "vardepsexclude", " BUILD_VARIANT")
+}
 
 def decode(str):
     import codecs
