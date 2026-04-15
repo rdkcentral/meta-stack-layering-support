@@ -21,9 +21,11 @@ PREBUILTDEPLOYDIR = "${COMPONENTS_DIR}/${PACKAGE_ARCH}"
 
 PSEUDO_IGNORE_PATHS .= ",${IPK_PKGDATA_RUNTIME_DIR},${IPK_PKGDATA_DIR}"
 
-BB_BASEHASH_IGNORE_VARS += "BUILD_VARIANT"
-
 do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
+
+do_install_ipk_recipe_sysroot[vardepsexclude] += "IPK_FEED_URIS BUILD_VARIANT"
+update_ipk_deps[vardepsexclude] += "IPK_FEED_URIS BUILD_VARIANT"
+check_deps_ipk_mode[vardepsexclude] += "IPK_FEED_URIS BUILD_VARIANT"
 
 inherit gir-ipk-qemuwrapper
 inherit ipk-mode-support-base
