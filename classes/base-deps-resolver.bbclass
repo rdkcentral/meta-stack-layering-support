@@ -26,6 +26,21 @@ do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
 inherit gir-ipk-qemuwrapper
 inherit ipk-mode-support-base
 
+def ipk_feed_var_dep_exclude(d):
+    import re
+    raw = d.getVar("IPK_FEED_URIS", False) or ""
+    refs = re.findall(r"\${([^}]+)}", raw)
+    exclude_vars = (d.getVar("IPK_FEED_EXCLUDE_VARS") or "").split()
+
+    for var in refs:
+        if var.startswith("@"):
+            continue
+        var = var.split(":")[0]
+        val = d.getVar(var, False) or ""
+        for ex in exclude_vars:
+            if ex in val:
+                d.appendVarFlag(var, "vardepsexclude", " " + ex)
+
 def decode(str):
     import codecs
     c = codecs.getdecoder("unicode_escape")
@@ -1518,6 +1533,8 @@ python create_stack_layer_info () {
         # For multiconfig builds.
         if not os.path.exists(index_check):
             open(index_check, 'w').close()
+    if isinstance(e, bb.event.ConfigParsed):
+        ipk_feed_var_dep_exclude(e.data)
     if isinstance(e, bb.event.ConfigParsed) and not os.path.exists(index_check):
         if os.path.exists(feed_info_dir):
             shutil.rmtree(feed_info_dir)
