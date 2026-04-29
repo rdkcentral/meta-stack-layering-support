@@ -1518,11 +1518,27 @@ python create_stack_layer_info () {
     import re
     import shutil
     import gzip
+    import os
     feed_info_dir = e.data.getVar("FEED_INFO_DIR")
     index_check = os.path.join(e.data.getVar("TOPDIR"),"index_created")
     target_check = os.path.join(e.data.getVar("TOPDIR"),"target_pkg_list")
     dep_tree_check = os.path.join(d.getVar("TOPDIR"),"tree_generated")
     if isinstance(e, bb.event.CacheLoadStarted):
+        staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
+        support = (d.getVar("PREBUILT_NATIVE_SUPPORT") or "0").strip()
+        if support == "1":
+            bb.note("Prebuilt toolchain/native consumption: ENABLED")
+        else:
+            bb.note(f"Prebuilt toolchain/native consumption: DISABLED (PREBUILT_NATIVE_SUPPORT={support})")
+        if staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
+            bb.note(f"Prebuilt toolchain/native packages found at: {staging_native_prebuilt_path}")
+            exclusion_list = []
+            exclusion_list = (e.data.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
+            if exclusion_list:
+                bb.note("Excluding the following list of native packages %s from prebuilt consumption"%exclusion_list)
+        else:
+            bb.note(f"Prebuilt toolchain/native packages are not found at: {staging_native_prebuilt_path}")
+
         if os.path.exists(index_check):
             os.remove(index_check)
         if os.path.exists(dep_tree_check):
