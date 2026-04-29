@@ -1771,7 +1771,7 @@ python feed_index_creation () {
         if not os.path.exists(pkgs_file):
             open(pkgs_file, "w").close()
 
-        cmds.add('%s --checksum md5 --checksum sha256 -r %s -p %s -m %s' %
+        cmds.add('%s --checksum md5 --checksum sha256 -f -r %s -p %s -m %s' %
                      (opkg_index_cmd, pkgs_file, pkgs_file, pkgs_dir))
 
     if len(cmds) == 0:
