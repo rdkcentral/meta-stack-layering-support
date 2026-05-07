@@ -1147,10 +1147,7 @@ def get_rdeps_provider_ipk(d, rdep):
     lines = fd.readlines()
     fd.close()
     for line in lines:
-        pkg = line.split(" - ")[0]
-        ver = line.split(" - ")[1]
-        ver = ver.split("-")[0]
-        ipk_pkg += pkg + " (>=" + ver + ") "
+        ipk_pkg = line.split(" - ")[0]
 
     if ipk_pkg == " ":
         bb.note("[deps-resolver] rdep - %s - couldn't find from reciepe_sysroot. Checking staging ipk sysroot "%rdep)
@@ -1161,13 +1158,9 @@ def get_rdeps_provider_ipk(d, rdep):
         lines = fd.readlines()
         fd.close()
         for line in lines:
-            pkg = line.split(" - ")[0]
-            ver = line.split(" - ")[1]
-            ver = ver.split("-")[0]
-            ipk_pkg += pkg + " (>=" + ver + ") "
+            ipk_pkg = line.split(" - ")[0]
         if ipk_pkg == " ":
             bb.note("[deps-resolver] rdep - %s - not available in IPK pkgs "%rdep)
-
     else:
         bb.note("[deps-resolver] rdep - %s - available in IPK pkg %s"%(rdep, ipk_pkg))
     return ipk_pkg
