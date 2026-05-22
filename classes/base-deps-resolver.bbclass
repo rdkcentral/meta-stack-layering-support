@@ -285,7 +285,8 @@ python do_src_build_metadata_setscene () {
 
 python do_populate_sysroot:prepend() {
     import os
-    if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
+    pkg_pn = d.getVar("PN")
+    if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d) or pkg_pn.endswith("gcc-initial"):
         staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
         if d.getVar("PREBUILT_NATIVE_SUPPORT") == "1" and staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
             skip = sls_generate_native_sysroot (d, staging_native_prebuilt_path)
@@ -303,6 +304,8 @@ def sls_generate_native_sysroot(d, staging_native_prebuilt_path):
     import shutil
     import subprocess
     pn = d.getVar("PN", True)
+    if "gcc-initial" in  pn:
+        staging_native_prebuilt_path = d.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
 
     prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
     prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
@@ -313,15 +316,7 @@ def sls_generate_native_sysroot(d, staging_native_prebuilt_path):
     sysroot_components_dir = d.expand("${SYSROOT_DESTDIR}${base_prefix}/")
     if not os.path.exists(sysroot_components_dir):
         bb.utils.mkdirhier(sysroot_components_dir)
-    if os.path.exists(prebuilt_native_pkg_path):
-        for item in os.listdir(prebuilt_native_pkg_path):
-            source_path = os.path.join(prebuilt_native_pkg_path, item)
-            dest_path = os.path.join(sysroot_components_dir, item)
-            if os.path.isdir(source_path):
-                shutil.copytree(source_path, dest_path, symlinks=True)
-            else:
-                shutil.copy(source_path, dest_path)
-    elif prebuilt_native_pkg_type:
+    if prebuilt_native_pkg_type:
         import glob
         prebuilt_native_pkg_path = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
         if prebuilt_native_pkg_path:
@@ -759,13 +754,18 @@ python update_recipe_deps_handler() {
             if prebuilt_native_pkg_type:
                 import glob
                 if "gcc-initial" in  pn:
+                    bb.warn("==============================%s"%pn)
                     set_gcc_glibc_pkg_arch(e.data, pn)
                     staging_native_prebuilt_path = e.data.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
                 prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
-                prebuilt_native_pkg_path_list = glob.glob(staging_native_prebuilt_path+"*.%s"%prebuilt_native_pkg_type)
+
+                prebuilt_native_pkg_path_list = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
                 if prebuilt_native_pkg_path_list:
+                    bb.warn("===================list===========%s"%prebuilt_native_pkg_path_list)
                     prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
 
+                if "gcc-initial" in  pn:
+                    bb.warn("==============================%s"%prebuilt_native_pkg_path)
                 if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(e.data, pn,variant) and pn not in exclusion_list :
                     update_build_tasks(e.data, arch, "native")
                 elif pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant) :
