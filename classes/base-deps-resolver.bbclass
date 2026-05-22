@@ -301,7 +301,6 @@ python do_populate_sysroot:prepend() {
 
 def sls_generate_native_sysroot(d, staging_native_prebuilt_path):
     import os
-    import shutil
     import subprocess
     pn = d.getVar("PN", True)
     if "gcc-initial" in  pn:
@@ -346,7 +345,6 @@ sysroot_cleanup_ipk_download[vardepsexclude] += " SSTATE_MANFILEPREFIX"
 
 # Install the dev ipks to the component sysroot
 python do_install_ipk_recipe_sysroot () {
-    import shutil
     import re
     import glob
     ildeps = []
@@ -555,7 +553,6 @@ python do_install_ipk_recipe_sysroot () {
 
 def get_ipk_list(d, pkg_arch):
     import glob
-    import shutil
     ipk_list = []
     pn = d.getVar("PN")
     prefix = d.getVar('MLPREFIX') or ""
