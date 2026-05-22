@@ -285,7 +285,8 @@ python do_src_build_metadata_setscene () {
 
 python do_populate_sysroot:prepend() {
     import os
-    if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d):
+    pkg_pn = d.getVar("PN")
+    if bb.data.inherits_class('native', d) or bb.data.inherits_class('cross', d) or pkg_pn.endswith("gcc-initial"):
         staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
         if d.getVar("PREBUILT_NATIVE_SUPPORT") == "1" and staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path):
             skip = sls_generate_native_sysroot (d, staging_native_prebuilt_path)
@@ -300,9 +301,10 @@ python do_populate_sysroot:prepend() {
 
 def sls_generate_native_sysroot(d, staging_native_prebuilt_path):
     import os
-    import shutil
     import subprocess
     pn = d.getVar("PN", True)
+    if "gcc-initial" in  pn:
+        staging_native_prebuilt_path = d.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
 
     prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
     prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
@@ -313,15 +315,7 @@ def sls_generate_native_sysroot(d, staging_native_prebuilt_path):
     sysroot_components_dir = d.expand("${SYSROOT_DESTDIR}${base_prefix}/")
     if not os.path.exists(sysroot_components_dir):
         bb.utils.mkdirhier(sysroot_components_dir)
-    if os.path.exists(prebuilt_native_pkg_path):
-        for item in os.listdir(prebuilt_native_pkg_path):
-            source_path = os.path.join(prebuilt_native_pkg_path, item)
-            dest_path = os.path.join(sysroot_components_dir, item)
-            if os.path.isdir(source_path):
-                shutil.copytree(source_path, dest_path, symlinks=True)
-            else:
-                shutil.copy(source_path, dest_path)
-    elif prebuilt_native_pkg_type:
+    if prebuilt_native_pkg_type:
         import glob
         prebuilt_native_pkg_path = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
         if prebuilt_native_pkg_path:
@@ -351,7 +345,6 @@ sysroot_cleanup_ipk_download[vardepsexclude] += " SSTATE_MANFILEPREFIX"
 
 # Install the dev ipks to the component sysroot
 python do_install_ipk_recipe_sysroot () {
-    import shutil
     import re
     import glob
     ildeps = []
@@ -560,7 +553,6 @@ python do_install_ipk_recipe_sysroot () {
 
 def get_ipk_list(d, pkg_arch):
     import glob
-    import shutil
     ipk_list = []
     pn = d.getVar("PN")
     prefix = d.getVar('MLPREFIX') or ""
@@ -752,23 +744,27 @@ python update_recipe_deps_handler() {
     arch = e.data.getVar('PACKAGE_ARCH')
     pn = e.data.getVar('PN')
     version = get_version_info(e.data)
-    if bb.data.inherits_class('native', e.data) or bb.data.inherits_class('cross', e.data):
+    if bb.data.inherits_class('native', e.data) or bb.data.inherits_class('cross', e.data) or "gcc-initial" in pn:
         if staging_native_prebuilt_path and d.getVar("PREBUILT_NATIVE_SUPPORT") == "1":
             exclusion_list = (e.data.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
-            prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
-            if not os.path.exists(prebuilt_native_pkg_path):
-                prebuilt_native_pkg_type = e.data.getVar("PREBUILT_NATIVE_PKG_TYPE")
-                if prebuilt_native_pkg_type:
-                    import glob
-                    prebuilt_native_pkg_path_list = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
-                    if prebuilt_native_pkg_path_list:
-                        prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
-            if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(e.data, pn,variant) and pn not in exclusion_list :
-                update_build_tasks(e.data, arch, "native")
-            elif pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant) :
-                update_build_tasks(d, arch, "native")
-            else:
-                bb.build.addtask('do_src_build_metadata','do_populate_sysroot',None,e.data)
+            prebuilt_native_pkg_type = e.data.getVar("PREBUILT_NATIVE_PKG_TYPE")
+            if prebuilt_native_pkg_type:
+                import glob
+                if "gcc-initial" in  pn:
+                    set_gcc_glibc_pkg_arch(e.data, pn)
+                    staging_native_prebuilt_path = e.data.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
+                prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
+
+                prebuilt_native_pkg_path_list = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
+                if prebuilt_native_pkg_path_list:
+                    prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
+
+                if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(e.data, pn,variant) and pn not in exclusion_list :
+                    update_build_tasks(e.data, arch, "native")
+                elif pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant) :
+                    update_build_tasks(e.data, arch, "native")
+                else:
+                    bb.build.addtask('do_src_build_metadata','do_populate_sysroot',None,e.data)
         if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
             e.data.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
     else:
@@ -791,8 +787,6 @@ python update_recipe_deps_handler() {
             if bb.data.inherits_class('update-alternatives',e.data):
                 bb.build.addtask('do_get_alternative_pkg','do_package_write_ipk', 'do_ipk_download do_populate_sysroot',e.data)
         elif d.getVar("PREBUILT_NATIVE_SUPPORT") == "1" and staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
-            update_build_tasks(e.data, arch, "native")
-        elif d.getVar("PREBUILT_NATIVE_SUPPORT") == "1" and staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and "gcc-initial" in pn and not gcc_source_mode_check(e.data, pn, variant):
             update_build_tasks(e.data, arch, "native")
         else:
             if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', e.data):
@@ -1719,10 +1713,31 @@ def generate_native_prebuilts_tar(d, deploy_dir):
     if gcc_arch:
         feed_src_path = os.path.join(deploy_dir, gcc_arch)
         feed_dst_path = os.path.join(dest_path, "ipk-feeds/%s"%gcc_arch)
+        gcc_initial_dir = d.expand("${COMPONENTS_DIR}/${GCC_LAYER_ARCH}/")
     if os.path.isdir(feed_src_path):
         if not os.path.exists(feed_dst_path):
             bb.utils.mkdirhier(feed_dst_path)
             shutil.copytree(feed_src_path, feed_dst_path, dirs_exist_ok=True)
+    # Support to generate libgcc-initial which is required for glibc build.
+    # libgcc-initial doesn't have ipk gneration support.
+    if os.path.exists(gcc_initial_dir):
+        cmds = []
+        for item in os.listdir(gcc_initial_dir):
+            if item.endswith("gcc-initial"):
+                source_path = os.path.join(gcc_initial_dir, item)
+                if os.path.isdir(source_path):
+                    version_file = "version-"+item
+                    version_path = os.path.join(source_path,version_file)
+                    version = ""
+                    if os.path.exists(version_path):
+                        with open(version_path,"r") as fd:
+                            lines = fd.readlines()
+                        version = "_"+lines[0]
+                    tar_file = os.path.join(feed_dst_path,"%s%s.tar.gz"%(item,version))
+                    if not os.path.exists(tar_file):
+                        cmds.append('cd %s && tar --exclude="fixmepath.cmd" -czf %s %s' %(gcc_initial_dir,tar_file, item))
+        if cmds:
+            oe.utils.multiprocess_launch(exec_sls_cmd, cmds, d)
 
 python feed_index_creation () {
     if e.data.getVar("STACK_LAYER_EXTENSION") or e.data.getVar("TARGET_BASED_IPK_STAGING") == "1":
