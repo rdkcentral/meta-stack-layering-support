@@ -754,18 +754,14 @@ python update_recipe_deps_handler() {
             if prebuilt_native_pkg_type:
                 import glob
                 if "gcc-initial" in  pn:
-                    bb.warn("==============================%s"%pn)
                     set_gcc_glibc_pkg_arch(e.data, pn)
                     staging_native_prebuilt_path = e.data.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
                 prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
 
                 prebuilt_native_pkg_path_list = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
                 if prebuilt_native_pkg_path_list:
-                    bb.warn("===================list===========%s"%prebuilt_native_pkg_path_list)
                     prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
 
-                if "gcc-initial" in  pn:
-                    bb.warn("==============================%s"%prebuilt_native_pkg_path)
                 if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(e.data, pn,variant) and pn not in exclusion_list :
                     update_build_tasks(e.data, arch, "native")
                 elif pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant) :
