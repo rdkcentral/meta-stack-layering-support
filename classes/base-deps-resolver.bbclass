@@ -765,6 +765,8 @@ python update_recipe_deps_handler() {
                     update_build_tasks(e.data, arch, "native")
                 elif pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant) :
                     update_build_tasks(e.data, arch, "native")
+                elif "gcc-initial" in pn and not gcc_source_mode_check(e.data, pn, variant) :
+                    update_build_tasks(e.data, arch, "native")
                 else:
                     bb.build.addtask('do_src_build_metadata','do_populate_sysroot',None,e.data)
         if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
