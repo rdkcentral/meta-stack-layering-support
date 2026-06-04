@@ -318,8 +318,9 @@ def sls_generate_native_sysroot(d, staging_native_prebuilt_path):
         bb.utils.mkdirhier(sysroot_components_dir)
     if prebuilt_native_pkg_type:
         import glob
-        if prebuilt_native_pkg_path:
-            prebuilt_native_pkg_path = prebuilt_native_pkg_path[0]
+        prebuilt_native_pkg_path_list = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
+        if prebuilt_native_pkg_path_list:
+            prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
             if prebuilt_native_pkg_type == "tar.gz":
                 bb.process.run("tar --strip-components=1 -xvzf %s -C %s" % (prebuilt_native_pkg_path, sysroot_components_dir), stderr=subprocess.STDOUT)
             else:
