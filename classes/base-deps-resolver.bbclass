@@ -306,7 +306,8 @@ def sls_generate_native_sysroot(d, staging_native_prebuilt_path):
     if "gcc-initial" in  pn:
         staging_native_prebuilt_path = d.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
 
-    prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
+    base_version = d.getVar('PV').split('+')[0]
+    prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, f"{pn}_{base_version}")
     prebuilt_native_pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
     exclusion_list = (d.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
     if pn in exclusion_list:
@@ -317,7 +318,6 @@ def sls_generate_native_sysroot(d, staging_native_prebuilt_path):
         bb.utils.mkdirhier(sysroot_components_dir)
     if prebuilt_native_pkg_type:
         import glob
-        prebuilt_native_pkg_path = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
         if prebuilt_native_pkg_path:
             prebuilt_native_pkg_path = prebuilt_native_pkg_path[0]
             if prebuilt_native_pkg_type == "tar.gz":
@@ -753,7 +753,8 @@ python update_recipe_deps_handler() {
                 if "gcc-initial" in  pn:
                     set_gcc_glibc_pkg_arch(e.data, pn)
                     staging_native_prebuilt_path = e.data.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
-                prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, pn)
+                base_version = e.data.getVar('PV').split('+')[0]
+                prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, f"{pn}_{base_version}")
 
                 prebuilt_native_pkg_path_list = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
                 if prebuilt_native_pkg_path_list:
