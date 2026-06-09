@@ -1172,7 +1172,7 @@ def get_rdeps_provider_ipk(d, rdep):
 
 def check_file_provider_ipk(d, file, rdeps):
     ipk = ""
-    layer_sysroot = d.getVar("RECIPE_SYSROOT")
+    layer_sysroot = d.getVar("SYSROOT_IPK")
     lpkgopkg_path = os.path.join(layer_sysroot,"usr/lib/opkg/alternatives")
     alternatives_file_path = os.path.join(lpkgopkg_path,file.split("/")[-1])
     alternatives_check_file_path = d.getVar("SYSROOT_ALTERNATIVES")
