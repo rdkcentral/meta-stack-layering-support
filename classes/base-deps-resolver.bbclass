@@ -779,7 +779,15 @@ python update_recipe_deps_handler() {
             e.data.appendVarFlag('do_deploy', 'prefuncs', ' do_clean_deploy_images')
             e.data.appendVarFlag('do_deploy_setscene', 'prefuncs', ' do_clean_deploy_images')
         e.data.appendVar("DEPENDS", " pseudo-native")
+
+        # This is to make sure IMAGE_LINGUAS ipks are generated with stack layer packagegroups
+        if check_targets(e.data, pn, variant) and ("packagegroup" in pn or bb.data.inherits_class('image', e.data)):
+            if e.data.getVar("GENERATE_GLIBC_LOCALE_IPK") == "1":
+                e.data.appendVarFlag('do_build', 'depends', ' glibc-locale:do_package_write_ipk')
+                e.data.appendVar("DEPENDS", ' glibc-locale')
+
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
+
         if ipk_mode and not check_targets(e.data, pn, variant) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data, variant):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
             if not os.path.exists(skipped_pkg_dir):
@@ -1172,7 +1180,7 @@ def get_rdeps_provider_ipk(d, rdep):
 
 def check_file_provider_ipk(d, file, rdeps):
     ipk = ""
-    layer_sysroot = d.getVar("RECIPE_SYSROOT")
+    layer_sysroot = d.getVar("SYSROOT_IPK")
     lpkgopkg_path = os.path.join(layer_sysroot,"usr/lib/opkg/alternatives")
     alternatives_file_path = os.path.join(lpkgopkg_path,file.split("/")[-1])
     alternatives_check_file_path = d.getVar("SYSROOT_ALTERNATIVES")
