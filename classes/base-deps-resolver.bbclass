@@ -684,10 +684,6 @@ def gcc_source_mode_check(d, pn, variant):
             gcc_source_mode = False
         else:
             gcc_source_mode = True
-        if not gcc_source_mode:
-            manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"
-            bb.utils.mkdirhier(os.path.dirname(manifest_name))
-            open(manifest_name, 'w').close()
     else:
         gcc_source_mode = False
     return gcc_source_mode
@@ -782,7 +778,8 @@ python update_recipe_deps_handler() {
 
         # This is to make sure IMAGE_LINGUAS ipks are generated with stack layer packagegroups
         if check_targets(e.data, pn, variant) and ("packagegroup" in pn or bb.data.inherits_class('image', e.data)):
-            if e.data.getVar("GENERATE_GLIBC_LOCALE_IPK") == "1":
+            skip_recipe_ipk_pkgs = True if "1" == d.getVar('SKIP_RECIPE_IPK_PKGS') else False
+            if e.data.getVar("GENERATE_GLIBC_LOCALE_IPK") == "1" and not skip_recipe_ipk_pkgs:
                 e.data.appendVarFlag('do_build', 'depends', ' glibc-locale:do_package_write_ipk')
                 e.data.appendVar("DEPENDS", ' glibc-locale')
 
