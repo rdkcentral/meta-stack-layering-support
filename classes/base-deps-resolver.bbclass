@@ -19,7 +19,8 @@ SSTATE_MANFILEPREFIX_NATIVE_FILTER = "${SSTATE_MANIFESTS}/manifest-"
 SYSROOT_PREBUILT_DESTDIR = "${WORKDIR}/sysroot-prebuilt-destdir"
 PREBUILTDEPLOYDIR = "${COMPONENTS_DIR}/${PACKAGE_ARCH}"
 
-PSEUDO_IGNORE_PATHS .= ",${IPK_PKGDATA_RUNTIME_DIR},${IPK_PKGDATA_DIR}"
+EPSEUDO_IGNORE_PATHS .= ",${IPK_PKGDATA_RUNTIME_DIR},${IPK_PKGDATA_DIR}"
+PSEUDO_IGNORE_PATHS .= ",${IPK_PKGDATA_DIR}"
 
 do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
@@ -1209,7 +1210,8 @@ def update_rdeps_shlib(d,pkg):
     if d.getVar('SHLIBSKIPLIST_%s'%pkg):
         pkg_dir = d.getVar("IPK_PKGDATA_RUNTIME_DIR")
         if not os.path.exists(pkg_dir):
-            bb.utils.mkdirhier(pkg_dir)
+            #bb.utils.mkdirhier(pkg_dir)
+            bb.process.run("install -d %s" % pkg_dir)
         pkg_path = os.path.join(pkg_dir, pkg)
         with open(pkg_path, 'a') as file:
             shlib_skip = d.getVar('SHLIBSKIPLIST_%s'%pkg).split(" ")
