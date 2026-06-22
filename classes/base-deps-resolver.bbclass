@@ -19,8 +19,7 @@ SSTATE_MANFILEPREFIX_NATIVE_FILTER = "${SSTATE_MANIFESTS}/manifest-"
 SYSROOT_PREBUILT_DESTDIR = "${WORKDIR}/sysroot-prebuilt-destdir"
 PREBUILTDEPLOYDIR = "${COMPONENTS_DIR}/${PACKAGE_ARCH}"
 
-EPSEUDO_IGNORE_PATHS .= ",${IPK_PKGDATA_RUNTIME_DIR},${IPK_PKGDATA_DIR}"
-PSEUDO_IGNORE_PATHS .= ",${IPK_PKGDATA_DIR}"
+PSEUDO_IGNORE_PATHS .= ",${IPK_PKGDATA_RUNTIME_DIR},${IPK_PKGDATA_DIR}"
 
 do_install_ipk_recipe_sysroot[depends] += "opkg-native:do_populate_sysroot"
 
@@ -1204,27 +1203,39 @@ def check_file_provider_ipk(d, file, rdeps):
 
 # Function returns the ipk pkg name which contains the run-time dependent shared lib.
 # This data is read from the metadata generated while executing the package_do_shlibs (do_package).
-def update_rdeps_shlib(d,pkg):
-    ipks = []
-    # SHLIBSKIPLIST should set with missing sahred libs in package_do_shlibs
-    if d.getVar('SHLIBSKIPLIST_%s'%pkg):
-        pkg_dir = d.getVar("IPK_PKGDATA_RUNTIME_DIR")
-        if not os.path.exists(pkg_dir):
-            #bb.utils.mkdirhier(pkg_dir)
-            bb.process.run("install -d %s" % pkg_dir)
-        pkg_path = os.path.join(pkg_dir, pkg)
-        with open(pkg_path, 'a') as file:
-            shlib_skip = d.getVar('SHLIBSKIPLIST_%s'%pkg).split(" ")
-            for shlib in shlib_skip:
-                ipk = get_rdeps_provider_ipk(d,shlib)
-                if ipk.endswith("-dev"):
-                    continue
-                if ipk not in ipks and ipk != " ":
-                    ipks.append(ipk)
-                if ipk != " ":
-                    file.write("%s\n"%shlib)
-    return ipks
 
+def write_shlib_deps_files(d):
+    import os
+    pkg_dir = d.getVar("IPK_PKGDATA_RUNTIME_DIR")
+    packages = (d.getVar('PACKAGES') or "").split()
+    cmd = ""
+    for pkg in packages:
+        shlib_skip = d.getVar('SHLIBSKIPLIST_%s' % pkg)
+        if shlib_skip:
+            pkg_path = os.path.join(pkg_dir, pkg)
+            for shlib in shlib_skip.split():
+                cmd += "printf '%%s\\n' '%s' >> %s; " % (shlib, pkg_path)
+    return cmd
+
+do_update_rdeps_files[fakeroot] = "1"
+do_update_rdeps_files() {
+    install -d ${IPK_PKGDATA_RUNTIME_DIR}
+    ${@write_shlib_deps_files(d)}
+}
+
+def update_rdeps_shlib(d, pkg):
+    ipks = []
+    shlib_skip = d.getVar('SHLIBSKIPLIST_%s' % pkg)
+    
+    if shlib_skip:
+        for shlib in shlib_skip.split():
+            ipk = get_rdeps_provider_ipk(d, shlib)
+            if ipk.endswith("-dev"):
+                continue
+            if ipk not in ipks and ipk != " ":
+                ipks.append(ipk)
+    return ipks
+addtask update_rdeps_files after do_package before do_package_qa
 def update_rdeps_pkgconfig(d,pkg):
     ipks = []
     # PKGCONFIGSKIPLIST should set with missing pkgconfig modules in package_do_pkgconfig
