@@ -1576,15 +1576,15 @@ python create_stack_layer_info () {
                 index_file = feed_info_dir+"index/"
                 if arch_uri.startswith("file:"):
                     src_pkg = os.path.join(arch_uri[5:], "Packages.gz")
-                    if not os.path.exists(src_pkg)
+                    if not os.path.exists(src_pkg):
                         bb.warn("***** Packages.gz not found for feed %s at %s. Skipping pkgdata creation. *****"%(arch_name, src_pkg))
                         continue
                     shutil.copy(src_pkg, index_file)
                 else:
                     try:
                         bb.process.run("wget %s --directory-prefix=%s"%(arch_uri+"/Packages.gz", index_file), stderr=subprocess.STDOUT)
-                    except bb.process.ExecutionError as e:
-                        bb.warn("***** Failed to download Packages.gz for feed %s from %s. Skipping pkgdata creation. Error: %s *****"%(arch_name, arch_uri, e))
+                    except bb.process.ExecutionError as err:
+                        bb.warn("***** Failed to download Packages.gz for feed %s from %s. Skipping pkgdata creation. Error: %s *****"%(arch_name, arch_uri, err))
                         continue
                 with gzip.open(index_file+"Packages.gz", 'rb') as gz_file:
                     with open(index_file+arch_name, 'wb') as output_file:
