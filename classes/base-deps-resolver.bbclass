@@ -684,10 +684,6 @@ def gcc_source_mode_check(d, pn, variant):
             gcc_source_mode = False
         else:
             gcc_source_mode = True
-        if not gcc_source_mode:
-            manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"
-            bb.utils.mkdirhier(os.path.dirname(manifest_name))
-            open(manifest_name, 'w').close()
     else:
         gcc_source_mode = False
     return gcc_source_mode
@@ -779,7 +775,16 @@ python update_recipe_deps_handler() {
             e.data.appendVarFlag('do_deploy', 'prefuncs', ' do_clean_deploy_images')
             e.data.appendVarFlag('do_deploy_setscene', 'prefuncs', ' do_clean_deploy_images')
         e.data.appendVar("DEPENDS", " pseudo-native")
+
+        # This is to make sure IMAGE_LINGUAS ipks are generated with stack layer packagegroups
+        if check_targets(e.data, pn, variant) and ("packagegroup" in pn or bb.data.inherits_class('image', e.data)):
+            skip_recipe_ipk_pkgs = True if "1" == d.getVar('SKIP_RECIPE_IPK_PKGS') else False
+            if e.data.getVar("GENERATE_GLIBC_LOCALE_IPK") == "1" and not skip_recipe_ipk_pkgs:
+                e.data.appendVarFlag('do_build', 'depends', ' glibc-locale:do_package_write_ipk')
+                e.data.appendVar("DEPENDS", ' glibc-locale')
+
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
+
         if ipk_mode and not check_targets(e.data, pn, variant) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data, variant):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
             if not os.path.exists(skipped_pkg_dir):
@@ -1172,7 +1177,7 @@ def get_rdeps_provider_ipk(d, rdep):
 
 def check_file_provider_ipk(d, file, rdeps):
     ipk = ""
-    layer_sysroot = d.getVar("RECIPE_SYSROOT")
+    layer_sysroot = d.getVar("SYSROOT_IPK")
     lpkgopkg_path = os.path.join(layer_sysroot,"usr/lib/opkg/alternatives")
     alternatives_file_path = os.path.join(lpkgopkg_path,file.split("/")[-1])
     alternatives_check_file_path = d.getVar("SYSROOT_ALTERNATIVES")
@@ -1583,9 +1588,17 @@ python create_stack_layer_info () {
                 arch_uri = feed.group(2)
                 index_file = feed_info_dir+"index/"
                 if arch_uri.startswith("file:"):
-                    shutil.copy(arch_uri[5:]+"/Packages.gz", index_file)
+                    src_pkg = os.path.join(arch_uri[5:], "Packages.gz")
+                    if not os.path.exists(src_pkg):
+                        bb.warn("***** Packages.gz not found for feed %s at %s. Skipping pkgdata creation. *****"%(arch_name, src_pkg))
+                        continue
+                    shutil.copy(src_pkg, index_file)
                 else:
-                    bb.process.run("wget %s --directory-prefix=%s"%(arch_uri+"/Packages.gz", index_file), stderr=subprocess.STDOUT)
+                    try:
+                        bb.process.run("wget %s --directory-prefix=%s"%(arch_uri+"/Packages.gz", index_file), stderr=subprocess.STDOUT)
+                    except bb.process.ExecutionError as err:
+                        bb.warn("***** Failed to download Packages.gz for feed %s from %s. Skipping pkgdata creation. Error: %s *****"%(arch_name, arch_uri, err))
+                        continue
                 with gzip.open(index_file+"Packages.gz", 'rb') as gz_file:
                     with open(index_file+arch_name, 'wb') as output_file:
                         shutil.copyfileobj(gz_file, output_file)

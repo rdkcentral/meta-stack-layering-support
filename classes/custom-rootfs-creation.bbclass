@@ -178,6 +178,8 @@ python do_update_opkg_config () {
     ipk_feed_uris = []
     feed_uri = ""
     entry = (d.getVar("STACK_LAYER_EXTENSION") or "").split(" ")
+    gcc_arch = d.getVar("GCC_LAYER_ARCH")
+    glibc_arch = d.getVar("GLIBC_LAYER_ARCH")
 
     for arch in pkg_archs.split():
         feed_from_server = False
@@ -185,10 +187,11 @@ python do_update_opkg_config () {
             feed_match = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
             if feed_match is not None:
                 feed_name = feed_match.group(1)
-                if feed_name == arch and  arch not in entry:
-                    feed_from_server = True
-                    ipk_feed_uris.append(line)
-                    break
+                if feed_name == arch:
+                    if arch == gcc_arch or arch == glibc_arch or arch not in entry:
+                        feed_from_server = True
+                        ipk_feed_uris.append(line)
+                        break
         if (arch not in feed_arch_list) or (feed_from_server):
             continue
         pkgs_dir = os.path.join(d.getVar("DEPLOY_DIR_IPK"), arch)
@@ -239,6 +242,8 @@ python do_update_sdk_opkg_config () {
     ipk_feed_uris = []
     feed_uri = ""
     entry = (d.getVar("STACK_LAYER_EXTENSION") or "").split(" ")
+    gcc_arch = d.getVar("GCC_LAYER_ARCH")
+    glibc_arch = d.getVar("GLIBC_LAYER_ARCH")
 
     for arch in pkg_archs.split():
         feed_from_server = False
@@ -246,10 +251,11 @@ python do_update_sdk_opkg_config () {
             feed_match = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
             if feed_match is not None:
                 feed_name = feed_match.group(1)
-                if feed_name == arch and  arch not in entry:
-                    feed_from_server = True
-                    ipk_feed_uris.append(line)
-                    break
+                if feed_name == arch:
+                    if arch == gcc_arch or arch == glibc_arch or arch not in entry:
+                        feed_from_server = True
+                        ipk_feed_uris.append(line)
+                        break
         if feed_from_server:
             continue
         pkgs_dir = os.path.join(d.getVar("DEPLOY_DIR_IPK"), arch)
