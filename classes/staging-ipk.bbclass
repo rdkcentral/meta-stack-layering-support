@@ -178,7 +178,12 @@ fakeroot python do_populate_ipk_sysroot(){
 
     prefix = d.getVar('MLPREFIX') or ""
 
+    seen = set()
     for file in files:
+        file = file.split(":")[-1]
+        if file in seen:
+            continue
+        seen.add(file)
         if "packagegroup-" in file:
             continue
         if file.endswith("\n"):
