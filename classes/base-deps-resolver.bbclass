@@ -195,10 +195,10 @@ def staging_copy_ipk_file(c, dest, seendirs):
         linkto = os.readlink(c)
         if os.path.lexists(dest):
             if not os.path.islink(dest):
-                raise OSError(errno.EEXIST, "Link %s already exists as a file" % dest, dest)
+                bb.warn("Link %s already exists as a file" % dest)
             if os.readlink(dest) == linkto:
                 return dest
-            raise OSError(errno.EEXIST, "Link %s already exists to a different location? (%s vs %s)" % (dest, os.readlink(dest), linkto), dest)
+            bb.warn("Link %s already exists to a different location? (%s vs %s)" % (dest, os.readlink(dest), linkto))
         os.symlink(linkto, dest)
     else:
         try:
@@ -208,7 +208,7 @@ def staging_copy_ipk_file(c, dest, seendirs):
             if err.errno == errno.EXDEV:
                 bb.utils.copyfile(c, dest)
             else:
-                raise
+                bb.warn("Failed copy file %s to %s" % (c,dest))
     return dest
 
 def staging_copy_ipk_dir(c, dest, seendirs):
