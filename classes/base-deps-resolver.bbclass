@@ -788,10 +788,7 @@ python update_recipe_deps_handler() {
         if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
             e.data.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
     else:
-        if bb.data.inherits_class('module', e.data) or bb.data.inherits_class('kernel', e.data):
-            e.data.setVar('PACKAGE_ARCH', arch + "-kern")
-        else:
-            set_gcc_glibc_pkg_arch(e.data, pn)
+        set_gcc_glibc_pkg_arch(e.data, pn)
         arch = e.data.getVar('PACKAGE_ARCH')
         # Skipping unrequired version of recipes
         if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
