@@ -679,12 +679,13 @@ def check_depends_version_change(d, variant):
         return is_target
 
     feed_info_dir = d.getVar("FEED_INFO_DIR")
-    deps = []
-    for var in ("DEPENDS", "RDEPENDS"):
-        val = d.getVar(var, True)
-        if val:
-            deps.extend(val.split())
+    deps = (d.getVar("DEPENDS") or "").split()
 
+    packages = d.getVar("PACKAGES")
+    if packages:
+        for pkg in packages.split():
+            rdeps = (d.getVar(f"RDEPENDS:{pkg}") or "").split()
+            deps.extend(rdeps)
     for dep in deps:
         if "-native" in dep or "-cross" in dep:
             continue
@@ -706,7 +707,9 @@ def check_depends_version_change(d, variant):
                 continue
             pkg_path = feed_info_dir+"%s/"%arch
             src_list = glob.glob(pkg_path + "source/%s_*"%(dep))
-            src_version = glob.glob(pkg_path + "source/%s_%s*"%(dep,version.split(".")[0]))
+            # This checks the full version. If we only need to check the major version,
+            # we should change it to version.split(".")[0].
+            src_version = glob.glob(pkg_path + "source/%s_%s*"%(dep,version))
             if src_list and not src_version:
                 is_target = True
                 break
@@ -886,7 +889,7 @@ python update_recipe_deps_handler() {
                 e.data.setVarFlag('do_prepare_recipe_sysroot', 'postfuncs', "")
 }
 addhandler update_recipe_deps_handler
-update_recipe_deps_handler[eventmask] = "bb.event.RecipePreFinalise"
+update_recipe_deps_handler[eventmask] = "bb.event.RecipePostKeyExpansion"
 
 python do_clean_pkgdata(){
     kernel_abi_ver_file = oe.path.join(d.getVar('PKGDATA_DIR'), "kernel-depmod",
