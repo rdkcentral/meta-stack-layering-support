@@ -689,12 +689,14 @@ def check_depends_version_change(d, variant):
         if "-native" in dep or "-cross" in dep:
             continue
         dep_info = recipe_version_map.get("%s"%dep, {})
-        required = dep_info.get("required", "")
-        if not required:
-            required = dep_info.get("preferred", "")
-            if not required:
-                required = dep_info.get("latest", "")
-        version = required.split(":", 1)[-1].split("-", 1)[0]
+        v = dep_info.get("required", "")
+        if not v:
+            v = dep_info.get("preferred", "")
+            if not v:
+                v = dep_info.get("latest", "")
+        if v.startswith(":"):
+            v = v[1:]
+        version = v.split("-", 1)[0].replace("AUTOINC", "0")
         if not version:
             continue
         if variant:
@@ -848,7 +850,6 @@ python update_recipe_deps_handler() {
                 e.data.appendVar("DEPENDS", ' glibc-locale')
 
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
-
         if ipk_mode and not check_targets(e.data, pn, variant) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data, variant):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
             if not os.path.exists(skipped_pkg_dir):
@@ -872,10 +873,8 @@ python update_recipe_deps_handler() {
                 if not os.path.exists(feed_info_dir+"src_mode/"):
                     bb.utils.mkdirhier(feed_info_dir+"src_mode/")
                 open(feed_info_dir+"src_mode/%s"%pn, 'w').close()
-                if version_check and not check_targets(e.data, pn_orig, variant):
-                    open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
-            e.data.appendVar("DEPENDS", " opkg-native ")
 
+            e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',e.data)
             bb.build.addtask('do_src_build_metadata','do_package_write_ipk',None,e.data)
             e.data.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
@@ -1903,18 +1902,6 @@ python get_pkgs_handler () {
             with open(pkg_path, "w") as f:
                 for deps in targetdeps:
                     f.writelines(deps+"\n")
-
-        if d.getVar("STACK_LAYER_EXTENSION"):
-            for source, dependencies in ipk_mapping.items():
-                if os.path.exists(feed_info_dir+"src_mode/%s"%source):
-                    continue
-
-                if source not in targetdeps:
-                    continue
-
-                for dep in dependencies:
-                    if os.path.exists(feed_info_dir+"src_mode/%s.major"%dep):
-                        bb.warn("%s version should update and rebuild. Dependency %s has changed with major version"%(source,dep))
 }
 addhandler get_pkgs_handler
 get_pkgs_handler[eventmask] = "bb.event.DepTreeGenerated"
