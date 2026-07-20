@@ -304,7 +304,11 @@ def sls_generate_native_sysroot(d, staging_native_prebuilt_path):
     import subprocess
     pn = d.getVar("PN", True)
     if "gcc-initial" in  pn:
-        staging_native_prebuilt_path = d.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
+        remote_feed = d.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED') or ""
+        if remote_feed:
+            staging_native_prebuilt_path = os.path.join(d.getVar("IPK_PKGDATA_DIR"), "prebuilt_gcc_initial")
+        else:
+            staging_native_prebuilt_path = d.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
 
     base_version = d.getVar('PV').split('+')[0]
     prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, f"{pn}_{base_version}")
@@ -735,6 +739,7 @@ def set_gcc_glibc_pkg_arch(d, pn):
         return
 
 python update_recipe_deps_handler() {
+    import subprocess
     staging_native_prebuilt_path = e.data.getVar("PREBUILT_NATIVE_SYSROOT")
     feed_info_dir = e.data.getVar("FEED_INFO_DIR")
     variant = e.data.getVar("BBEXTENDVARIANT")
@@ -747,10 +752,25 @@ python update_recipe_deps_handler() {
             prebuilt_native_pkg_type = e.data.getVar("PREBUILT_NATIVE_PKG_TYPE")
             if prebuilt_native_pkg_type:
                 import glob
+                base_version = e.data.getVar('PV').split('+')[0]
                 if "gcc-initial" in  pn:
                     set_gcc_glibc_pkg_arch(e.data, pn)
-                    staging_native_prebuilt_path = e.data.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
-                base_version = e.data.getVar('PV').split('+')[0]
+                    remote_feed = d.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED') or ""
+                    if remote_feed:
+                        local_feed_dir = os.path.join(d.getVar("IPK_PKGDATA_DIR"), "prebuilt_gcc_initial")
+                        bb.utils.mkdirhier(local_feed_dir)
+                        pr = e.data.getVar('PR')
+                        if variant:
+                            remote_file = os.path.join(remote_feed, f"{variant}-{pn}_{base_version}-{pr}.{prebuilt_native_pkg_type}")
+                        else:
+                            remote_file = os.path.join(remote_feed, f"{pn}_{base_version}-{pr}.{prebuilt_native_pkg_type}")
+                        try:
+                            bb.process.run("wget %s --directory-prefix=%s"%(remote_file, local_feed_dir), stderr=subprocess.STDOUT)
+                        except bb.process.ExecutionError as err:
+                            bb.warn("***** Failed to download %s"%remote_file)
+                        staging_native_prebuilt_path = local_feed_dir
+                    else:
+                        staging_native_prebuilt_path = e.data.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
                 prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, f"{pn}_{base_version}")
 
                 prebuilt_native_pkg_path_list = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
