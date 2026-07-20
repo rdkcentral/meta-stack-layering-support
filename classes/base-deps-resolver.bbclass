@@ -631,26 +631,70 @@ def check_depends_on_targets(d):
             break
     return is_target
 
+def loadRecipeVersionMap(d):
+    import os
+    recipe_version_map = {}
+
+    version_file = d.getVar("RECIPE_VER_LIST")
+
+    try:
+        with open(version_file, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                if line.startswith("Recipe"):
+                    continue
+                parts = line.split("|")
+                if len(parts) != 4:
+                    bb.warn("Skipping invalid version line: %s" % line)
+                    continue
+                recipe, latest, preferred, required = [p.strip() for p in parts]
+                if not recipe:
+                    continue
+                recipe_version_map[recipe] = {
+                    "latest": latest,
+                    "preferred": preferred,
+                    "required": required
+                }
+    except FileNotFoundError:
+        bb.warn("Recipe version file not found: %s" % version_file)
+
+    except Exception as e:
+        bb.warn("Failed to load recipe version map from %s: %s" % (version_file, e))
+    return recipe_version_map
+
 def check_depends_version_change(d, variant):
+    import glob
     version_check = True
     is_target = False
-    if d.getVar("DEPENDS_VERSION_CHECK") == "0":
-        return is_target
     archs = []
+    recipe_version_map =  loadRecipeVersionMap(d)
+    if not recipe_version_map:
+        return is_target
+
     if d.getVar("STACK_LAYER_EXTENSION"):
         archs = d.getVar("STACK_LAYER_EXTENSION").split()
     else:
         return is_target
 
-    import glob
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     deps = []
     for var in ("DEPENDS", "RDEPENDS"):
         val = d.getVar(var, True)
         if val:
             deps.extend(val.split())
+
     for dep in deps:
-        version = d.getVar("PV:pn-%s"%dep)
+        if "-native" in dep or "-cross" in dep:
+            continue
+        dep_info = recipe_version_map.get("%s"%dep, {})
+        required = dep_info.get("required", "")
+        if not required:
+            required = dep_info.get("preferred", "")
+            if not required:
+                required = dep_info.get("latest", "")
+        version = required.split(":", 1)[-1].split("-", 1)[0]
         if not version:
             continue
         if variant:
@@ -1860,7 +1904,7 @@ python get_pkgs_handler () {
                 for deps in targetdeps:
                     f.writelines(deps+"\n")
 
-        if d.getVar("STACK_LAYER_EXTENSION") and d.getVar("DEPENDS_VERSION_CHECK") and d.getVar("DEPENDS_VERSION_CHECK") == "1":
+        if d.getVar("STACK_LAYER_EXTENSION"):
             for source, dependencies in ipk_mapping.items():
                 if os.path.exists(feed_info_dir+"src_mode/%s"%source):
                     continue
