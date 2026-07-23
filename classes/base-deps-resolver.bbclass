@@ -707,10 +707,11 @@ def check_depends_version_change(d, variant):
                 continue
             pkg_path = feed_info_dir+"%s/"%arch
             src_list = glob.glob(pkg_path + "source/%s_*"%(dep))
-            # This checks the full version. If we only need to check the major version,
+            # This checks ignore the minor version. If we only need to check the major version,
             # we should change it to version.split(".")[0].
-            src_version = glob.glob(pkg_path + "source/%s_%s*"%(dep,version))
+            src_version = glob.glob(pkg_path + "source/%s_%s*"%(dep,version.split(".")[:2]))
             if src_list and not src_version:
+                bb.warn("** package %s is rebuilding because dependency %s version changed **"%(d.getVar("PN"),dep))
                 is_target = True
                 break
         if is_target:
@@ -869,13 +870,6 @@ python update_recipe_deps_handler() {
             if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', e.data):
                 e.data.appendVarFlag('do_packagedata', 'prefuncs', ' do_clean_pkgdata')
                 e.data.appendVarFlag('do_packagedata_setscene', 'prefuncs', ' do_clean_pkgdata')
-            if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
-                pn_orig = pn
-                if variant:
-                    pn  = f"{variant}-{pn}"
-                if not os.path.exists(feed_info_dir+"src_mode/"):
-                    bb.utils.mkdirhier(feed_info_dir+"src_mode/")
-                open(feed_info_dir+"src_mode/%s"%pn, 'w').close()
 
             e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',e.data)
@@ -1502,8 +1496,6 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
             line = line.strip()
             if not line:  # Blank line indicates the end of a package entry
                 if package != None:
-                    if variant:
-                        source = variant + source
                     if not package.endswith("-dev") and not package.endswith("-dbg") and not package.endswith("-staticdev") and not package.endswith("-doc") and not package.endswith("-src"):
                         package_info[package] = (source, dependencies)
                     if not package.endswith("-doc") and not package.endswith("-src"):
@@ -1541,12 +1533,8 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
                             break
             elif line.startswith('Provides:'):
                 provides = line.split('Provides: ', 1)[1]
-            elif line.startswith('Source:'):
-                source = line.split('Source: ', 1)[1]
-                if "_" in source:
-                     source = source.split("_", 1)[0]
-                else:
-                     source = source[:-3]
+            elif line.startswith('OE:'):
+                source = line.split('OE: ', 1)[1]
             elif line.startswith('Version:'):
                 version = line.split('Version: ', 1)[1]
             elif line.startswith('Depends:'):
@@ -1557,8 +1545,6 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
         d.setVar("IPK_DEPS_MAPPING_LIST",ipk_deps_mapping)
 
     if package != None:
-        if variant:
-            source = variant + source
         if not package.endswith("-doc") and not package.endswith("-src"):
             pkg_path = os.path.join(ipk_pkgdata_dir+"%s/"%arch_name, ("package/%s")%(package))
             src_path = os.path.join(ipk_pkgdata_dir+"%s/"%arch_name, "source/%s"%source)
