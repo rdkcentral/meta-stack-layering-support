@@ -1203,7 +1203,7 @@ def check_file_provider_ipk(d, file, rdeps):
 
 # Function returns the ipk pkg name which contains the run-time dependent shared lib.
 # This data is read from the metadata generated while executing the package_do_shlibs (do_package).
-
+do_update_rdeps_files[nostamp] = "1"
 def write_shlib_deps_files(d):
     import os
     pkg_dir = d.getVar("IPK_PKGDATA_RUNTIME_DIR")
