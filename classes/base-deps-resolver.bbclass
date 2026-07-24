@@ -1014,6 +1014,9 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
                     srcrev = bb.fetch2.get_srcrev(d)
                 elif len(srcrev) > 10:
                     srcrev = "AUTOINC+" + srcrev[:10]
+                else:
+                    import bb.fetch2
+                    srcrev = bb.fetch2.get_srcrev(d)
                 srcrev = srcrev.replace("AUTOINC","0")
                 version = version.replace("${SRCPV}",srcrev)
                 search_pattern = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
