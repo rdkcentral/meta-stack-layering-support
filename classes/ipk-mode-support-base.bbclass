@@ -290,17 +290,27 @@ def download_ipk(ipk, server_path, arch, d):
 def copy_deploy_ipk(d):
     import shutil
     arch = d.getVar('PACKAGE_ARCH')
-    ipk_outdir = os.path.join(d.getVar('PKGWRITEDIRIPK'),arch)
+    ipk_outdir = os.path.join(d.getVar('PKGWRITEDIRIPK'), arch)
     if not os.path.exists(ipk_outdir):
         bb.utils.mkdirhier(ipk_outdir)
 
     download_dir = d.getVar("PKGWRITECACHEIPK", True)
-
-    ipk_list = get_ipk_list(d,arch)
-    bb.note("[copy_deploy_ipk] ipk list : %s"%ipk_list)
+    ipk_list = get_ipk_list(d, arch)
+    bb.note("[copy_deploy_ipk] deploying %d IPK(s) to %s" % (len(ipk_list), ipk_outdir))
     for ipk in ipk_list:
-        src_path = os.path.join(download_dir,ipk)
-        bb.note("[copy_deploy_ipk] ipk path : %s"%src_path)
-        if os.path.exists(src_path):
-            bb.note("[copy_deploy_ipk] copying : %s"%src_path)
-            shutil.copy(src_path, ipk_outdir)
+        src_path = os.path.join(download_dir, ipk)
+        if not os.path.exists(src_path):
+            continue
+        dst_path = os.path.join(ipk_outdir, ipk)
+        # If src and dst already share the same inode (hard-linked) nothing to do.
+        try:
+            src_st = os.stat(src_path)
+            if os.path.exists(dst_path):
+                if os.stat(dst_path).st_ino == src_st.st_ino:
+                    continue
+                os.remove(dst_path)
+            # Hard-link: zero data copy, single metadata syscall.
+            os.link(src_path, dst_path)
+        except OSError:
+            # Different filesystem (EXDEV) — fall back to a real copy.
+            shutil.copy2(src_path, dst_path)
