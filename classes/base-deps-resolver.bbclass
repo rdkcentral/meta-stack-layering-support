@@ -1014,6 +1014,25 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
                     srcrev = bb.fetch2.get_srcrev(d)
                 elif len(srcrev) > 10:
                     srcrev = "AUTOINC+" + srcrev[:10]
+                else:
+                    # Short ref (tag / branch name): SRCPV was resolved to a
+                    # commit hash at build time by the git fetcher, but we
+                    # cannot reconstruct that hash here without a network
+                    # fetch.  Glob on the version prefix (everything before
+                    # ${SRCPV}) to locate the source-info file regardless of
+                    # the exact hash that was embedded.
+                    # e.g. PV = "2.8.2+git${SRCPV}" → prefix = "2.8.2+git"
+                    #      matches "browser-launcher_2.8.2+gitAUTOINC+1e6878b5dc-r0"
+                    version_prefix = version.split("${SRCPV}")[0]
+                    src_list = glob.glob(os.path.join(pkg_path, "source",
+                                                      "%s_%s*" % (src_dep_bpkg, version_prefix)))
+                    if src_list and os.path.exists(src_list[0]):
+                        ipkmode = True
+                        if arch == pkg_arch:
+                            same_arch = True
+                        version_mismatch = False
+                        break
+                    continue   # no match for this arch, try the next
                 srcrev = srcrev.replace("AUTOINC","0")
                 version = version.replace("${SRCPV}",srcrev)
                 search_pattern = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
