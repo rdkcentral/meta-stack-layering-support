@@ -1203,7 +1203,7 @@ def check_file_provider_ipk(d, file, rdeps):
 
 # Function returns the ipk pkg name which contains the run-time dependent shared lib.
 # This data is read from the metadata generated while executing the package_do_shlibs (do_package).
-do_update_rdeps_files[nostamp] = "1"
+
 def write_shlib_deps_files(d):
     import os
     pkg_dir = d.getVar("IPK_PKGDATA_RUNTIME_DIR")
@@ -1217,11 +1217,12 @@ def write_shlib_deps_files(d):
                 cmd += "printf '%%s\\n' '%s' >> %s; " % (shlib, pkg_path)
     return cmd
 
-do_update_rdeps_files[fakeroot] = "1"
 do_update_rdeps_files() {
     install -d ${IPK_PKGDATA_RUNTIME_DIR}
     ${@write_shlib_deps_files(d)}
 }
+
+do_packagedata[postfuncs] += "do_update_rdeps_files"
 
 def update_rdeps_shlib(d, pkg):
     ipks = []
@@ -1235,7 +1236,7 @@ def update_rdeps_shlib(d, pkg):
             if ipk not in ipks and ipk != " ":
                 ipks.append(ipk)
     return ipks
-addtask update_rdeps_files after do_package before do_package_qa
+
 def update_rdeps_pkgconfig(d,pkg):
     ipks = []
     # PKGCONFIGSKIPLIST should set with missing pkgconfig modules in package_do_pkgconfig
