@@ -195,10 +195,10 @@ def staging_copy_ipk_file(c, dest, seendirs):
         linkto = os.readlink(c)
         if os.path.lexists(dest):
             if not os.path.islink(dest):
-                raise OSError(errno.EEXIST, "Link %s already exists as a file" % dest, dest)
+                bb.warn("Link %s already exists as a file" % dest)
             if os.readlink(dest) == linkto:
                 return dest
-            raise OSError(errno.EEXIST, "Link %s already exists to a different location? (%s vs %s)" % (dest, os.readlink(dest), linkto), dest)
+            bb.warn("Link %s already exists to a different location? (%s vs %s)" % (dest, os.readlink(dest), linkto))
         os.symlink(linkto, dest)
     else:
         try:
@@ -208,7 +208,7 @@ def staging_copy_ipk_file(c, dest, seendirs):
             if err.errno == errno.EXDEV:
                 bb.utils.copyfile(c, dest)
             else:
-                raise
+                bb.warn("Failed copy file %s to %s" % (c,dest))
     return dest
 
 def staging_copy_ipk_dir(c, dest, seendirs):
@@ -304,7 +304,11 @@ def sls_generate_native_sysroot(d, staging_native_prebuilt_path):
     import subprocess
     pn = d.getVar("PN", True)
     if "gcc-initial" in  pn:
-        staging_native_prebuilt_path = d.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
+        remote_feed = d.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED') or ""
+        if remote_feed:
+            staging_native_prebuilt_path = os.path.join(d.getVar("IPK_PKGDATA_DIR"), "prebuilt_gcc_initial")
+        else:
+            staging_native_prebuilt_path = d.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
 
     base_version = d.getVar('PV').split('+')[0]
     prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, f"{pn}_{base_version}")
@@ -627,26 +631,73 @@ def check_depends_on_targets(d):
             break
     return is_target
 
+def loadRecipeVersionMap(d):
+    import os
+    recipe_version_map = {}
+
+    version_file = d.getVar("RECIPE_VER_LIST")
+
+    try:
+        with open(version_file, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                if line.startswith("Recipe"):
+                    continue
+                parts = line.split("|")
+                if len(parts) != 4:
+                    bb.warn("Skipping invalid version line: %s" % line)
+                    continue
+                recipe, latest, preferred, required = [p.strip() for p in parts]
+                if not recipe:
+                    continue
+                recipe_version_map[recipe] = {
+                    "latest": latest,
+                    "preferred": preferred,
+                    "required": required
+                }
+    except FileNotFoundError:
+        bb.warn("Recipe version file not found: %s" % version_file)
+
+    except Exception as e:
+        bb.warn("Failed to load recipe version map from %s: %s" % (version_file, e))
+    return recipe_version_map
+
 def check_depends_version_change(d, variant):
+    import glob
     version_check = True
     is_target = False
-    if d.getVar("DEPENDS_VERSION_CHECK") == "0":
-        return is_target
     archs = []
+    recipe_version_map =  loadRecipeVersionMap(d)
+    if not recipe_version_map:
+        return is_target
+
     if d.getVar("STACK_LAYER_EXTENSION"):
         archs = d.getVar("STACK_LAYER_EXTENSION").split()
     else:
         return is_target
 
-    import glob
     feed_info_dir = d.getVar("FEED_INFO_DIR")
-    deps = []
-    for var in ("DEPENDS", "RDEPENDS"):
-        val = d.getVar(var, True)
-        if val:
-            deps.extend(val.split())
+    deps = (d.getVar("DEPENDS") or "").split()
+
+    packages = d.getVar("PACKAGES")
+    if packages:
+        for pkg in packages.split():
+            rdeps = (d.getVar(f"RDEPENDS:{pkg}") or "").split()
+            deps.extend(rdeps)
     for dep in deps:
-        version = d.getVar("PV:pn-%s"%dep)
+        if "-native" in dep or "-cross" in dep:
+            continue
+        dep_info = recipe_version_map.get("%s"%dep, {})
+        v = dep_info.get("required", "")
+        if not v:
+            v = dep_info.get("preferred", "")
+            if not v:
+                v = dep_info.get("latest", "")
+        if v.startswith(":"):
+            v = v[1:]
+        version = v.split("-", 1)[0].replace("AUTOINC", "0")
         if not version:
             continue
         if variant:
@@ -656,8 +707,11 @@ def check_depends_version_change(d, variant):
                 continue
             pkg_path = feed_info_dir+"%s/"%arch
             src_list = glob.glob(pkg_path + "source/%s_*"%(dep))
-            src_version = glob.glob(pkg_path + "source/%s_%s*"%(dep,version.split(".")[0]))
+            # This checks ignore the minor version. If we only need to check the major version,
+            # we should change it to version.split(".")[0].
+            src_version = glob.glob(pkg_path + "source/%s_%s*"%(dep,version.split(".")[:2]))
             if src_list and not src_version:
+                bb.warn("** package %s is rebuilding because dependency %s version changed **"%(d.getVar("PN"),dep))
                 is_target = True
                 break
         if is_target:
@@ -684,10 +738,6 @@ def gcc_source_mode_check(d, pn, variant):
             gcc_source_mode = False
         else:
             gcc_source_mode = True
-        if not gcc_source_mode:
-            manifest_name = d.getVar("SSTATE_MANFILEPREFIX", True) + ".gcc_ipk"
-            bb.utils.mkdirhier(os.path.dirname(manifest_name))
-            open(manifest_name, 'w').close()
     else:
         gcc_source_mode = False
     return gcc_source_mode
@@ -739,6 +789,7 @@ def set_gcc_glibc_pkg_arch(d, pn):
         return
 
 python update_recipe_deps_handler() {
+    import subprocess
     staging_native_prebuilt_path = e.data.getVar("PREBUILT_NATIVE_SYSROOT")
     feed_info_dir = e.data.getVar("FEED_INFO_DIR")
     variant = e.data.getVar("BBEXTENDVARIANT")
@@ -751,10 +802,25 @@ python update_recipe_deps_handler() {
             prebuilt_native_pkg_type = e.data.getVar("PREBUILT_NATIVE_PKG_TYPE")
             if prebuilt_native_pkg_type:
                 import glob
+                base_version = e.data.getVar('PV').split('+')[0]
                 if "gcc-initial" in  pn:
                     set_gcc_glibc_pkg_arch(e.data, pn)
-                    staging_native_prebuilt_path = e.data.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
-                base_version = e.data.getVar('PV').split('+')[0]
+                    remote_feed = d.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED') or ""
+                    if remote_feed:
+                        local_feed_dir = os.path.join(d.getVar("IPK_PKGDATA_DIR"), "prebuilt_gcc_initial")
+                        bb.utils.mkdirhier(local_feed_dir)
+                        pr = e.data.getVar('PR')
+                        if variant:
+                            remote_file = os.path.join(remote_feed, f"{variant}-{pn}_{base_version}-{pr}.{prebuilt_native_pkg_type}")
+                        else:
+                            remote_file = os.path.join(remote_feed, f"{pn}_{base_version}-{pr}.{prebuilt_native_pkg_type}")
+                        try:
+                            bb.process.run("wget %s --directory-prefix=%s"%(remote_file, local_feed_dir), stderr=subprocess.STDOUT)
+                        except bb.process.ExecutionError as err:
+                            bb.warn("***** Failed to download %s"%remote_file)
+                        staging_native_prebuilt_path = local_feed_dir
+                    else:
+                        staging_native_prebuilt_path = e.data.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
                 prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, f"{pn}_{base_version}")
 
                 prebuilt_native_pkg_path_list = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
@@ -779,6 +845,14 @@ python update_recipe_deps_handler() {
             e.data.appendVarFlag('do_deploy', 'prefuncs', ' do_clean_deploy_images')
             e.data.appendVarFlag('do_deploy_setscene', 'prefuncs', ' do_clean_deploy_images')
         e.data.appendVar("DEPENDS", " pseudo-native")
+
+        # This is to make sure IMAGE_LINGUAS ipks are generated with stack layer packagegroups
+        if check_targets(e.data, pn, variant) and ("packagegroup" in pn or bb.data.inherits_class('image', e.data)):
+            skip_recipe_ipk_pkgs = True if "1" == d.getVar('SKIP_RECIPE_IPK_PKGS') else False
+            if e.data.getVar("GENERATE_GLIBC_LOCALE_IPK") == "1" and not skip_recipe_ipk_pkgs:
+                e.data.appendVarFlag('do_build', 'depends', ' glibc-locale:do_package_write_ipk')
+                e.data.appendVar("DEPENDS", ' glibc-locale')
+
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
         if ipk_mode and not check_targets(e.data, pn, variant) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data, variant):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
@@ -796,17 +870,8 @@ python update_recipe_deps_handler() {
             if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', e.data):
                 e.data.appendVarFlag('do_packagedata', 'prefuncs', ' do_clean_pkgdata')
                 e.data.appendVarFlag('do_packagedata_setscene', 'prefuncs', ' do_clean_pkgdata')
-            if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
-                pn_orig = pn
-                if variant:
-                    pn  = f"{variant}-{pn}"
-                if not os.path.exists(feed_info_dir+"src_mode/"):
-                    bb.utils.mkdirhier(feed_info_dir+"src_mode/")
-                open(feed_info_dir+"src_mode/%s"%pn, 'w').close()
-                if version_check and not check_targets(e.data, pn_orig, variant):
-                    open(feed_info_dir+"src_mode/%s.major"%pn, 'w').close()
-            e.data.appendVar("DEPENDS", " opkg-native ")
 
+            e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',e.data)
             bb.build.addtask('do_src_build_metadata','do_package_write_ipk',None,e.data)
             e.data.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
@@ -818,7 +883,7 @@ python update_recipe_deps_handler() {
                 e.data.setVarFlag('do_prepare_recipe_sysroot', 'postfuncs', "")
 }
 addhandler update_recipe_deps_handler
-update_recipe_deps_handler[eventmask] = "bb.event.RecipePreFinalise"
+update_recipe_deps_handler[eventmask] = "bb.event.RecipePostKeyExpansion"
 
 python do_clean_pkgdata(){
     kernel_abi_ver_file = oe.path.join(d.getVar('PKGDATA_DIR'), "kernel-depmod",
@@ -1172,7 +1237,7 @@ def get_rdeps_provider_ipk(d, rdep):
 
 def check_file_provider_ipk(d, file, rdeps):
     ipk = ""
-    layer_sysroot = d.getVar("RECIPE_SYSROOT")
+    layer_sysroot = d.getVar("SYSROOT_IPK")
     lpkgopkg_path = os.path.join(layer_sysroot,"usr/lib/opkg/alternatives")
     alternatives_file_path = os.path.join(lpkgopkg_path,file.split("/")[-1])
     alternatives_check_file_path = d.getVar("SYSROOT_ALTERNATIVES")
@@ -1445,8 +1510,6 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
             line = line.strip()
             if not line:  # Blank line indicates the end of a package entry
                 if package != None:
-                    if variant:
-                        source = variant + source
                     if not package.endswith("-dev") and not package.endswith("-dbg") and not package.endswith("-staticdev") and not package.endswith("-doc") and not package.endswith("-src"):
                         package_info[package] = (source, dependencies)
                     if not package.endswith("-doc") and not package.endswith("-src"):
@@ -1484,12 +1547,8 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
                             break
             elif line.startswith('Provides:'):
                 provides = line.split('Provides: ', 1)[1]
-            elif line.startswith('Source:'):
-                source = line.split('Source: ', 1)[1]
-                if "_" in source:
-                     source = source.split("_", 1)[0]
-                else:
-                     source = source[:-3]
+            elif line.startswith('OE:'):
+                source = line.split('OE: ', 1)[1]
             elif line.startswith('Version:'):
                 version = line.split('Version: ', 1)[1]
             elif line.startswith('Depends:'):
@@ -1500,8 +1559,6 @@ def create_ipk_pkgdata(d,file_path,ipk_pkgdata_dir,arch_name):
         d.setVar("IPK_DEPS_MAPPING_LIST",ipk_deps_mapping)
 
     if package != None:
-        if variant:
-            source = variant + source
         if not package.endswith("-doc") and not package.endswith("-src"):
             pkg_path = os.path.join(ipk_pkgdata_dir+"%s/"%arch_name, ("package/%s")%(package))
             src_path = os.path.join(ipk_pkgdata_dir+"%s/"%arch_name, "source/%s"%source)
@@ -1584,9 +1641,17 @@ python create_stack_layer_info () {
                 arch_uri = feed.group(2)
                 index_file = feed_info_dir+"index/"
                 if arch_uri.startswith("file:"):
-                    shutil.copy(arch_uri[5:]+"/Packages.gz", index_file)
+                    src_pkg = os.path.join(arch_uri[5:], "Packages.gz")
+                    if not os.path.exists(src_pkg):
+                        bb.warn("***** Packages.gz not found for feed %s at %s. Skipping pkgdata creation. *****"%(arch_name, src_pkg))
+                        continue
+                    shutil.copy(src_pkg, index_file)
                 else:
-                    bb.process.run("wget %s --directory-prefix=%s"%(arch_uri+"/Packages.gz", index_file), stderr=subprocess.STDOUT)
+                    try:
+                        bb.process.run("wget %s --directory-prefix=%s"%(arch_uri+"/Packages.gz", index_file), stderr=subprocess.STDOUT)
+                    except bb.process.ExecutionError as err:
+                        bb.warn("***** Failed to download Packages.gz for feed %s from %s. Skipping pkgdata creation. Error: %s *****"%(arch_name, arch_uri, err))
+                        continue
                 with gzip.open(index_file+"Packages.gz", 'rb') as gz_file:
                     with open(index_file+arch_name, 'wb') as output_file:
                         shutil.copyfileobj(gz_file, output_file)
@@ -1763,9 +1828,6 @@ python feed_index_creation () {
         cache_folder = os.path.join(d.getVar("TOPDIR"),"cache")
         if os.path.exists(cache_folder):
             shutil.rmtree(cache_folder)
-        cache_folder = os.path.join(d.getVar("TMPDIR"),"cache")
-        if os.path.exists(cache_folder):
-            shutil.rmtree(cache_folder)
 
     print_pkgs_in_src_mode(d)
 
@@ -1840,18 +1902,6 @@ python get_pkgs_handler () {
             with open(pkg_path, "w") as f:
                 for deps in targetdeps:
                     f.writelines(deps+"\n")
-
-        if d.getVar("STACK_LAYER_EXTENSION") and d.getVar("DEPENDS_VERSION_CHECK") and d.getVar("DEPENDS_VERSION_CHECK") == "1":
-            for source, dependencies in ipk_mapping.items():
-                if os.path.exists(feed_info_dir+"src_mode/%s"%source):
-                    continue
-
-                if source not in targetdeps:
-                    continue
-
-                for dep in dependencies:
-                    if os.path.exists(feed_info_dir+"src_mode/%s.major"%dep):
-                        bb.warn("%s version should update and rebuild. Dependency %s has changed with major version"%(source,dep))
 }
 addhandler get_pkgs_handler
 get_pkgs_handler[eventmask] = "bb.event.DepTreeGenerated"
