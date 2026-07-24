@@ -114,40 +114,151 @@ python do_ipk_download_setscene () {
 }
 addtask do_ipk_download_setscene
 
-def ipk_sysroot_creation(d):
+def _extract_single_ipk(args):
+    """
+    Worker: extract one .ipk directly without opkg overhead.
+    An .ipk is an ar(1) archive containing control.tar.* and data.tar.*.
+    Safe to call in parallel — tar handles concurrent directory creation
+    gracefully when multiple workers write to the same install_dir.
+    Returns (success, ipk_path, control_text, file_list_text, error_msg).
+    """
     import subprocess
+    import tempfile
+    ipk_path, install_dir = args
+    control_text = ""
+    file_list_text = ""
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            r = subprocess.run(['ar', 'x', ipk_path], cwd=tmpdir,
+                               stderr=subprocess.PIPE)
+            if r.returncode != 0:
+                return (False, ipk_path, "", "",
+                        r.stderr.decode('utf-8', errors='replace'))
+
+            entries = os.listdir(tmpdir)
+
+            # ---- control.tar.* ----
+            for entry in entries:
+                if entry.startswith('control.tar'):
+                    subprocess.run(
+                        ['tar', '-xf', os.path.join(tmpdir, entry), '-C', tmpdir],
+                        stderr=subprocess.DEVNULL)
+                    ctl = os.path.join(tmpdir, 'control')
+                    if os.path.exists(ctl):
+                        with open(ctl, errors='replace') as f:
+                            control_text = f.read()
+                    break
+
+            # ---- data.tar.* ----
+            for entry in entries:
+                if entry.startswith('data.tar'):
+                    lr = subprocess.run(
+                        ['tar', '-tf', os.path.join(tmpdir, entry)],
+                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                    file_list_text = lr.stdout.decode('utf-8', errors='replace')
+
+                    # --no-same-owner avoids permission errors under pseudo
+                    er = subprocess.run(
+                        ['tar', '--no-same-owner', '-xf',
+                         os.path.join(tmpdir, entry), '-C', install_dir],
+                        stderr=subprocess.PIPE)
+                    if er.returncode != 0:
+                        return (False, ipk_path, "", "",
+                                er.stderr.decode('utf-8', errors='replace'))
+                    break
+    except Exception as e:
+        return (False, ipk_path, "", "", str(e))
+    return (True, ipk_path, control_text, file_list_text, "")
+
+
+def _generate_opkg_state(install_dir, pkg_results):
+    """
+    Build minimal opkg state files (info/*.control, info/*.list, status)
+    from the already-extracted control data so that layer tooling which
+    reads /var/lib/opkg/ continues to work correctly.
+    """
+    import re
+    info_dir = os.path.join(install_dir, "var", "lib", "opkg", "info")
+    bb.utils.mkdirhier(info_dir)
+    status_lines = []
+
+    for (ok, ipk_path, control_text, file_list_text, _) in pkg_results:
+        if not ok or not control_text:
+            continue
+
+        fields = {}
+        for line in control_text.splitlines():
+            m = re.match(r'^([A-Za-z0-9_-]+):\s+(.*)', line)
+            if m:
+                fields[m.group(1)] = m.group(2)
+        pkg_name = fields.get('Package', '')
+        if not pkg_name:
+            continue
+
+        with open(os.path.join(info_dir, pkg_name + '.control'), 'w') as f:
+            f.write(control_text)
+
+        with open(os.path.join(info_dir, pkg_name + '.list'), 'w') as f:
+            for line in file_list_text.splitlines():
+                path = line.strip().lstrip('.')
+                if path and path != '/':
+                    f.write(path + '\n')
+
+        status_lines.append(control_text.rstrip())
+        status_lines.append('Status: install ok installed')
+        status_lines.append('')
+
+    with open(os.path.join(install_dir, "var", "lib", "opkg", "status"), 'w') as f:
+        f.write('\n'.join(status_lines))
+
+
+def ipk_sysroot_creation(d):
     import shutil
+    import concurrent.futures
     install_dir = d.getVar("D", True)
     arch = d.getVar('PACKAGE_ARCH')
     download_dir = d.getVar("PKGWRITECACHEIPK", True)
     if os.path.exists(install_dir):
         shutil.rmtree(install_dir)
+    bb.utils.mkdirhier(install_dir)
     ipk_install_list = []
-    ipk_list = get_ipk_list(d,arch)
-    opkg_cmd = bb.utils.which(os.getenv('PATH'), "opkg")
+    ipk_list = get_ipk_list(d, arch)
     for ipk in ipk_list:
         source_name = os.path.join(download_dir, ipk)
         if "-dbg_" not in ipk:
             if not os.path.exists(source_name):
-                bb.fatal("[ipk_sysroot_creation] %s has not been downloaded. Check ..."%source_name)
+                bb.fatal("[ipk_sysroot_creation] %s has not been downloaded. Check ..." % source_name)
             ipk_install_list.append(source_name)
     if not ipk_install_list:
         bb.note("[ipk_sysroot_creation] IPK list is empty")
         return
-    opkg_conf = d.getVar("IPKGCONF_LAYERING")
-    import oe.sls_utils
-    oe.sls_utils.sls_opkg_conf (d, opkg_conf)
-    opkg_args = "-f %s -o %s" %(opkg_conf,install_dir)
-    cmd = '%s %s --volatile-cache --no-install-recommends --nodeps install ' % (opkg_cmd, opkg_args)
-    ipk_install(d, cmd, ipk_install_list, install_dir)
-    os.remove(opkg_conf)
+
+    # Direct parallel extraction: bypass opkg (serial, one lock per package)
+    # and extract data.tar.* from every .ipk concurrently — the same principle
+    # as sstate setscene which uses a single tar call with no package-manager
+    # overhead. Post-install scripts are not needed for a build sysroot.
+    workers = min(8, len(ipk_install_list))
+    bb.note("[ipk_sysroot_creation] Extracting %d IPKs with %d parallel workers"
+            % (len(ipk_install_list), workers))
+    args_list = [(ipk, install_dir) for ipk in ipk_install_list]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+        results = list(ex.map(_extract_single_ipk, args_list))
+
+    failed = [(r[1], r[4]) for r in results if not r[0]]
+    if failed:
+        msgs = "; ".join("%s: %s" % (os.path.basename(p), e) for p, e in failed)
+        bb.fatal("[ipk_sysroot_creation] Extraction failed: %s" % msgs)
+
+    bb.note("[ipk_sysroot_creation] Generating opkg state files")
+    _generate_opkg_state(install_dir, results)
+
     bb.build.exec_func("sysroot_stage_all", d)
     multiprov = d.getVar("BB_MULTI_PROVIDER_ALLOWED").split()
     provdir = d.expand("${SYSROOT_DESTDIR}${base_prefix}/sysroot-providers/")
     opkg_extra_src = d.expand("${D}${base_prefix}/var/lib/opkg/")
     if os.path.exists(opkg_extra_src):
         opkg_extra_dest = d.expand("${SYSROOT_DESTDIR}${base_prefix}/var/lib/opkg")
-        bb.note("opkg_extra_dest : %s"%opkg_extra_dest)
+        bb.note("opkg_extra_dest : %s" % opkg_extra_dest)
         shutil.copytree(opkg_extra_src, opkg_extra_dest)
         old_name = d.expand("${SYSROOT_DESTDIR}${base_prefix}/var/lib/opkg/status")
         new_name = d.expand("${SYSROOT_DESTDIR}${base_prefix}/var/lib/opkg/${PN}.status")
