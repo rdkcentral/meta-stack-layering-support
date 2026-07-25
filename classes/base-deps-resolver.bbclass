@@ -680,6 +680,7 @@ def check_depends_version_change(d, variant):
 
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     deps = (d.getVar("DEPENDS") or "").split()
+    version_check_mode = d.getVar("DEPENDS_REBUILD_VERSION_MATCH") or ""
 
     packages = d.getVar("PACKAGES")
     if packages:
@@ -700,16 +701,22 @@ def check_depends_version_change(d, variant):
         version = v.split("-", 1)[0].replace("AUTOINC", "0")
         if not version:
             continue
-        if variant:
+        if variant and not dep.startswith(f"{variant}"):
             dep = f"{variant}-{dep}"
         for arch in archs:
             if not arch or  arch  == " ":
                 continue
             pkg_path = feed_info_dir+"%s/"%arch
             src_list = glob.glob(pkg_path + "source/%s_*"%(dep))
-            # This checks ignore the minor version. If we only need to check the major version,
-            # we should change it to version.split(".")[0].
-            src_version = glob.glob(pkg_path + "source/%s_%s*"%(dep,version.split(".")[:2]))
+            if version_check_mode == "major":
+                version_match = version.split(".")[0]
+            elif version_check_mode == "major.minor":
+                version_match = ".".join(version.split(".")[:2])
+            else:
+                version_match = version
+
+            src_version = glob.glob(f"{pkg_path}source/{dep}_{version_match}*")
+
             if src_list and not src_version:
                 bb.warn("** package %s is rebuilding because dependency %s version changed **"%(d.getVar("PN"),dep))
                 is_target = True
