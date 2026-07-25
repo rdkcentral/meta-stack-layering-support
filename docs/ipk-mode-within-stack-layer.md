@@ -4,7 +4,7 @@ With the help of IPK mode support, we can switch the components between source a
 IPK mode means, build will skip the corresponding package recipe from executing its default tasks and use the IPK of that package to resolve both build time and runtime dependencies.
 
 - Build from source only if there is a version change in the package or if specified in the command line using bitbake [package].
-- The lower-level dependencies will be handled automatically. <br />If there is a version change in the dependency tree (as determined by DEPENDS_REBUILD_VERSION_MATCH), it will rebuild those packages from the source as well.<br /><br />
+- The lower-level dependencies will be handled automatically. <br />If there is a version change in the dependency tree (as determined by DEPENDS_REBUILD_VERSION_MATCH), it will rebuild those packages from the source as well.<br />
 Example, if pkg1 depends on pkg2, and pkg2 has a version change (at the granularity set by DEPENDS_REBUILD_VERSION_MATCH, e.g. "minor") compared to the previous release, then pkg1 will build from source even though pkg1 has no version change.
 - At the end of the build, a summary of all packages that were built from source is printed to the build log, allowing developers to easily identify which packages were rebuilt and why.
 
@@ -13,7 +13,7 @@ Example, if pkg1 depends on pkg2, and pkg2 has a version change (at the granular
 - Or if there is a version mismatch from the previous release feed. 
 
 ## To enable IPK consumption:
-- Define STACK_LAYER_EXTENSION variable with the IPK feed arch name.<br /> e.g.<br /> STACK_LAYER_EXTENSION = "armv7at2hf-neon"<br /> IPK_FEED_URIS += " ${STACK_LAYER_EXTENSION}##<Artifactory/ipk feed path> "<br /><br />  This will consume all the packages available from the feed URI defined for "armv7at2hf-neon" as IPKs, unless the conditions mentioned in "To trigger build from source" are met. We can set multiple arch feeds in STACK_LAYER_EXTENSION.
+- Define STACK_LAYER_EXTENSION variable with the IPK feed arch name.<br /> e.g.<br /> STACK_LAYER_EXTENSION = "armv7at2hf-neon"<br /> IPK_FEED_URIS += " ${STACK_LAYER_EXTENSION}##<Artifactory/ipk feed path> "<br />  This will consume all the packages available from the feed URI defined for "armv7at2hf-neon" as IPKs, unless the conditions mentioned in "To trigger build from source" are met. We can set multiple arch feeds in STACK_LAYER_EXTENSION.
 - Ensure proper version updates while reviewing each change in the components.
 
 ## Additional info
