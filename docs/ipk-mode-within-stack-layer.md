@@ -8,6 +8,9 @@ IPK mode means, build will skip the corresponding package recipe from executing 
 Example, if pkg1 depends on pkg2, and pkg2 has a version change (at the granularity set by DEPENDS_REBUILD_VERSION_MATCH, e.g. "minor") compared to the previous release, then pkg1 will build from source even though pkg1 has no version change.
 - At the end of the build, a summary of all packages that were built from source is printed to the build log, allowing developers to easily identify which packages were rebuilt and why.
 
+## Prerequisite
+- Run `bitbake -s` to generate the recipe version file (RECIPE_VER_LIST) before starting the build. This file captures the recipe names and their versions, and is used by the dependency resolver to detect the dependent package version changes that may trigger rebuilds from source.
+
 ## To trigger build from source:
 - Either package name should mention in the command line<br /> e.g. bitbake openssl
 - Or if there is a version mismatch from the previous release feed. 
