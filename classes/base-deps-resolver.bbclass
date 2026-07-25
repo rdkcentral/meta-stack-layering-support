@@ -710,7 +710,7 @@ def check_depends_version_change(d, variant):
             src_list = glob.glob(pkg_path + "source/%s_*"%(dep))
             if version_check_mode == "major":
                 version_match = version.split(".")[0]
-            elif version_check_mode == "major.minor":
+            elif version_check_mode == "minor":
                 version_match = ".".join(version.split(".")[:2])
             else:
                 version_match = version
