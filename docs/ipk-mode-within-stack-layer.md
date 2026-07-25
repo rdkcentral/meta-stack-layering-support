@@ -38,5 +38,3 @@ Adopting fully tested released version IPKs provides a controlled and stable dev
 
 ## Additional info
 - EXCLUDE_IPK_FEEDS : This will skip the corresponding arch feed from the IPK consumption. <br /> EXCLUDE_IPK_FEEDS = "armv7at2hf-neon all", this will skip all the packages from "armv7at2hf-neon" and "all" archs from IPK consumption and process the recipes.<br /> 
-- DEPENDS_VERSION_CHECK :  If set to "1", it will build the package from source, if a dependency's major version has changed. This will work only with packages set with global PV and PR . Example PV:pn-[openssl] = "1.1.1" <br />
-- DEPENDS_ON_TARGET : If set to "1", it will build pkg from source, if it depends on target package <br />
