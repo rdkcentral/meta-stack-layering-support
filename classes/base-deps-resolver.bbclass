@@ -618,7 +618,7 @@ def check_depends_on_targets(d):
     targets = get_target_list(d)
     for dep in deps:
         if dep.startswith("virtual/"):
-            preferred_provider = d.getVar('PREFERRED_PROVIDER_%s' % pkg, True)
+            preferred_provider = d.getVar('PREFERRED_PROVIDER_%s' % dep, True)
             if preferred_provider is not None:
                 dep = preferred_provider
         for target in targets:
