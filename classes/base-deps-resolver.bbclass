@@ -603,12 +603,10 @@ def get_target_list(d):
 
     return targets
 
-def check_targets(d, pkg, variant):
+def check_targets(d, pkg):
     is_target = False
     targets = get_target_list(d)
     for target in targets:
-        if target.startswith("lib32-"):
-            target = target[6:]
         if pkg == target[:-1]:
             is_target = True
             break
@@ -617,10 +615,12 @@ def check_targets(d, pkg, variant):
 def check_depends_on_targets(d):
     deps = d.getVar("DEPENDS",True).split()
     is_target = False
-    if d.getVar("DEPENDS_ON_TARGET") == "0":
-        return is_target
     targets = get_target_list(d)
     for dep in deps:
+        if dep.startswith("virtual/"):
+            preferred_provider = d.getVar('PREFERRED_PROVIDER_%s' % pkg, True)
+            if preferred_provider is not None:
+                dep = preferred_provider
         for target in targets:
             if target.startswith("lib32-"):
                 target = target[6:]
@@ -731,10 +731,10 @@ def gcc_source_mode_check(d, pn, variant):
     if "gcc-" in pn:
         version = get_version_info(d)
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, "libgcc", False, version)
-        if ipk_mode and not check_targets(d, pn, variant):
+        if ipk_mode and not check_targets(d, pn):
             gcc_source_mode = False
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, "gcc-runtime", False, version)
-        if ipk_mode and not check_targets(d, pn, variant):
+        if ipk_mode and not check_targets(d, pn):
             gcc_source_mode = False
         else:
             gcc_source_mode = True
@@ -847,14 +847,14 @@ python update_recipe_deps_handler() {
         e.data.appendVar("DEPENDS", " pseudo-native")
 
         # This is to make sure IMAGE_LINGUAS ipks are generated with stack layer packagegroups
-        if check_targets(e.data, pn, variant) and ("packagegroup" in pn or bb.data.inherits_class('image', e.data)):
+        if check_targets(e.data, pn) and ("packagegroup" in pn or bb.data.inherits_class('image', e.data)):
             skip_recipe_ipk_pkgs = True if "1" == d.getVar('SKIP_RECIPE_IPK_PKGS') else False
             if e.data.getVar("GENERATE_GLIBC_LOCALE_IPK") == "1" and not skip_recipe_ipk_pkgs:
                 e.data.appendVarFlag('do_build', 'depends', ' glibc-locale:do_package_write_ipk')
                 e.data.appendVar("DEPENDS", ' glibc-locale')
 
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
-        if ipk_mode and not check_targets(e.data, pn, variant) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data, variant):
+        if ipk_mode and not check_targets(e.data, pn) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data, variant):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
             if not os.path.exists(skipped_pkg_dir):
                 bb.utils.mkdirhier(skipped_pkg_dir)
