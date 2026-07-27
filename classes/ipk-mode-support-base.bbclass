@@ -140,6 +140,30 @@ def ipk_sysroot_creation(d):
     opkg_args = "-f %s -o %s" %(opkg_conf,install_dir)
     cmd = '%s %s --volatile-cache --no-install-recommends --nodeps install ' % (opkg_cmd, opkg_args)
     ipk_install(d, cmd, ipk_install_list, install_dir)
+    # Write simple IPK pkgdata: list .so filenames for each Yocto package so that
+    # do_skip_ipk_files_qa_check can populate FILES_IPK_PKG for consumers.
+    import glob
+    ipk_shlibs_dir = d.getVar("IPK_SHLIBS_PKGDATA_WORKDIR")
+    bb.utils.mkdirhier(ipk_shlibs_dir)
+    so_files = set()
+    for info_dir in [os.path.join(install_dir, "var/lib/opkg/info"),
+                     os.path.join(install_dir, "usr/lib/opkg/info")]:
+        if not os.path.exists(info_dir):
+            continue
+        for list_file in glob.glob(os.path.join(info_dir, "*.list")):
+            try:
+                with open(list_file) as lf:
+                    for line in lf:
+                        f = line.strip()
+                        if ".so" in os.path.basename(f):
+                            so_files.add(os.path.basename(f))
+            except IOError:
+                pass
+    if so_files:
+        content = "\n".join(sorted(so_files)) + "\n"
+        for pkg in (d.getVar("PACKAGES") or "").split():
+            with open(os.path.join(ipk_shlibs_dir, pkg), "w") as pf:
+                pf.write(content)
     os.remove(opkg_conf)
     bb.build.exec_func("sysroot_stage_all", d)
     multiprov = d.getVar("BB_MULTI_PROVIDER_ALLOWED").split()
