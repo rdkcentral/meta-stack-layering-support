@@ -1945,4 +1945,4 @@ get_pkgs_handler[eventmask] = "bb.event.DepTreeGenerated"
 do_build[recrdeptask] += "do_package_write_ipk do_src_build_metadata"
 # deptask (direct deps only) is sufficient: do_skip_ipk_files_qa_check reads
 # only direct RDEPENDS, so there is no need to wait on the full transitive graph.
-do_package_qa[deptask] += "do_ipk_shlibs_pkgdata"
+do_package_qa[recrdeptask] += "do_ipk_shlibs_pkgdata"
