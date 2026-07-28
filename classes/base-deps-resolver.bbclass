@@ -291,6 +291,11 @@ python do_src_build_metadata_setscene () {
 # Sstate task: captures per-recipe IPK shlibs pkgdata written by ipk_sysroot_creation
 # and stages it to the global PKGDATA_DIR/ipk/ so file-rdeps QA can find .so providers.
 python do_ipk_shlibs_pkgdata() {
+    import os
+    workdir = d.getVar("IPK_SHLIBS_PKGDATA_WORKDIR")
+    if not os.path.isdir(workdir) or not os.listdir(workdir):
+        bb.note("[do_ipk_shlibs_pkgdata] no shlibs pkgdata to stage for %s, skipping" % d.getVar("PN"))
+        return
     bb.note("[do_ipk_shlibs_pkgdata] staging IPK shlibs pkgdata for %s" % d.getVar("PN"))
 }
 do_ipk_shlibs_pkgdata[dirs] = "${IPK_SHLIBS_PKGDATA_WORKDIR}"
@@ -1938,4 +1943,6 @@ addhandler get_pkgs_handler
 get_pkgs_handler[eventmask] = "bb.event.DepTreeGenerated"
 
 do_build[recrdeptask] += "do_package_write_ipk do_src_build_metadata"
-do_package_qa[recrdeptask] += "do_ipk_shlibs_pkgdata"
+# deptask (direct deps only) is sufficient: do_skip_ipk_files_qa_check reads
+# only direct RDEPENDS, so there is no need to wait on the full transitive graph.
+do_package_qa[deptask] += "do_ipk_shlibs_pkgdata"
