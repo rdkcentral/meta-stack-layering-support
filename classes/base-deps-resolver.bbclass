@@ -542,18 +542,6 @@ python do_install_ipk_recipe_sysroot () {
             bb.note(" [deps-resolver] gobject-introspection requires cross compilation support")
             g_ir_cc_support(d,recipe_sysroot,pkg_pn)
             break
-
-    output_file = os.path.join(d.getVar('RECIPE_SYSROOT'), 'var/lib/opkg/status')
-    directory = os.path.dirname(output_file)
-    if not os.path.exists(os.path.dirname(output_file)):
-        return
-    with open(output_file, 'a') as outfile:
-        for filename in os.listdir(directory):
-            if filename.endswith('.status') and filename != 'status':
-                file_path = os.path.join(directory, filename)
-                outfile.write('\n')
-                with open(file_path, 'r') as infile:
-                    outfile.write(infile.read())
 }
 
 def get_ipk_list(d, pkg_arch):
@@ -1213,6 +1201,17 @@ def get_rdeps_provider_ipk(d, rdep):
     if not os.path.exists(info_file_path):
         bb.utils.mkdirhier(os.path.dirname(info_file_path))
 
+    output_file = os.path.join(reciepe_sysroot, 'var/lib/opkg/status')
+    directory = os.path.dirname(output_file)
+    if not os.path.exists(directory):
+        bb.utils.mkdirhier(directory)
+    with open(output_file, 'a') as outfile:
+        for filename in os.listdir(directory):
+            if filename.endswith('.status') and filename != 'status':
+                file_path = os.path.join(directory, filename)
+                outfile.write('\n')
+                with open(file_path, 'r') as infile:
+                    outfile.write(infile.read())
     opkg_args = "-f %s -t %s -o %s " % (opkg_conf, info_file_path ,reciepe_sysroot)
 
     cmd = '%s %s -A search "'"*/%s"'"' % (opkg_cmd, opkg_args,rdep.strip()) + " 2>/dev/null"
@@ -1274,6 +1273,16 @@ def check_file_provider_ipk(d, file, rdeps):
         pkg = get_rdeps_provider_ipk(d, file.split("/")[-1])
         if pkg and pkg.split("(")[0].strip() in rdeps:
             ipk = pkg.split("(")[0].strip()
+        elif pkg:
+            import re
+            ipk = pkg.split("(")[0].strip()
+            archs = []
+            for line in (d.getVar('IPK_FEED_URIS') or "").split():
+                feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
+                if feed is not None:
+                    archs.append(feed.group(1))
+            if archs:
+                ipk = get_provider(d,ipk,archs)
     return ipk
 
 # Function returns the ipk pkg name which contains the run-time dependent shared lib.
