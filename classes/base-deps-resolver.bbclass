@@ -13,10 +13,6 @@ SYSROOT_DIRS_BIN_REQUIRED = "${MLPREFIX}gobject-introspection"
 
 # Pkgdata directory to store runtime IPK dependency details.
 IPK_PKGDATA_RUNTIME_DIR = "${WORKDIR}/pkgdata/ipk"
-# Per-recipe temp dir written by ipk_sysroot_creation; staged to IPK_PKGDATA_SHLIBS_DIR via sstate.
-IPK_SHLIBS_PKGDATA_WORKDIR = "${WORKDIR}/ipk-shlibs-pkgdata"
-# Global shared dir (sstate output) where file-rdeps QA reads .so providers for IPK packages.
-IPK_PKGDATA_SHLIBS_DIR = "${PKGDATA_DIR}/ipk/shlibs"
 
 SSTATE_MANFILEPREFIX_NATIVE_FILTER = "${SSTATE_MANIFESTS}/manifest-"
 
@@ -285,24 +281,6 @@ python do_src_build_metadata (){
 }
 SSTATETASKS += "do_src_build_metadata"
 python do_src_build_metadata_setscene () {
-    sstate_setscene(d)
-}
-
-# Sstate task: captures per-recipe IPK shlibs pkgdata written by ipk_sysroot_creation
-# and stages it to the global PKGDATA_DIR/ipk/ so file-rdeps QA can find .so providers.
-python do_ipk_shlibs_pkgdata() {
-    import os
-    workdir = d.getVar("IPK_SHLIBS_PKGDATA_WORKDIR")
-    if not os.path.isdir(workdir) or not os.listdir(workdir):
-        bb.note("[do_ipk_shlibs_pkgdata] no shlibs pkgdata to stage for %s, skipping" % d.getVar("PN"))
-        return
-    bb.note("[do_ipk_shlibs_pkgdata] staging IPK shlibs pkgdata for %s" % d.getVar("PN"))
-}
-do_ipk_shlibs_pkgdata[dirs] = "${IPK_SHLIBS_PKGDATA_WORKDIR}"
-do_ipk_shlibs_pkgdata[sstate-inputdirs] = "${IPK_SHLIBS_PKGDATA_WORKDIR}"
-do_ipk_shlibs_pkgdata[sstate-outputdirs] = "${IPK_PKGDATA_SHLIBS_DIR}"
-SSTATETASKS += "do_ipk_shlibs_pkgdata"
-python do_ipk_shlibs_pkgdata_setscene() {
     sstate_setscene(d)
 }
 
@@ -892,7 +870,7 @@ python update_recipe_deps_handler() {
             update_build_tasks(e.data, arch, "target")
             e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
-            bb.build.addtask('do_ipk_shlibs_pkgdata', None, 'do_populate_sysroot', e.data)
+            bb.build.addtask('do_ipk_shlibs_pkgdata', 'do_package_write_ipk', 'do_ipk_download do_populate_sysroot', e.data)
             if bb.data.inherits_class('update-alternatives',e.data):
                 bb.build.addtask('do_get_alternative_pkg','do_package_write_ipk', 'do_ipk_download do_populate_sysroot',e.data)
         elif d.getVar("PREBUILT_NATIVE_SUPPORT") == "1" and staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
@@ -1943,6 +1921,3 @@ addhandler get_pkgs_handler
 get_pkgs_handler[eventmask] = "bb.event.DepTreeGenerated"
 
 do_build[recrdeptask] += "do_package_write_ipk do_src_build_metadata"
-# deptask (direct deps only) is sufficient: do_skip_ipk_files_qa_check reads
-# only direct RDEPENDS, so there is no need to wait on the full transitive graph.
-do_package_qa[recrdeptask] += "do_ipk_shlibs_pkgdata"

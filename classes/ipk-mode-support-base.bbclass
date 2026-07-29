@@ -73,6 +73,56 @@ python do_get_alternative_pkg_setscene () {
 addtask do_get_alternative_pkg_sysroot_setscene
 do_package_qa[recrdeptask] += "do_get_alternative_pkg"
 
+python do_ipk_shlibs_pkgdata (){
+    import glob
+    workdir = d.expand("${IPK_SHLIBS_PKGDATA_WORKDIR}")
+    install_dir = d.expand("${SYSROOT_DESTDIR}${base_prefix}/var/lib/opkg/info")
+    if not os.path.exists(workdir):
+        bb.utils.mkdirhier(workdir)
+    so_files = set()
+    for info_dir in [os.path.join(install_dir, "var/lib/opkg/info"),
+                     os.path.join(install_dir, "usr/lib/opkg/info")]:
+        if not os.path.isdir(info_dir):
+            continue
+        for lf in glob.glob(os.path.join(info_dir, "*.list")):
+            try:
+                with open(lf, 'r') as f:
+                    for line in f:
+                        bn = os.path.basename(line.strip())
+                        if '.so' in bn:
+                            so_files.add(bn)
+            except IOError:
+                pass
+    if not so_files:
+        bb.note("[do_ipk_shlibs_pkgdata] no .so files found for %s" % d.getVar("PN"))
+        return
+    content = "\n".join(sorted(so_files)) + "\n"
+    packages = (d.getVar("PACKAGES") or "").split()
+    if packages:
+        first = os.path.join(workdir, packages[0])
+        with open(first, "w") as pf:
+            pf.write(content)
+        for pkg in packages[1:]:
+            pkg_path = os.path.join(workdir, pkg)
+            try:
+                os.link(first, pkg_path)
+            except OSError:
+                with open(pkg_path, "w") as pf:
+                    pf.write(content)
+    bb.note("[do_ipk_shlibs_pkgdata] staged .so shlibs pkgdata for %s" % d.getVar("PN"))
+}
+SSTATETASKS += "do_ipk_shlibs_pkgdata"
+do_ipk_shlibs_pkgdata[dirs] = "${IPK_SHLIBS_PKGDATA_WORKDIR} ${IPK_PKGDATA_SHLIBS_DIR}"
+do_ipk_shlibs_pkgdata[sstate-inputdirs] = "${IPK_SHLIBS_PKGDATA_WORKDIR}"
+do_ipk_shlibs_pkgdata[sstate-outputdirs] = "${IPK_PKGDATA_SHLIBS_DIR}"
+do_ipk_shlibs_pkgdata[cleandirs] = "${IPK_SHLIBS_PKGDATA_WORKDIR}"
+
+python do_ipk_shlibs_pkgdata_setscene () {
+    sstate_setscene(d)
+}
+addtask do_ipk_shlibs_pkgdata_setscene
+do_package_qa[rdeptask] += "do_ipk_shlibs_pkgdata"
+
 do_ipk_download[network] = "1"
 python do_ipk_download (){
     import subprocess
@@ -140,43 +190,6 @@ def ipk_sysroot_creation(d):
     opkg_args = "-f %s -o %s" %(opkg_conf,install_dir)
     cmd = '%s %s --volatile-cache --no-install-recommends --nodeps install ' % (opkg_cmd, opkg_args)
     ipk_install(d, cmd, ipk_install_list, install_dir)
-    # Write simple IPK pkgdata: list .so filenames for each Yocto package so that
-    # do_skip_ipk_files_qa_check can populate FILES_IPK_PKG for consumers.
-    ipk_shlibs_dir = d.getVar("IPK_SHLIBS_PKGDATA_WORKDIR")
-    so_files = set()
-    for info_dir in [os.path.join(install_dir, "var/lib/opkg/info"),
-                     os.path.join(install_dir, "usr/lib/opkg/info")]:
-        if not os.path.isdir(info_dir):
-            continue
-        with os.scandir(info_dir) as it:
-            for entry in it:
-                if not entry.name.endswith(".list") or not entry.is_file():
-                    continue
-                try:
-                    with open(entry.path) as lf:
-                        for line in lf:
-                            bn = os.path.basename(line.strip())
-                            if ".so" in bn:
-                                so_files.add(bn)
-                except IOError:
-                    pass
-    if so_files:
-        bb.utils.mkdirhier(ipk_shlibs_dir)
-        content = "\n".join(sorted(so_files)) + "\n"
-        packages = (d.getVar("PACKAGES") or "").split()
-        if packages:
-            # Write content once; hard-link for remaining package files to
-            # avoid redundant I/O when all PACKAGES entries share the same data.
-            first = os.path.join(ipk_shlibs_dir, packages[0])
-            with open(first, "w") as pf:
-                pf.write(content)
-            for pkg in packages[1:]:
-                pkg_path = os.path.join(ipk_shlibs_dir, pkg)
-                try:
-                    os.link(first, pkg_path)
-                except OSError:
-                    with open(pkg_path, "w") as pf:
-                        pf.write(content)
     os.remove(opkg_conf)
     bb.build.exec_func("sysroot_stage_all", d)
     multiprov = d.getVar("BB_MULTI_PROVIDER_ALLOWED").split()
