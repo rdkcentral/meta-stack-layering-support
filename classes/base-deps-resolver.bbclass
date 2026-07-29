@@ -262,7 +262,6 @@ def update_build_tasks(d, arch, machine):
 
     if machine == "target":
         enable_task(d, "do_package_write_ipk")
-        enable_task(d, "do_ipk_shlibs_pkgdata")
 
     d.setVarFlag("do_populate_sysroot", "sstate-interceptfuncs", " ")
     d.setVarFlag("do_populate_sysroot", "sstate-fixmedir", " ")
@@ -870,7 +869,6 @@ python update_recipe_deps_handler() {
             update_build_tasks(e.data, arch, "target")
             e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
-            bb.build.addtask('do_ipk_shlibs_pkgdata', 'do_package_write_ipk', 'do_ipk_download do_populate_sysroot', e.data)
             if bb.data.inherits_class('update-alternatives',e.data):
                 bb.build.addtask('do_get_alternative_pkg','do_package_write_ipk', 'do_ipk_download do_populate_sysroot',e.data)
         elif d.getVar("PREBUILT_NATIVE_SUPPORT") == "1" and staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
@@ -1439,8 +1437,6 @@ python do_skip_ipk_files_qa_check () {
     bb.build.exec_func("read_subpackage_metadata", d)
     packages = d.getVar('PACKAGES').split(" ")
     pkg_dir = d.getVar("IPK_PKGDATA_RUNTIME_DIR")
-    ipk_pkgdata_dir = d.getVar("IPK_PKGDATA_SHLIBS_DIR")
-    pkgdata_dir = d.getVar("PKGDATA_DIR")
     for pkg in packages:
         pkg_path = os.path.join(pkg_dir, pkg)
         if os.path.isdir(pkg_path):
@@ -1450,20 +1446,6 @@ python do_skip_ipk_files_qa_check () {
                 lines = fd.readlines()
             for l in lines:
                 d.appendVar("FILES_IPK_PKG:%s"%pkg, " %s"%l[:-1])
-        # For each runtime dependency, if its normal pkgdata is absent (IPK mode),
-        # add its .so names to FILES_IPK_PKG so file-rdeps QA skips them gracefully.
-        for rdep in bb.utils.explode_deps(d.getVar("RDEPENDS:%s" % pkg) or ""):
-            if not rdep:
-                continue
-            if os.path.exists(os.path.join(pkgdata_dir, "runtime", rdep)):
-                continue  # normal pkgdata present – standard QA flow handles it
-            ipk_rdep_file = os.path.join(ipk_pkgdata_dir, rdep)
-            if os.path.exists(ipk_rdep_file):
-                with open(ipk_rdep_file, "r") as f:
-                    for line in f:
-                        lib = line.strip()
-                        if lib:
-                            d.appendVar("FILES_IPK_PKG:%s"%pkg, " %s"%lib)
 }
 do_package_qa[prefuncs] += "do_skip_ipk_files_qa_check"
 
