@@ -1680,7 +1680,8 @@ def print_pkgs_in_src_mode(d):
     target_archs = d.getVar("STACK_LAYER_EXTENSION")
     if target_archs:
        for arch in target_archs.split(" "):
-            checklist.append(arch)
+            if arch not in checklist:
+                checklist.append(arch)
     bb.note("List of Archs checking in source mode: %s"%checklist)
     for arch in checklist:
         prefix = d.getVar("SSTATE_MANFILEPREFIX_NATIVE_FILTER", True) + arch +"-"
