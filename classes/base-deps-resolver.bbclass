@@ -618,6 +618,8 @@ def check_depends_on_targets(d):
                 is_target = True
                 break
         if is_target:
+            if not d.getVar("REBUILD_REASON"):
+                d.setVar("REBUILD_REASON","%s:dependency on target %s "%(d.getVar("PN"),dep))
             break
     return is_target
 
