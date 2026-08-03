@@ -277,9 +277,11 @@ python do_package_write_ipk:prepend() {
 
 python do_src_build_metadata (){
     bb.note("%s is running as source mode"%d.getVar("PN"))
+    bb.warn("******%s"%d.getVar("REBUILD_REASON"))
 }
 SSTATETASKS += "do_src_build_metadata"
 python do_src_build_metadata_setscene () {
+    bb.warn("******%s"%d.getVar("REBUILD_REASON"))
     sstate_setscene(d)
 }
 
@@ -706,7 +708,9 @@ def check_depends_version_change(d, variant):
             src_version = glob.glob(f"{pkg_path}source/{dep}_{version_match}*")
 
             if src_list and not src_version:
-                bb.warn("** package %s is rebuilding because dependency %s version changed **"%(d.getVar("PN"),dep))
+                if not d.getVar("REBUILD_REASON"):
+                    d.setVar("REBUILD_REASON","%s:dependency %s version changed"%(d.getVar("PN"),dep))
+                #bb.warn("** package %s is rebuilding because dependency %s version changed **"%(d.getVar("PN"),dep))
                 is_target = True
                 break
         if is_target:
