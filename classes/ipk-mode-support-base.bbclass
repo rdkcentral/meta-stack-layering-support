@@ -70,7 +70,7 @@ do_get_alternative[cleandirs] = "${SYSROOT_ALTERNATIVES}/${PN}"
 python do_get_alternative_pkg_setscene () {
     sstate_setscene(d)
 }
-addtask do_get_alternative_pkg_sysroot_setscene
+addtask do_get_alternative_pkg_setscene
 do_package_qa[recrdeptask] += "do_get_alternative_pkg"
 
 do_ipk_download[network] = "1"
