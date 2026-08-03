@@ -855,6 +855,8 @@ python update_recipe_deps_handler() {
                 e.data.appendVar("DEPENDS", ' glibc-locale')
 
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
+        if not d.getVar("REBUILD_REASON") and not ipk_mode:
+            d.setVar("REBUILD_REASON","%s:version changed "%pn)
         if ipk_mode and not check_targets(e.data, pn) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data, variant):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
             if not os.path.exists(skipped_pkg_dir):
