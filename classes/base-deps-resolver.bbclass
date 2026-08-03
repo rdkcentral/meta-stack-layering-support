@@ -542,18 +542,6 @@ python do_install_ipk_recipe_sysroot () {
             bb.note(" [deps-resolver] gobject-introspection requires cross compilation support")
             g_ir_cc_support(d,recipe_sysroot,pkg_pn)
             break
-
-    output_file = os.path.join(d.getVar('RECIPE_SYSROOT'), 'var/lib/opkg/status')
-    directory = os.path.dirname(output_file)
-    if not os.path.exists(os.path.dirname(output_file)):
-        return
-    with open(output_file, 'a') as outfile:
-        for filename in os.listdir(directory):
-            if filename.endswith('.status') and filename != 'status':
-                file_path = os.path.join(directory, filename)
-                outfile.write('\n')
-                with open(file_path, 'r') as infile:
-                    outfile.write(infile.read())
 }
 
 def get_ipk_list(d, pkg_arch):
@@ -603,12 +591,10 @@ def get_target_list(d):
 
     return targets
 
-def check_targets(d, pkg, variant):
+def check_targets(d, pkg):
     is_target = False
     targets = get_target_list(d)
     for target in targets:
-        if target.startswith("lib32-"):
-            target = target[6:]
         if pkg == target[:-1]:
             is_target = True
             break
@@ -617,10 +603,12 @@ def check_targets(d, pkg, variant):
 def check_depends_on_targets(d):
     deps = d.getVar("DEPENDS",True).split()
     is_target = False
-    if d.getVar("DEPENDS_ON_TARGET") == "0":
-        return is_target
     targets = get_target_list(d)
     for dep in deps:
+        if dep.startswith("virtual/"):
+            preferred_provider = d.getVar('PREFERRED_PROVIDER_%s' % dep, True)
+            if preferred_provider is not None:
+                dep = preferred_provider
         for target in targets:
             if target.startswith("lib32-"):
                 target = target[6:]
@@ -680,6 +668,7 @@ def check_depends_version_change(d, variant):
 
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     deps = (d.getVar("DEPENDS") or "").split()
+    version_check_mode = d.getVar("DEPENDS_REBUILD_VERSION_MATCH") or ""
 
     packages = d.getVar("PACKAGES")
     if packages:
@@ -700,16 +689,22 @@ def check_depends_version_change(d, variant):
         version = v.split("-", 1)[0].replace("AUTOINC", "0")
         if not version:
             continue
-        if variant:
+        if variant and not dep.startswith(f"{variant}"):
             dep = f"{variant}-{dep}"
         for arch in archs:
             if not arch or  arch  == " ":
                 continue
             pkg_path = feed_info_dir+"%s/"%arch
             src_list = glob.glob(pkg_path + "source/%s_*"%(dep))
-            # This checks ignore the minor version. If we only need to check the major version,
-            # we should change it to version.split(".")[0].
-            src_version = glob.glob(pkg_path + "source/%s_%s*"%(dep,version.split(".")[:2]))
+            if version_check_mode == "major":
+                version_match = version.split(".")[0]
+            elif version_check_mode == "minor":
+                version_match = ".".join(version.split(".")[:2])
+            else:
+                version_match = version
+
+            src_version = glob.glob(f"{pkg_path}source/{dep}_{version_match}*")
+
             if src_list and not src_version:
                 bb.warn("** package %s is rebuilding because dependency %s version changed **"%(d.getVar("PN"),dep))
                 is_target = True
@@ -731,10 +726,10 @@ def gcc_source_mode_check(d, pn, variant):
     if "gcc-" in pn:
         version = get_version_info(d)
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, "libgcc", False, version)
-        if ipk_mode and not check_targets(d, pn, variant):
+        if ipk_mode and not check_targets(d, pn):
             gcc_source_mode = False
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(d, "gcc-runtime", False, version)
-        if ipk_mode and not check_targets(d, pn, variant):
+        if ipk_mode and not check_targets(d, pn):
             gcc_source_mode = False
         else:
             gcc_source_mode = True
@@ -847,14 +842,14 @@ python update_recipe_deps_handler() {
         e.data.appendVar("DEPENDS", " pseudo-native")
 
         # This is to make sure IMAGE_LINGUAS ipks are generated with stack layer packagegroups
-        if check_targets(e.data, pn, variant) and ("packagegroup" in pn or bb.data.inherits_class('image', e.data)):
+        if check_targets(e.data, pn) and ("packagegroup" in pn or bb.data.inherits_class('image', e.data)):
             skip_recipe_ipk_pkgs = True if "1" == d.getVar('SKIP_RECIPE_IPK_PKGS') else False
             if e.data.getVar("GENERATE_GLIBC_LOCALE_IPK") == "1" and not skip_recipe_ipk_pkgs:
                 e.data.appendVarFlag('do_build', 'depends', ' glibc-locale:do_package_write_ipk')
                 e.data.appendVar("DEPENDS", ' glibc-locale')
 
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
-        if ipk_mode and not check_targets(e.data, pn, variant) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data, variant):
+        if ipk_mode and not check_targets(e.data, pn) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data, variant):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
             if not os.path.exists(skipped_pkg_dir):
                 bb.utils.mkdirhier(skipped_pkg_dir)
@@ -1014,6 +1009,9 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
                     srcrev = bb.fetch2.get_srcrev(d)
                 elif len(srcrev) > 10:
                     srcrev = "AUTOINC+" + srcrev[:10]
+                else:
+                    import bb.fetch2
+                    srcrev = bb.fetch2.get_srcrev(d)
                 srcrev = srcrev.replace("AUTOINC","0")
                 version = version.replace("${SRCPV}",srcrev)
                 search_pattern = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
@@ -1203,6 +1201,17 @@ def get_rdeps_provider_ipk(d, rdep):
     if not os.path.exists(info_file_path):
         bb.utils.mkdirhier(os.path.dirname(info_file_path))
 
+    output_file = os.path.join(reciepe_sysroot, 'var/lib/opkg/status')
+    directory = os.path.dirname(output_file)
+    if not os.path.exists(directory):
+        bb.utils.mkdirhier(directory)
+    with open(output_file, 'a') as outfile:
+        for filename in os.listdir(directory):
+            if filename.endswith('.status') and filename != 'status':
+                file_path = os.path.join(directory, filename)
+                outfile.write('\n')
+                with open(file_path, 'r') as infile:
+                    outfile.write(infile.read())
     opkg_args = "-f %s -t %s -o %s " % (opkg_conf, info_file_path ,reciepe_sysroot)
 
     cmd = '%s %s -A search "'"*/%s"'"' % (opkg_cmd, opkg_args,rdep.strip()) + " 2>/dev/null"
@@ -1264,6 +1273,16 @@ def check_file_provider_ipk(d, file, rdeps):
         pkg = get_rdeps_provider_ipk(d, file.split("/")[-1])
         if pkg and pkg.split("(")[0].strip() in rdeps:
             ipk = pkg.split("(")[0].strip()
+        elif pkg:
+            import re
+            ipk = pkg.split("(")[0].strip()
+            archs = []
+            for line in (d.getVar('IPK_FEED_URIS') or "").split():
+                feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
+                if feed is not None:
+                    archs.append(feed.group(1))
+            if archs:
+                ipk = get_provider(d,ipk,archs)
     return ipk
 
 # Function returns the ipk pkg name which contains the run-time dependent shared lib.
@@ -1428,11 +1447,11 @@ python do_skip_ipk_files_qa_check () {
     packages = d.getVar('PACKAGES').split(" ")
     pkg_dir = d.getVar("IPK_PKGDATA_RUNTIME_DIR")
     for pkg in packages:
-        pkg_path = os.path.join(pkg_dir,pkg)
+        pkg_path = os.path.join(pkg_dir, pkg)
         if os.path.isdir(pkg_path):
             continue
         if os.path.exists(pkg_path):
-            with open(pkg_path,"r") as fd:
+            with open(pkg_path, "r") as fd:
                 lines = fd.readlines()
             for l in lines:
                 d.appendVar("FILES_IPK_PKG:%s"%pkg, " %s"%l[:-1])
@@ -1661,7 +1680,8 @@ def print_pkgs_in_src_mode(d):
     target_archs = d.getVar("STACK_LAYER_EXTENSION")
     if target_archs:
        for arch in target_archs.split(" "):
-            checklist.append(arch)
+            if arch not in checklist:
+                checklist.append(arch)
     bb.note("List of Archs checking in source mode: %s"%checklist)
     for arch in checklist:
         prefix = d.getVar("SSTATE_MANFILEPREFIX_NATIVE_FILTER", True) + arch +"-"
