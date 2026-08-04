@@ -608,6 +608,8 @@ def check_targets(d, pkg):
     for target in targets:
         if pkg == target[:-1]:
             is_target = True
+            if not d.getVar("REBUILD_REASON"):
+                d.setVar("REBUILD_REASON","target:yes")
             break
     return is_target
 
