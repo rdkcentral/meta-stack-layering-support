@@ -1619,6 +1619,7 @@ python create_stack_layer_info () {
     import gzip
     import os
     feed_info_dir = e.data.getVar("FEED_INFO_DIR")
+    ipk_dir = e.data.getVar("IPK_PKGDATA_DIR")
     index_check = os.path.join(e.data.getVar("TOPDIR"),"index_created")
     target_check = os.path.join(e.data.getVar("TOPDIR"),"target_pkg_list")
     dep_tree_check = os.path.join(d.getVar("TOPDIR"),"tree_generated")
@@ -1651,8 +1652,8 @@ python create_stack_layer_info () {
     if isinstance(e, bb.event.ConfigParsed):
         ipk_feed_var_dep_exclude(e.data)
     if isinstance(e, bb.event.ConfigParsed) and not os.path.exists(index_check):
-        if os.path.exists(feed_info_dir):
-            shutil.rmtree(feed_info_dir)
+        if os.path.exists(ipk_dir):
+            shutil.rmtree(ipk_dir)
         if not os.path.exists(feed_info_dir+"index/"):
             bb.utils.mkdirhier(feed_info_dir+"index/")
 
