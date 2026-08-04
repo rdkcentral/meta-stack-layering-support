@@ -277,11 +277,20 @@ python do_package_write_ipk:prepend() {
 
 python do_src_build_metadata (){
     bb.note("%s is running as source mode"%d.getVar("PN"))
-    bb.warn("******%s"%d.getVar("REBUILD_REASON"))
+    src_dir = d.getVar("SRC_REASON_DIR")
+    if not os.path.exists(src_dir):
+        bb.utils.mkdirhier(src_dir)
+    packagedfile = os.path.join(src_dir,'%s' % d.getVar("REBUILD_REASON"))
+    open(packagedfile, 'w').close()
 }
 SSTATETASKS += "do_src_build_metadata"
 python do_src_build_metadata_setscene () {
-    bb.warn("******%s"%d.getVar("REBUILD_REASON"))
+    src_dir = d.getVar("SRC_REASON_DIR")
+    if not os.path.exists(src_dir):
+        bb.utils.mkdirhier(src_dir)
+    packagedfile = os.path.join(src_dir,'%s' % d.getVar("REBUILD_REASON"))
+    open(packagedfile, 'w').close()
+    #bb.warn("******%s"%d.getVar("REBUILD_REASON"))
     sstate_setscene(d)
 }
 
@@ -619,7 +628,7 @@ def check_depends_on_targets(d):
                 break
         if is_target:
             if not d.getVar("REBUILD_REASON"):
-                d.setVar("REBUILD_REASON","%s:target:%s"%(d.getVar("PN"),dep))
+                d.setVar("REBUILD_REASON","dep:target:%s"%dep)
             break
     return is_target
 
@@ -711,7 +720,7 @@ def check_depends_version_change(d, variant):
 
             if src_list and not src_version:
                 if not d.getVar("REBUILD_REASON"):
-                    d.setVar("REBUILD_REASON","%s:version:%s"%(d.getVar("PN"),dep))
+                    d.setVar("REBUILD_REASON","dep:version:%s"%dep)
                 #bb.warn("** package %s is rebuilding because dependency %s version changed **"%(d.getVar("PN"),dep))
                 is_target = True
                 break
@@ -835,6 +844,12 @@ python update_recipe_deps_handler() {
                 elif "gcc-initial" in pn and not gcc_source_mode_check(e.data, pn, variant) :
                     update_build_tasks(e.data, arch, "native")
                 else:
+                    if not d.getVar("REBUILD_REASON"): 
+                        if pn not in exclusion_list:
+                            d.setVar("REBUILD_REASON","tar:no")
+                        else:
+                            d.setVar("REBUILD_REASON","exclusion:yes")
+                  
                     bb.build.addtask('do_src_build_metadata','do_populate_sysroot',None,e.data)
         if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
             e.data.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
@@ -856,7 +871,7 @@ python update_recipe_deps_handler() {
 
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
         if not d.getVar("REBUILD_REASON") and not ipk_mode:
-            d.setVar("REBUILD_REASON","%s:IPK"%pn)
+            d.setVar("REBUILD_REASON","ipk:no:")
         if ipk_mode and not check_targets(e.data, pn) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data, variant):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
             if not os.path.exists(skipped_pkg_dir):
