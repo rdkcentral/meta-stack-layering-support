@@ -277,7 +277,7 @@ python do_package_write_ipk:prepend() {
 
 python do_src_build_metadata (){
     bb.note("%s is running as source mode"%d.getVar("PN"))
-    src_dir = d.getVar("SRC_REASON_DIR")
+    src_dir = os.path.join(d.getVar("SRC_REASON_DIR"),d.getVar("PACKAGE_ARCH"))
     if not os.path.exists(src_dir):
         bb.utils.mkdirhier(src_dir)
     packagedfile = os.path.join(src_dir,'%s:%s' % (d.getVar("PN"),d.getVar("REBUILD_REASON")))
@@ -285,7 +285,7 @@ python do_src_build_metadata (){
 }
 SSTATETASKS += "do_src_build_metadata"
 python do_src_build_metadata_setscene () {
-    src_dir = d.getVar("SRC_REASON_DIR")
+    src_dir = os.path.join(d.getVar("SRC_REASON_DIR"),d.getVar("PACKAGE_ARCH"))
     if not os.path.exists(src_dir):
         bb.utils.mkdirhier(src_dir)
     packagedfile = os.path.join(src_dir,'%s:%s' % (d.getVar("PN"),d.getVar("REBUILD_REASON")))
@@ -1707,16 +1707,16 @@ def print_pkgs_in_src_mode(d):
                 checklist.append(arch)
     bb.note("List of Archs checking in source mode: %s"%checklist)
     for arch in checklist:
-        prefix = d.getVar("SSTATE_MANFILEPREFIX_NATIVE_FILTER", True) + arch +"-"
-        src_mode_pkgs = glob.glob(prefix+"*.src_build_metadata")
+        prefix = os.path.join(d.getVar("SRC_REASON_DIR"),arch)
+        src_mode_pkgs = glob.glob(prefix+"/*")
         if src_mode_pkgs:
             list_native_pkgs = []
             for pkg in src_mode_pkgs:
-                file = pkg[len(prefix):-19]
+                file = filename = os.path.basename(pkg)
                 list_native_pkgs.append(file)
             bb.note("::: Packages from %s in src mode :::"%arch)
             for i in range(0, len(list_native_pkgs), 5):
-                bb.note(' '.join(list_native_pkgs[i:i+5]))
+                bb.note(', '.join(list_native_pkgs[i:i+5]))
 
 # Helper function to create a markup document with a list of IPKs in the respective deploy directory.
 # Set the variable 'GENERATE_IPK_VERSION_DOC' to enable this feature.
