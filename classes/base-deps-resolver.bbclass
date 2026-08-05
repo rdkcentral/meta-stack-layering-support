@@ -1699,7 +1699,7 @@ def print_pkgs_in_src_mode(d):
             header = "::: Packages from %s in src mode :::" % arch
             bb.note("-" * max(max_width * cols_per_row, len(header)))
             bb.note(header)
-            bb.note(sep)
+            bb.note("-" * max(max_width * cols_per_row, len(header)))
             for i in range(0, len(list_native_pkgs), cols_per_row):
                 row = ''.join(f'{pkg:<{max_width}}' for pkg in list_native_pkgs[i:i + cols_per_row])
                 bb.note(row)
