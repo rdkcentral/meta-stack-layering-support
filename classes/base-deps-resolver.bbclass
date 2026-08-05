@@ -1695,7 +1695,7 @@ def print_pkgs_in_src_mode(d):
                 file = pkg[len(prefix):-19]
                 list_native_pkgs.append(file)
             max_width = max(len(pkg) for pkg in list_native_pkgs) + 4
-            cols_per_row = 3
+            cols_per_row = 5
             header = "::: Packages from %s in src mode :::" % arch
             bb.note("-" * max(max_width * cols_per_row, len(header)))
             bb.note(header)
