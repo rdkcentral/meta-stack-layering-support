@@ -1682,7 +1682,10 @@ def print_pkgs_in_src_mode(d):
        for arch in target_archs.split(" "):
             if arch not in checklist:
                 checklist.append(arch)
-    bb.note("List of Archs checking in source mode: %s"%checklist)
+    title = "List of Archs checking in source mode: %s" % checklist
+    line = "=" * len(title)
+    bb.note(title)
+    bb.note(line)
     for arch in checklist:
         prefix = d.getVar("SSTATE_MANFILEPREFIX_NATIVE_FILTER", True) + arch +"-"
         src_mode_pkgs = glob.glob(prefix+"*.src_build_metadata")
@@ -1691,9 +1694,15 @@ def print_pkgs_in_src_mode(d):
             for pkg in src_mode_pkgs:
                 file = pkg[len(prefix):-19]
                 list_native_pkgs.append(file)
-            bb.note("::: Packages from %s in src mode :::"%arch)
-            for i in range(0, len(list_native_pkgs), 5):
-                bb.note(' '.join(list_native_pkgs[i:i+5]))
+            max_width = max(len(pkg) for pkg in list_native_pkgs) + 1
+            cols_per_row = 3
+            header = "::: Packages from %s in src mode :::" % arch
+            bb.note(header)
+            bb.note("-" * max(max_width * cols_per_row, len(header)))
+            for i in range(0, len(list_native_pkgs), cols_per_row):
+                row = ''.join(f'{pkg:<{max_width}}' for pkg in list_native_pkgs[i:i + cols_per_row])
+                bb.note(row)
+            bb.note("=" * max(max_width * cols_per_row, len(header)))
 
 # Helper function to create a markup document with a list of IPKs in the respective deploy directory.
 # Set the variable 'GENERATE_IPK_VERSION_DOC' to enable this feature.
