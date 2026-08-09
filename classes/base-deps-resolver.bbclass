@@ -1086,8 +1086,6 @@ def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False):
         else:
             (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, dep_bpkg, rrecommends, None)
 
-        if "secapi3" in dep_bpkg or "secapi2-adapter" in dep_bpkg:
-            bb.warn("=====%s===%s=="%(dep_bpkg,ipk_mode))
         if ipk_mode and not arch_check:
             if dep_ver:
                 ipkrdeps.append(dep +" " + dep_ver)
