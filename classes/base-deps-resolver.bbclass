@@ -690,7 +690,7 @@ def check_depends_version_change(d, variant):
                 v = dep_info.get("latest", "")
         if v.startswith(":"):
             v = v[1:]
-        version = v.split("-", 1)[0].replace("AUTOINC", "0")
+        version = v.replace("AUTOINC", "0")
         if not version:
             continue
         if variant and not dep.startswith(f"{variant}"):
@@ -704,6 +704,8 @@ def check_depends_version_change(d, variant):
                 version_match = version.split(".")[0]
             elif version_check_mode == "minor":
                 version_match = ".".join(version.split(".")[:2])
+            elif version_check_mode == "patch":
+                version_match = version.split("-", 1)[0]
             else:
                 version_match = version
 
