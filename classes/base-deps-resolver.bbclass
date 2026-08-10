@@ -574,10 +574,9 @@ def get_target_list(d):
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     target_list = os.path.join(d.getVar("TOPDIR"),"target_pkg_list")
     if not os.path.exists(target_list):
-        options, targets = bb.main.BitBakeConfigParameters.parseCommandLine(None)
-        # Above fn return non bitbake targets in kirkstone
-        if "decafbad" in targets:
-            options, targets = bb.main.BitBakeConfigParameters.parseCommandLine(d, d.getVar("BB_CMDLINE"))
+        options, targets = bb.main.BitBakeConfigParameters.parseCommandLine(d, d.getVar("BB_CMDLINE"))
+        if "None" in targets:
+            return []
         if not os.path.exists(feed_info_dir+"target/"):
             bb.utils.mkdirhier(feed_info_dir+"target/")
         with open(target_list, 'w') as file:
