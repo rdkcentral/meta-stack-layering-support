@@ -30,7 +30,7 @@ def generate_wrapper(d):
        rsh.write("export GIO_MODULE_DIR=%s/gio/modules-dummy\n"%d.getVar('STAGING_LIBDIR'))
        rsh.write("\n")
        rsh.write('''%s "$@"\n'''%qemu_binary)
-       rsh.write('''if [ \$? -ne 0 ]; then\n''')
+       rsh.write(r'''if [ \$? -ne 0 ]; then''' + '\n')
        rsh.write('''\t echo "If missing .so libraries, then set up GIR_EXTRA_LIBS_PATH in the recipe"\n''')
        rsh.write('''\t echo "(: GIR_EXTRA_LIBS_PATH=\"$""{B}/something/.libs\")"\n''')
        rsh.write('''\t exit 1\n''')
