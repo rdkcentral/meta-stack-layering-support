@@ -195,9 +195,9 @@ def staging_copy_ipk_file(c, dest, seendirs):
         linkto = os.readlink(c)
         if os.path.lexists(dest):
             if not os.path.islink(dest):
-                bb.warn("Link %s already exists as a file" % dest)
+                bb.note("Link %s already exists as a file" % dest)
             else:
-                bb.warn("Link %s already exists to a different location? (%s vs %s)" % (dest, os.readlink(dest), linkto))
+                bb.note("Link %s already exists to a different location? (%s vs %s)" % (dest, os.readlink(dest), linkto))
         else:
             os.symlink(linkto, dest)
     else:
