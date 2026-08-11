@@ -721,7 +721,6 @@ def check_depends_version_change(d, variant, pn):
             if src_list and not src_version:
                 if not d.getVar("REBUILD_REASON"):
                     d.setVar("REBUILD_REASON","dep %s version changed"%dep)
-                bb.warn("** package %s is rebuilding because dependency %s version changed **"%(d.getVar("PN"),dep))
                 isVersionChanged = True
                 break
         if isVersionChanged:
