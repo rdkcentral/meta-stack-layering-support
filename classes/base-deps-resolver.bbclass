@@ -710,7 +710,7 @@ def check_depends_version_change(d, variant, pn):
             if version_check_mode == "major":
                 version_match = version.split(".")[0]
             elif version_check_mode == "minor":
-                version_match = ".".join(version.split(".")[:2])
+                version_match = ".".join(version.split("-", 1)[0].split(".")[:2])
             elif version_check_mode == "patch":
                 version_match = version.split("-", 1)[0]
             else:
