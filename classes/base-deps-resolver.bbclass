@@ -283,6 +283,7 @@ python do_src_build_metadata_setscene () {
     bb.note("source mode reason : %s"%d.getVar("REBUILD_REASON"))
     sstate_setscene(d)
 }
+do_src_build_metadata[vardepsexclude] += "REBUILD_REASON"
 
 python do_populate_sysroot:prepend() {
     import os
