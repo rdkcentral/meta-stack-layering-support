@@ -656,19 +656,19 @@ def loadRecipeVersionMap(d):
         bb.warn("Failed to load recipe version map from %s: %s" % (version_file, e))
     return recipe_version_map
 
-def check_depends_version_change(d, variant):
+def check_depends_version_change(d, variant, pn):
     import glob
     version_check = True
-    is_target = False
+    isVersionChanged = False
     archs = []
     recipe_version_map =  loadRecipeVersionMap(d)
     if not recipe_version_map:
-        return is_target
+        return isVersionChanged
 
     if d.getVar("STACK_LAYER_EXTENSION"):
         archs = d.getVar("STACK_LAYER_EXTENSION").split()
     else:
-        return is_target
+        return isVersionChanged
 
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     deps = (d.getVar("DEPENDS") or "").split()
@@ -679,9 +679,16 @@ def check_depends_version_change(d, variant):
         for pkg in packages.split():
             rdeps = (d.getVar(f"RDEPENDS:{pkg}") or "").split()
             deps.extend(rdeps)
+
+    if pn in d.getVar('GCC_PKGS'):
+        return isVersionChanged
+
     for dep in deps:
         if "-native" in dep or "-cross" in dep:
             continue
+        preferred_provider = d.getVar('PREFERRED_PROVIDER_%s'%dep, True)
+        if preferred_provider is not None:
+            dep = preferred_provider
         dep_info = recipe_version_map.get("%s"%dep, {})
         v = dep_info.get("required", "")
         if not v:
@@ -690,7 +697,7 @@ def check_depends_version_change(d, variant):
                 v = dep_info.get("latest", "")
         if v.startswith(":"):
             v = v[1:]
-        version = v.split("-", 1)[0].replace("AUTOINC", "0")
+        version = v.replace("AUTOINC", "0")
         if not version:
             continue
         if variant and not dep.startswith(f"{variant}"):
@@ -703,7 +710,9 @@ def check_depends_version_change(d, variant):
             if version_check_mode == "major":
                 version_match = version.split(".")[0]
             elif version_check_mode == "minor":
-                version_match = ".".join(version.split(".")[:2])
+                version_match = ".".join(version.split("-", 1)[0].split(".")[:2])
+            elif version_check_mode == "patch":
+                version_match = version.split("-", 1)[0]
             else:
                 version_match = version
 
@@ -712,12 +721,11 @@ def check_depends_version_change(d, variant):
             if src_list and not src_version:
                 if not d.getVar("REBUILD_REASON"):
                     d.setVar("REBUILD_REASON","dep %s version changed"%dep)
-                bb.warn("** package %s is rebuilding because dependency %s version changed **"%(d.getVar("PN"),dep))
-                is_target = True
+                isVersionChanged = True
                 break
-        if is_target:
+        if isVersionChanged:
             break
-    return is_target
+    return isVersionChanged
 
 def get_version_info(d):
     pe = d.getVar('PE', True)
@@ -862,7 +870,7 @@ python update_recipe_deps_handler() {
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
         if not d.getVar("REBUILD_REASON") and not ipk_mode:
             d.setVar("REBUILD_REASON","Ipk not available")
-        if ipk_mode and not check_targets(e.data, pn) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data, variant):
+        if ipk_mode and not check_targets(e.data, pn) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data, variant, pn):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
             if not os.path.exists(skipped_pkg_dir):
                 bb.utils.mkdirhier(skipped_pkg_dir)
@@ -1118,7 +1126,6 @@ def update_dep_pkgs(e):
     version = "%s:%s-%s"%(pe,pv,pr) if pe else "%s-%s"%(pv,pr)
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     version = version.replace("AUTOINC","0")
-
     # Handle DEPENDS which needs recipe to process
     deps = (e.data.getVar('DEPENDS') or "").strip()
     if deps:
