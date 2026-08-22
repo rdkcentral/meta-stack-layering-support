@@ -102,30 +102,6 @@ def get_base_pkg_name(pkg_name):
         tmp_pkg_name = pkg_name[:-7]
     return tmp_pkg_name
 
-python do_kernel_devel_create(){
-    kernel_src = d.getVar('SYSROOT_IPK')+"/kernel-source"
-    kernel_artifacts = d.getVar('SYSROOT_IPK')+"/kernel-build"
-    kernel_src_staging = d.getVar('STAGING_KERNEL_DIR')
-    kernel_build_staging = d.getVar('STAGING_KERNEL_BUILDDIR')
-    if os.path.exists(kernel_src):
-        if not os.path.exists(kernel_src_staging):
-            parent_dir = os.path.dirname(kernel_src_staging)
-            if not os.path.exists(parent_dir):
-                bb.utils.mkdirhier(parent_dir)
-            os.symlink(kernel_src, d.getVar('STAGING_KERNEL_DIR'))
-    else:
-        bb.note("kernel devel source is not present in IPK feeds")
-
-    if os.path.exists(kernel_artifacts):
-        if not os.path.exists(kernel_build_staging):
-            parent_dir = os.path.dirname(kernel_build_staging)
-            if not os.path.exists(parent_dir):
-                bb.utils.mkdirhier(parent_dir)
-            os.symlink(kernel_artifacts, d.getVar('STAGING_KERNEL_BUILDDIR'))
-    else:
-        bb.note("kernel devel build artifacts is not present in IPK feeds")
-}
-
 # Install the dependent ipks to the component sysroot
 fakeroot python do_populate_ipk_sysroot(){
     import re
@@ -353,6 +329,5 @@ deltask do_package_qa
 deltask do_package_write_ipk
 
 addtask do_populate_ipk_sysroot before do_populate_sysroot
-addtask do_kernel_devel_create before do_build
 
 do_kernel_devel_create[nostamp] = "1"

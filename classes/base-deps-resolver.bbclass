@@ -262,6 +262,8 @@ def update_build_tasks(d, arch, machine):
 
     if machine == "target":
         enable_task(d, "do_package_write_ipk")
+    if bb.data.inherits_class('kernel', d):
+        enable_task(d, "do_kernel_devel_create")
 
     d.setVarFlag("do_populate_sysroot", "sstate-interceptfuncs", " ")
     d.setVarFlag("do_populate_sysroot", "sstate-fixmedir", " ")
@@ -879,6 +881,8 @@ python update_recipe_deps_handler() {
             update_build_tasks(e.data, arch, "target")
             e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
+            if bb.data.inherits_class('kernel', d):
+                bb.build.addtask('do_kernel_devel_create',' do_package_write_ipk', 'do_ipk_download do_populate_sysroot',e.data)
             if bb.data.inherits_class('update-alternatives',e.data):
                 bb.build.addtask('do_get_alternative_pkg','do_package_write_ipk', 'do_ipk_download do_populate_sysroot',e.data)
         elif d.getVar("PREBUILT_NATIVE_SUPPORT") == "1" and staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
@@ -1045,6 +1049,9 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
             else:
                 src_path = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
             if os.path.exists(src_path):
+                import bb
+                if bb.data.inherits_class('kernel', d) and not os.path.exists(pkg_path + "package/kernel-devel"):
+                    break
                 ipkmode = True
                 if arch == pkg_arch:
                     same_arch = True
