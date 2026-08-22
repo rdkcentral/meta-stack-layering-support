@@ -659,6 +659,18 @@ def loadRecipeVersionMap(d):
         bb.warn("Failed to load recipe version map from %s: %s" % (version_file, e))
     return recipe_version_map
 
+def getDepsVersion(d, pkg, recipe_version_map):
+    dep_info = recipe_version_map.get("%s"%pkg, {})
+    v = dep_info.get("required", "")
+    if not v:
+        v = dep_info.get("preferred", "")
+        if not v:
+            v = dep_info.get("latest", "")
+    if v.startswith(":"):
+        v = v[1:]
+    version = v.replace("AUTOINC", "0")
+    return version
+
 def check_depends_version_change(d, variant, pn):
     import glob
     version_check = True
@@ -692,15 +704,7 @@ def check_depends_version_change(d, variant, pn):
         preferred_provider = d.getVar('PREFERRED_PROVIDER_%s'%dep, True)
         if preferred_provider is not None:
             dep = preferred_provider
-        dep_info = recipe_version_map.get("%s"%dep, {})
-        v = dep_info.get("required", "")
-        if not v:
-            v = dep_info.get("preferred", "")
-            if not v:
-                v = dep_info.get("latest", "")
-        if v.startswith(":"):
-            v = v[1:]
-        version = v.replace("AUTOINC", "0")
+        version = getDepsVersion(d, dep, recipe_version_map)
         if not version:
             continue
         if variant and not dep.startswith(f"{variant}"):
@@ -898,12 +902,16 @@ python update_recipe_deps_handler() {
             e.data.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
             # For kernel modules building from source, depend directly on the kernel provider's
             # do_kernel_devel_create only when the kernel is in IPK mode (task exists on that recipe).
-            if pn == 'make-mod-scripts':
+            if pn == "make-mod-scripts":
                 kernel_pn = e.data.getVar('PREFERRED_PROVIDER_virtual/kernel') or ''
                 if kernel_pn:
-                    (kernel_ipk_mode, _, _) = check_deps_ipk_mode(e.data, kernel_pn)
-                    if kernel_ipk_mode:
-                        e.data.appendVarFlag('do_configure', 'depends', ' virtual/kernel:do_kernel_devel_create')
+                    recipe_version_map =  loadRecipeVersionMap(d)
+                    if recipe_version_map:
+                        kernel_ver = getDepsVersion(d, kernel_pn, recipe_version_map)
+                        (kernel_ipk_mode, _, _) = check_deps_ipk_mode(e.data, kernel_pn, kernel_ver)
+                        bb.warn("========Version %s===%s="%(kernel_ver,kernel_ipk_mode))
+                        if kernel_ipk_mode:
+                            e.data.appendVarFlag('do_configure', 'depends', ' virtual/kernel:do_kernel_devel_create')
             # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
             postfuncs = (e.data.getVarFlag('do_prepare_recipe_sysroot', 'postfuncs') or "").split()
             if postfuncs:
