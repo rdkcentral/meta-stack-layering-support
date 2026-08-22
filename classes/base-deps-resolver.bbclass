@@ -896,6 +896,14 @@ python update_recipe_deps_handler() {
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',e.data)
             bb.build.addtask('do_src_build_metadata','do_package_write_ipk',None,e.data)
             e.data.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
+            # For kernel modules building from source, depend directly on the kernel provider's
+            # do_kernel_devel_create only when the kernel is in IPK mode (task exists on that recipe).
+            if pn == 'make-mod-scripts':
+                kernel_pn = e.data.getVar('PREFERRED_PROVIDER_virtual/kernel') or ''
+                if kernel_pn:
+                    (kernel_ipk_mode, _, _) = check_deps_ipk_mode(e.data, kernel_pn)
+                    if kernel_ipk_mode:
+                        e.data.appendVarFlag('do_configure', 'depends', ' virtual/kernel:do_kernel_devel_create')
             # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
             postfuncs = (e.data.getVarFlag('do_prepare_recipe_sysroot', 'postfuncs') or "").split()
             if postfuncs:
@@ -1953,4 +1961,3 @@ addhandler get_pkgs_handler
 get_pkgs_handler[eventmask] = "bb.event.DepTreeGenerated"
 
 do_build[recrdeptask] += "do_package_write_ipk do_src_build_metadata"
-do_configure[recrdeptask] += "do_kernel_devel_create"

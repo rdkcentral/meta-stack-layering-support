@@ -11,7 +11,7 @@ def ipk_install(d, cmd, pkgs, sysroot_destdir):
     os.environ['OPKG_OFFLINE_ROOT'] = sysroot_destdir
     os.environ['NATIVE_ROOT'] = d.getVar('STAGING_DIR_NATIVE')
     try:
-        bb.note("[staging-ipk] Installing the following packages: %s" % ' '.join(pkgs))
+        bb.note("Installing the following packages: %s" % ' '.join(pkgs))
         bb.note("Command: %s"%command)
 
         # Run the command and decode the result
@@ -241,3 +241,4 @@ python do_kernel_devel_create(){
 do_kernel_devel_create[cleandirs] += " ${STAGING_KERNEL_DIR} ${STAGING_KERNEL_BUILDDIR}"
 do_kernel_devel_create[dirs] += " ${KERNEL_DEVEL_DIR}"
 do_kernel_devel_create[cleandirs] += " ${KERNEL_DEVEL_DIR}"
+do_kernel_devel_create[nostamp] = "1"

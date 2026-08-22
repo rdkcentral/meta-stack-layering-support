@@ -329,5 +329,3 @@ deltask do_package_qa
 deltask do_package_write_ipk
 
 addtask do_populate_ipk_sysroot before do_populate_sysroot
-
-do_kernel_devel_create[nostamp] = "1"
