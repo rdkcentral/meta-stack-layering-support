@@ -908,7 +908,7 @@ python update_recipe_deps_handler() {
                     recipe_version_map =  loadRecipeVersionMap(d)
                     if recipe_version_map:
                         kernel_ver = getDepsVersion(d, kernel_pn, recipe_version_map)
-                        (kernel_ipk_mode, _, _) = check_deps_ipk_mode(e.data, kernel_pn, kernel_ver)
+                        (kernel_ipk_mode, _, _) = check_deps_ipk_mode(e.data, kernel_pn, False, kernel_ver)
                         bb.warn("====%s====Version %s===%s="%(kernel_pn, kernel_ver,kernel_ipk_mode))
                         if kernel_ipk_mode:
                             e.data.appendVarFlag('do_configure', 'depends', ' virtual/kernel:do_kernel_devel_create')
