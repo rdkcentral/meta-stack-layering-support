@@ -1871,6 +1871,9 @@ python feed_index_creation () {
         cache_folder = os.path.join(d.getVar("TOPDIR"),"cache")
         if os.path.exists(cache_folder):
             shutil.rmtree(cache_folder)
+        cache_folder = os.path.join(d.getVar("TMPDIR"),"cache")
+        if os.path.exists(cache_folder):
+            shutil.rmtree(cache_folder)
 
     print_pkgs_in_src_mode(d)
 
