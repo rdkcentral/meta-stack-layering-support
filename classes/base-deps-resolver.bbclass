@@ -882,7 +882,7 @@ python update_recipe_deps_handler() {
             e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
             if bb.data.inherits_class('kernel', d):
-                bb.build.addtask('do_kernel_devel_create',' do_package_write_ipk', 'do_ipk_download do_populate_sysroot',e.data)
+                bb.build.addtask('do_kernel_devel_create', None, 'do_ipk_download',e.data)
             if bb.data.inherits_class('update-alternatives',e.data):
                 bb.build.addtask('do_get_alternative_pkg','do_package_write_ipk', 'do_ipk_download do_populate_sysroot',e.data)
         elif d.getVar("PREBUILT_NATIVE_SUPPORT") == "1" and staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
@@ -1950,3 +1950,4 @@ addhandler get_pkgs_handler
 get_pkgs_handler[eventmask] = "bb.event.DepTreeGenerated"
 
 do_build[recrdeptask] += "do_package_write_ipk do_src_build_metadata"
+do_configure[recrdeptask] += "do_kernel_devel_create"

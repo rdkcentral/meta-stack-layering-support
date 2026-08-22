@@ -198,45 +198,46 @@ def copy_deploy_ipk(d):
 python do_kernel_devel_create(){
     import subprocess
     import shutil
-    ipk_install_list = []
+    import tempfile
+    import glob
     install_dir = d.getVar("KERNEL_DEVEL_DIR", True)
     download_dir = d.getVar("PKGWRITECACHEIPK", True)
     pkg_ipk = "kernel-devel_%s-%s_%s.ipk"%(d.getVar("PV"),d.getVar('PR'),d.getVar('PACKAGE_ARCH'))
-    opkg_cmd = bb.utils.which(os.getenv('PATH'), "opkg")
     source_name = os.path.join(download_dir, pkg_ipk)
     if not os.path.exists(source_name):
         bb.fatal("[ipk_sysroot_creation] %s has not been downloaded. Check ..."%source_name)
-    ipk_install_list.append(source_name)
-    opkg_conf = d.getVar("IPKGCONF_LAYERING")
-    import oe.sls_utils
-    oe.sls_utils.sls_opkg_conf (d, opkg_conf)
-    opkg_args = "-f %s -o %s" %(opkg_conf,install_dir)
-    cmd = '%s %s --volatile-cache --no-install-recommends --nodeps install ' % (opkg_cmd, opkg_args)
-    ipk_install(d, cmd, ipk_install_list, install_dir)
-    os.remove(opkg_conf)
+
+    # Extract IPK (AR archive) then extract data payload using tar
+    tmpdir = tempfile.mkdtemp()
+    try:
+        subprocess.check_call(['ar', 'x', source_name], cwd=tmpdir)
+        data_archives = glob.glob(os.path.join(tmpdir, 'data.tar.*'))
+        if not data_archives:
+            bb.fatal("[ipk_sysroot_creation] No data archive found in %s" % source_name)
+        subprocess.check_call(['tar', 'xf', data_archives[0], '-C', install_dir])
+    finally:
+        shutil.rmtree(tmpdir)
+
     kernel_src = d.getVar('KERNEL_DEVEL_DIR')+"/kernel-source"
     kernel_artifacts = d.getVar('KERNEL_DEVEL_DIR')+"/kernel-build"
     kernel_src_staging = d.getVar('STAGING_KERNEL_DIR')
     kernel_build_staging = d.getVar('STAGING_KERNEL_BUILDDIR')
     if os.path.exists(kernel_src):
-        if not os.path.exists(kernel_src_staging):
-            parent_dir = os.path.dirname(kernel_src_staging)
-            if not os.path.exists(parent_dir):
-                bb.utils.mkdirhier(parent_dir)
-        os.symlink(kernel_src, d.getVar('STAGING_KERNEL_DIR'))
-        bb.note("kernel devel source is not present in IPK feeds")
+        parent_dir = os.path.dirname(kernel_src_staging)
+        if not os.path.exists(parent_dir):
+            bb.utils.mkdirhier(parent_dir)
+        shutil.copytree(kernel_src, kernel_src_staging, dirs_exist_ok=True)
     else:
         bb.note("kernel devel source is not present in IPK feeds")
 
     if os.path.exists(kernel_artifacts):
-        if not os.path.exists(kernel_build_staging):
-            parent_dir = os.path.dirname(kernel_build_staging)
-            if not os.path.exists(parent_dir):
-                bb.utils.mkdirhier(parent_dir)
-        os.symlink(kernel_artifacts, d.getVar('STAGING_KERNEL_BUILDDIR'))
+        parent_dir = os.path.dirname(kernel_build_staging)
+        if not os.path.exists(parent_dir):
+            bb.utils.mkdirhier(parent_dir)
+        shutil.copytree(kernel_artifacts, kernel_build_staging, dirs_exist_ok=True)
     else:
         bb.note("kernel devel build artifacts is not present in IPK feeds")
 }
-#do_kernel_devel_create[cleandirs] += " ${STAGING_KERNEL_DIR} ${STAGING_KERNEL_BUILDDIR}"
+do_kernel_devel_create[cleandirs] += " ${STAGING_KERNEL_DIR} ${STAGING_KERNEL_BUILDDIR}"
 do_kernel_devel_create[dirs] += " ${KERNEL_DEVEL_DIR}"
 do_kernel_devel_create[cleandirs] += " ${KERNEL_DEVEL_DIR}"
