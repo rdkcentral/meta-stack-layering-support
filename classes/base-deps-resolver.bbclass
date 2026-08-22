@@ -885,7 +885,7 @@ python update_recipe_deps_handler() {
             update_build_tasks(e.data, arch, "target")
             e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
-            if bb.data.inherits_class('kernel', d):
+            if bb.data.inherits_class('kernel', e.data):
                 bb.build.addtask('do_kernel_devel_create', None, 'do_ipk_download',e.data)
             if bb.data.inherits_class('update-alternatives',e.data):
                 bb.build.addtask('do_get_alternative_pkg','do_package_write_ipk', 'do_ipk_download do_populate_sysroot',e.data)
