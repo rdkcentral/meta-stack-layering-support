@@ -262,6 +262,8 @@ def update_build_tasks(d, arch, machine):
 
     if machine == "target":
         enable_task(d, "do_package_write_ipk")
+    if bb.data.inherits_class('kernel', d):
+        enable_task(d, "do_kernel_devel_create")
 
     d.setVarFlag("do_populate_sysroot", "sstate-interceptfuncs", " ")
     d.setVarFlag("do_populate_sysroot", "sstate-fixmedir", " ")
@@ -657,6 +659,18 @@ def loadRecipeVersionMap(d):
         bb.warn("Failed to load recipe version map from %s: %s" % (version_file, e))
     return recipe_version_map
 
+def getDepsVersion(d, pkg, recipe_version_map):
+    dep_info = recipe_version_map.get("%s"%pkg, {})
+    v = dep_info.get("required", "")
+    if not v:
+        v = dep_info.get("preferred", "")
+        if not v:
+            v = dep_info.get("latest", "")
+    if v.startswith(":"):
+        v = v[1:]
+    version = v.replace("AUTOINC", "0")
+    return version
+
 def check_depends_version_change(d, variant, pn):
     import glob
     version_check = True
@@ -690,15 +704,7 @@ def check_depends_version_change(d, variant, pn):
         preferred_provider = d.getVar('PREFERRED_PROVIDER_%s'%dep, True)
         if preferred_provider is not None:
             dep = preferred_provider
-        dep_info = recipe_version_map.get("%s"%dep, {})
-        v = dep_info.get("required", "")
-        if not v:
-            v = dep_info.get("preferred", "")
-            if not v:
-                v = dep_info.get("latest", "")
-        if v.startswith(":"):
-            v = v[1:]
-        version = v.replace("AUTOINC", "0")
+        version = getDepsVersion(d, dep, recipe_version_map)
         if not version:
             continue
         if variant and not dep.startswith(f"{variant}"):
@@ -879,6 +885,8 @@ python update_recipe_deps_handler() {
             update_build_tasks(e.data, arch, "target")
             e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
+            if bb.data.inherits_class('kernel', e.data):
+                bb.build.addtask('do_kernel_devel_create', None, 'do_ipk_download',e.data)
             if bb.data.inherits_class('update-alternatives',e.data):
                 bb.build.addtask('do_get_alternative_pkg','do_package_write_ipk', 'do_ipk_download do_populate_sysroot',e.data)
         elif d.getVar("PREBUILT_NATIVE_SUPPORT") == "1" and staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
@@ -892,6 +900,17 @@ python update_recipe_deps_handler() {
             bb.build.addtask('do_install_ipk_recipe_sysroot','do_configure','do_prepare_recipe_sysroot',e.data)
             bb.build.addtask('do_src_build_metadata','do_package_write_ipk',None,e.data)
             e.data.appendVarFlag('do_install_ipk_recipe_sysroot', 'prefuncs', ' update_ipk_deps')
+            # For kernel modules building from source, depend directly on the kernel provider's
+            # do_kernel_devel_create only when the kernel is in IPK mode (task exists on that recipe).
+            if pn == "make-mod-scripts":
+                kernel_pn = e.data.getVar('PREFERRED_PROVIDER_virtual/kernel') or ''
+                if kernel_pn:
+                    recipe_version_map =  loadRecipeVersionMap(d)
+                    if recipe_version_map:
+                        kernel_ver = getDepsVersion(d, kernel_pn, recipe_version_map)
+                        (kernel_ipk_mode, _, _) = check_deps_ipk_mode(e.data, kernel_pn, False, kernel_ver)
+                        if kernel_ipk_mode:
+                            e.data.appendVarFlag('do_configure', 'depends', ' virtual/kernel:do_kernel_devel_create')
             # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
             postfuncs = (e.data.getVarFlag('do_prepare_recipe_sysroot', 'postfuncs') or "").split()
             if postfuncs:
@@ -1045,6 +1064,9 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
             else:
                 src_path = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
             if os.path.exists(src_path):
+                import bb
+                if bb.data.inherits_class('kernel', d) and not os.path.exists(pkg_path + "package/kernel-devel"):
+                    break
                 ipkmode = True
                 if arch == pkg_arch:
                     same_arch = True
@@ -1862,6 +1884,9 @@ python feed_index_creation () {
     if e.data.getVar("STACK_LAYER_EXTENSION") or e.data.getVar("TARGET_BASED_IPK_STAGING") == "1":
         import shutil
         cache_folder = os.path.join(d.getVar("TOPDIR"),"cache")
+        if os.path.exists(cache_folder):
+            shutil.rmtree(cache_folder)
+        cache_folder = os.path.join(d.getVar("TMPDIR"),"cache")
         if os.path.exists(cache_folder):
             shutil.rmtree(cache_folder)
 
