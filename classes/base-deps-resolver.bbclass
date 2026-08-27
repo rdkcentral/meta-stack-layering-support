@@ -1065,7 +1065,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
                 src_path = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
             if os.path.exists(src_path):
                 import bb
-                if bb.data.inherits_class('kernel', d) and not os.path.exists(pkg_path + "package/kernel-devel"):
+                if bb.data.inherits_class('linux-kernel-base', d) and not os.path.exists(pkg_path + "package/kernel-devel"):
                     break
                 ipkmode = True
                 if arch == pkg_arch:
