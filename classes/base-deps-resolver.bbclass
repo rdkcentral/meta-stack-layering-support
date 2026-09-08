@@ -779,28 +779,15 @@ def set_gcc_glibc_pkg_arch(d, pn):
         # Not a gcc/glibc package → do nothing
         return
 
-    # --- Feed availability (remote or local) ---
-    gcc_enable = d.getVar('ENABLE_DOCKER_TARGET_GCC_FEED') == '1'
-    glibc_enable = d.getVar('ENABLE_DOCKER_TARGET_GLIBC_FEED') == '1'
-    gcc_remote_feed = (d.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED')   or '').strip()
-    glibc_remote_feed = (d.getVar('PREBUILT_GLIBC_TARGET_REMOTE_FEED') or '').strip()
-
-    # Use separate gcc/glibc local feed variables to keep their prebuilt package feeds distinct
-    gcc_local_feed   = d.getVar('PREBUILT_GCC_TARGET_DOCKER_FEED')   or ''
-    glibc_local_feed = d.getVar('PREBUILT_GLIBC_TARGET_DOCKER_FEED') or ''
-
-    set_gcc_arch   = bool(gcc_remote_feed)   or (gcc_enable and os.path.isdir(gcc_local_feed)) or d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1"
-    set_glibc_arch = bool(glibc_remote_feed) or (glibc_enable and os.path.isdir(glibc_local_feed)) or d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1"
-
     # --- Set PACKAGE_ARCH based on which feed is available ---
     gcc_arch   = d.getVar('GCC_LAYER_ARCH')
     glibc_arch = d.getVar('GLIBC_LAYER_ARCH')
 
-    if set_gcc_arch and gcc_arch and pn_matches_any_suffix(pn, gcc_suffixes):
+    if gcc_arch and pn_matches_any_suffix(pn, gcc_suffixes):
         d.setVar('PACKAGE_ARCH', gcc_arch)
         return
 
-    if set_glibc_arch and glibc_arch and pn_matches_any_suffix(pn, glibc_suffixes):
+    if glibc_arch and pn_matches_any_suffix(pn, glibc_suffixes):
         d.setVar('PACKAGE_ARCH', glibc_arch)
         return
 
@@ -820,7 +807,8 @@ python update_recipe_deps_handler() {
                 import glob
                 base_version = e.data.getVar('PV').split('+')[0]
                 if "gcc-initial" in  pn:
-                    set_gcc_glibc_pkg_arch(e.data, pn)
+                    if d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1":
+                        set_gcc_glibc_pkg_arch(e.data, pn)
                     remote_feed = d.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED') or ""
                     if remote_feed:
                         local_feed_dir = os.path.join(d.getVar("IPK_PKGDATA_DIR"), "prebuilt_gcc_initial")
@@ -859,6 +847,8 @@ python update_recipe_deps_handler() {
         if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
             e.data.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
     else:
+        if d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1":
+            set_gcc_glibc_pkg_arch(e.data, pn)
         arch = e.data.getVar('PACKAGE_ARCH')
         # Skipping unrequired version of recipes
         if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
