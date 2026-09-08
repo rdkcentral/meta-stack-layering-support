@@ -832,10 +832,11 @@ python update_recipe_deps_handler() {
                     prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
 
                 if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(e.data, pn,variant) and pn not in exclusion_list :
+                    if "gcc-initial" in  pn:
+                        gcc_arch = d.getVar('GCC_LAYER_ARCH')
+                        d.setVar("PACKAGE_ARCH", gcc_arch)
                     update_build_tasks(e.data, arch, "native")
                 elif pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant) :
-                    update_build_tasks(e.data, arch, "native")
-                elif "gcc-initial" in pn and not gcc_source_mode_check(e.data, pn, variant) :
                     update_build_tasks(e.data, arch, "native")
                 else:
                     if not d.getVar("REBUILD_REASON"):
