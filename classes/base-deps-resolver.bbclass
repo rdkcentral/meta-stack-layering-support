@@ -1053,12 +1053,13 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
             if os.path.exists(src_path):
                 import bb
                 if bb.data.inherits_class('linux-kernel-base', d) and not os.path.exists(pkg_path + "package/kernel-devel"):
-                    bb.note("Linux recipe, but not kernel-devel ipk avilable. Skip Ipk mode")
+                    bb.note("Linux recipe, but kernel-devel ipk not avilable. Skip Ipk mode")
                 else:
                     if arch != pkg_arch:
                         d.setVar("PACKAGE_ARCH", arch)
                     ipkmode = True
                     same_arch = True
+                    version_mismatch = False
                 break
     else:
         archs = []
