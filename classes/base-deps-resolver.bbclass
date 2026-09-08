@@ -779,28 +779,15 @@ def set_gcc_glibc_pkg_arch(d, pn):
         # Not a gcc/glibc package → do nothing
         return
 
-    # --- Feed availability (remote or local) ---
-    gcc_enable = d.getVar('ENABLE_DOCKER_TARGET_GCC_FEED') == '1'
-    glibc_enable = d.getVar('ENABLE_DOCKER_TARGET_GLIBC_FEED') == '1'
-    gcc_remote_feed = (d.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED')   or '').strip()
-    glibc_remote_feed = (d.getVar('PREBUILT_GLIBC_TARGET_REMOTE_FEED') or '').strip()
-
-    # Use separate gcc/glibc local feed variables to keep their prebuilt package feeds distinct
-    gcc_local_feed   = d.getVar('PREBUILT_GCC_TARGET_DOCKER_FEED')   or ''
-    glibc_local_feed = d.getVar('PREBUILT_GLIBC_TARGET_DOCKER_FEED') or ''
-
-    set_gcc_arch   = bool(gcc_remote_feed)   or (gcc_enable and os.path.isdir(gcc_local_feed)) or d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1"
-    set_glibc_arch = bool(glibc_remote_feed) or (glibc_enable and os.path.isdir(glibc_local_feed)) or d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1"
-
     # --- Set PACKAGE_ARCH based on which feed is available ---
     gcc_arch   = d.getVar('GCC_LAYER_ARCH')
     glibc_arch = d.getVar('GLIBC_LAYER_ARCH')
 
-    if set_gcc_arch and gcc_arch and pn_matches_any_suffix(pn, gcc_suffixes):
+    if gcc_arch and pn_matches_any_suffix(pn, gcc_suffixes):
         d.setVar('PACKAGE_ARCH', gcc_arch)
         return
 
-    if set_glibc_arch and glibc_arch and pn_matches_any_suffix(pn, glibc_suffixes):
+    if glibc_arch and pn_matches_any_suffix(pn, glibc_suffixes):
         d.setVar('PACKAGE_ARCH', glibc_arch)
         return
 
@@ -820,7 +807,8 @@ python update_recipe_deps_handler() {
                 import glob
                 base_version = e.data.getVar('PV').split('+')[0]
                 if "gcc-initial" in  pn:
-                    set_gcc_glibc_pkg_arch(e.data, pn)
+                    if d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1":
+                        set_gcc_glibc_pkg_arch(e.data, pn)
                     remote_feed = d.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED') or ""
                     if remote_feed:
                         local_feed_dir = os.path.join(d.getVar("IPK_PKGDATA_DIR"), "prebuilt_gcc_initial")
@@ -844,10 +832,11 @@ python update_recipe_deps_handler() {
                     prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
 
                 if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(e.data, pn,variant) and pn not in exclusion_list :
+                    if "gcc-initial" in  pn:
+                        gcc_arch = d.getVar('GCC_LAYER_ARCH')
+                        d.setVar("PACKAGE_ARCH", gcc_arch)
                     update_build_tasks(e.data, arch, "native")
                 elif pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant) :
-                    update_build_tasks(e.data, arch, "native")
-                elif "gcc-initial" in pn and not gcc_source_mode_check(e.data, pn, variant) :
                     update_build_tasks(e.data, arch, "native")
                 else:
                     if not d.getVar("REBUILD_REASON"):
@@ -859,7 +848,8 @@ python update_recipe_deps_handler() {
         if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
             e.data.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
     else:
-        set_gcc_glibc_pkg_arch(e.data, pn)
+        if d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1":
+            set_gcc_glibc_pkg_arch(e.data, pn)
         arch = e.data.getVar('PACKAGE_ARCH')
         # Skipping unrequired version of recipes
         if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
@@ -1019,42 +1009,39 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
 
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     skip_recipe_ipk_pkgs = True if "1" == d.getVar('SKIP_RECIPE_IPK_PKGS') else False
+    if version:
+        pkg_archs = [pkg_arch]
+        gcc_suffixes = [suffix for suffix in (d.getVar('GCC_PKGS') or '').split() if suffix]
+        glibc_suffixes = [suffix for suffix in (d.getVar('GLIBC_PKGS') or '').split() if suffix]
+        if any(dep_bpkg.endswith(suffix) for suffix in gcc_suffixes):
+            gcc_arch = d.getVar('GCC_LAYER_ARCH')
+            if gcc_arch and gcc_arch not in pkg_archs:
+                pkg_archs.append(gcc_arch)
+        if any(dep_bpkg.endswith(suffix) for suffix in glibc_suffixes):
+            glibc_arch = d.getVar('GLIBC_LAYER_ARCH')
+            if glibc_arch and glibc_arch not in pkg_archs:
+                pkg_archs.append(glibc_arch)
 
-    archs = []
-    for line in (d.getVar('IPK_FEED_URIS') or "").split():
-        feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
-        if feed is not None:
-            if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
-                continue
-            if not skip_recipe_ipk_pkgs and "oss" in feed.group(1):
-                if d.getVar("STACK_LAYER_EXTENSION") and feed.group(1) in d.getVar("STACK_LAYER_EXTENSION").split():
-                    archs.append(feed.group(1))
-                else:
-                    continue
+        version_mismatch = True
+        prefix = d.getVar("BBEXTENDVARIANT")
+        if prefix and not src_dep_bpkg.startswith(prefix):
+            src_dep_bpkg = prefix + "-" + src_dep_bpkg
+        has_srcpv_version = "${SRCPV}" in version
+        if has_srcpv_version:
+            srcrev = d.getVar("SRCREV") or ""
+            if srcrev in ("AUTOREV", "AUTOINC", ""):
+                import bb.fetch2
+                srcrev = bb.fetch2.get_srcrev(d)
+            elif len(srcrev) > 10:
+                srcrev = "AUTOINC+" + srcrev[:10]
             else:
-                archs.append(feed.group(1))
-    if not archs:
-        return (ipkmode, version_mismatch, same_arch)
-
-    for arch in archs:
-        pkg_path = feed_info_dir+"%s/"%arch
-        if version:
-            version_mismatch = True
-            prefix = d.getVar("BBEXTENDVARIANT")
-            if prefix and not src_dep_bpkg.startswith(prefix):
-                src_dep_bpkg = prefix + "-" + src_dep_bpkg
-            if "${SRCPV}" in version:
-                srcrev = d.getVar("SRCREV") or ""
-                if srcrev in ("AUTOREV", "AUTOINC", ""):
-                    import bb.fetch2
-                    srcrev = bb.fetch2.get_srcrev(d)
-                elif len(srcrev) > 10:
-                    srcrev = "AUTOINC+" + srcrev[:10]
-                else:
-                    import bb.fetch2
-                    srcrev = bb.fetch2.get_srcrev(d)
-                srcrev = srcrev.replace("AUTOINC","0")
-                version = version.replace("${SRCPV}",srcrev)
+                import bb.fetch2
+                srcrev = bb.fetch2.get_srcrev(d)
+            srcrev = srcrev.replace("AUTOINC","0")
+            version = version.replace("${SRCPV}",srcrev)
+        for arch in pkg_archs:
+            pkg_path = feed_info_dir+"%s/"%arch
+            if has_srcpv_version:
                 search_pattern = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
                 src_list = glob.glob(search_pattern)
                 if src_list:
@@ -1066,13 +1053,33 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
             if os.path.exists(src_path):
                 import bb
                 if bb.data.inherits_class('linux-kernel-base', d) and not os.path.exists(pkg_path + "package/kernel-devel"):
-                    break
-                ipkmode = True
-                if arch == pkg_arch:
+                    bb.note("Linux recipe, but kernel-devel ipk not avilable. Skip Ipk mode")
+                else:
+                    if arch != pkg_arch:
+                        d.setVar("PACKAGE_ARCH", arch)
+                    ipkmode = True
                     same_arch = True
-                version_mismatch = False
+                    version_mismatch = False
                 break
-        else:
+    else:
+        archs = []
+        for line in (d.getVar('IPK_FEED_URIS') or "").split():
+            feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
+            if feed is not None:
+                if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
+                    continue
+                if not skip_recipe_ipk_pkgs and "oss" in feed.group(1):
+                    if d.getVar("STACK_LAYER_EXTENSION") and feed.group(1) in d.getVar("STACK_LAYER_EXTENSION").split():
+                        archs.append(feed.group(1))
+                    else:
+                        continue
+                else:
+                    archs.append(feed.group(1))
+        if not archs:
+            return (ipkmode, version_mismatch, same_arch)
+
+        for arch in archs:
+            pkg_path = feed_info_dir+"%s/"%arch
             src_path = pkg_path + "source/%s"%src_dep_bpkg
             src_list = glob.glob(pkg_path + "source/%s_*"%src_dep_bpkg)
             if src_list:
