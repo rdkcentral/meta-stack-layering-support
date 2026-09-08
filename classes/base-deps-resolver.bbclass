@@ -859,7 +859,6 @@ python update_recipe_deps_handler() {
         if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
             e.data.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
     else:
-        set_gcc_glibc_pkg_arch(e.data, pn)
         arch = e.data.getVar('PACKAGE_ARCH')
         # Skipping unrequired version of recipes
         if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" "):
@@ -1019,60 +1018,58 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
 
     feed_info_dir = d.getVar("FEED_INFO_DIR")
     skip_recipe_ipk_pkgs = True if "1" == d.getVar('SKIP_RECIPE_IPK_PKGS') else False
-
-    archs = []
-    for line in (d.getVar('IPK_FEED_URIS') or "").split():
-        feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
-        if feed is not None:
-            if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
-                continue
-            if not skip_recipe_ipk_pkgs and "oss" in feed.group(1):
-                if d.getVar("STACK_LAYER_EXTENSION") and feed.group(1) in d.getVar("STACK_LAYER_EXTENSION").split():
-                    archs.append(feed.group(1))
-                else:
-                    continue
+    if version:
+        pkg_path = feed_info_dir+"%s/"%pkg_arch
+        version_mismatch = True
+        prefix = d.getVar("BBEXTENDVARIANT")
+        if prefix and not src_dep_bpkg.startswith(prefix):
+            src_dep_bpkg = prefix + "-" + src_dep_bpkg
+        if "${SRCPV}" in version:
+            srcrev = d.getVar("SRCREV") or ""
+            if srcrev in ("AUTOREV", "AUTOINC", ""):
+                import bb.fetch2
+                srcrev = bb.fetch2.get_srcrev(d)
+            elif len(srcrev) > 10:
+                srcrev = "AUTOINC+" + srcrev[:10]
             else:
-                archs.append(feed.group(1))
-    if not archs:
-        return (ipkmode, version_mismatch, same_arch)
-
-    for arch in archs:
-        pkg_path = feed_info_dir+"%s/"%arch
-        if version:
-            version_mismatch = True
-            prefix = d.getVar("BBEXTENDVARIANT")
-            if prefix and not src_dep_bpkg.startswith(prefix):
-                src_dep_bpkg = prefix + "-" + src_dep_bpkg
-            if "${SRCPV}" in version:
-                srcrev = d.getVar("SRCREV") or ""
-                if srcrev in ("AUTOREV", "AUTOINC", ""):
-                    import bb.fetch2
-                    srcrev = bb.fetch2.get_srcrev(d)
-                elif len(srcrev) > 10:
-                    srcrev = "AUTOINC+" + srcrev[:10]
-                else:
-                    import bb.fetch2
-                    srcrev = bb.fetch2.get_srcrev(d)
-                srcrev = srcrev.replace("AUTOINC","0")
-                version = version.replace("${SRCPV}",srcrev)
-                search_pattern = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
-                src_list = glob.glob(search_pattern)
-                if src_list:
-                    src_path = src_list[0]
-                else:
-                    src_path = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
+                import bb.fetch2
+                srcrev = bb.fetch2.get_srcrev(d)
+            srcrev = srcrev.replace("AUTOINC","0")
+            version = version.replace("${SRCPV}",srcrev)
+            search_pattern = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
+            src_list = glob.glob(search_pattern)
+            if src_list:
+                src_path = src_list[0]
             else:
                 src_path = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
-            if os.path.exists(src_path):
-                import bb
-                if bb.data.inherits_class('linux-kernel-base', d) and not os.path.exists(pkg_path + "package/kernel-devel"):
-                    break
-                ipkmode = True
-                if arch == pkg_arch:
-                    same_arch = True
-                version_mismatch = False
-                break
         else:
+            src_path = os.path.join(pkg_path, "source", f"{src_dep_bpkg}_{version}")
+        if os.path.exists(src_path):
+            import bb
+            if bb.data.inherits_class('linux-kernel-base', d) and not os.path.exists(pkg_path + "package/kernel-devel"):
+                bb.note("Linux recipe, but not kernel-devel ipk avilable. Skip Ipk mode")
+            else:
+                ipkmode = True
+                same_arch = True
+    else:
+        archs = []
+        for line in (d.getVar('IPK_FEED_URIS') or "").split():
+            feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
+            if feed is not None:
+                if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
+                    continue
+                if not skip_recipe_ipk_pkgs and "oss" in feed.group(1):
+                    if d.getVar("STACK_LAYER_EXTENSION") and feed.group(1) in d.getVar("STACK_LAYER_EXTENSION").split():
+                        archs.append(feed.group(1))
+                    else:
+                        continue
+                else:
+                    archs.append(feed.group(1))
+        if not archs:
+            return (ipkmode, version_mismatch, same_arch)
+
+        for arch in archs:
+            pkg_path = feed_info_dir+"%s/"%arch
             src_path = pkg_path + "source/%s"%src_dep_bpkg
             src_list = glob.glob(pkg_path + "source/%s_*"%src_dep_bpkg)
             if src_list:
