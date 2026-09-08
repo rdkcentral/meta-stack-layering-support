@@ -883,6 +883,12 @@ python update_recipe_deps_handler() {
                 bb.utils.mkdirhier(skipped_pkg_dir)
             open(skipped_pkg_dir+pn, 'w').close()
             update_build_tasks(e.data, arch, "target")
+            depends = e.data.getVar("DEPENDS") or ""
+            depends = " ".join(
+                dep for dep in depends.split()
+                if not dep.endswith("-native")
+            )
+            e.data.setVar("DEPENDS", depends)
             e.data.appendVar("DEPENDS", " opkg-native ")
             bb.build.addtask('do_ipk_download','do_populate_sysroot do_package_write_ipk', None,e.data)
             if bb.data.inherits_class('kernel', e.data):
