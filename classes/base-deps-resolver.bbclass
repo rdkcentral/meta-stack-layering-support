@@ -1644,7 +1644,7 @@ python create_stack_layer_info () {
     import gzip
     import os
     feed_info_dir = e.data.getVar("FEED_INFO_DIR")
-    index_check = os.path.join(e.data.getVar("TOPDIR"),"index_created")
+    index_check = e.data.getVar("FEED_INFO_LOCK")
     target_check = os.path.join(e.data.getVar("TOPDIR"),"target_pkg_list")
     dep_tree_check = os.path.join(d.getVar("TOPDIR"),"tree_generated")
     if isinstance(e, bb.event.CacheLoadStarted):
@@ -1674,8 +1674,8 @@ python create_stack_layer_info () {
     if isinstance(e, bb.event.ConfigParsed):
         ipk_feed_var_dep_exclude(e.data)
     if isinstance(e, bb.event.ConfigParsed) and not os.path.exists(index_check):
+        bb.note("Generating ipk feed metadata.")
         if os.path.exists(feed_info_dir):
-            bb.note("Deleted existing IPK feed metadata to force regeneration of the latest metadata.")
             shutil.rmtree(feed_info_dir)
         if not os.path.exists(feed_info_dir+"index/"):
             bb.utils.mkdirhier(feed_info_dir+"index/")
@@ -1887,7 +1887,7 @@ def generate_native_prebuilts_tar(d, deploy_dir):
             oe.utils.multiprocess_launch(exec_sls_cmd, cmds, d)
 
 python feed_index_creation () {
-    index_check = os.path.join(e.data.getVar("TOPDIR"),"index_created")
+    index_check = e.data.getVar("FEED_INFO_LOCK")
     if os.path.exists(index_check):
         os.remove(index_check)
 
