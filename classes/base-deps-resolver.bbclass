@@ -1663,8 +1663,6 @@ python create_stack_layer_info () {
         else:
             bb.note(f"Prebuilt toolchain/native packages are not found at: {staging_native_prebuilt_path}")
 
-        if os.path.exists(index_check):
-            os.remove(index_check)
         if os.path.exists(dep_tree_check):
             os.remove(dep_tree_check)
         if os.path.exists(target_check):
@@ -1677,6 +1675,7 @@ python create_stack_layer_info () {
         ipk_feed_var_dep_exclude(e.data)
     if isinstance(e, bb.event.ConfigParsed) and not os.path.exists(index_check):
         if os.path.exists(feed_info_dir):
+            bb.note("Deleted existing IPK feed metadata to force regeneration of the latest metadata.")
             shutil.rmtree(feed_info_dir)
         if not os.path.exists(feed_info_dir+"index/"):
             bb.utils.mkdirhier(feed_info_dir+"index/")
@@ -1698,14 +1697,14 @@ python create_stack_layer_info () {
                 if arch_uri.startswith("file:"):
                     src_pkg = os.path.join(arch_uri[5:], "Packages.gz")
                     if not os.path.exists(src_pkg):
-                        bb.warn("***** Packages.gz not found for feed %s at %s. Skipping pkgdata creation. *****"%(arch_name, src_pkg))
+                        bb.note("***** Packages.gz not found for feed %s at %s. Skipping pkgdata creation. *****"%(arch_name, src_pkg))
                         continue
                     shutil.copy(src_pkg, index_file)
                 else:
                     try:
                         bb.process.run("wget %s --directory-prefix=%s"%(arch_uri+"/Packages.gz", index_file), stderr=subprocess.STDOUT)
                     except bb.process.ExecutionError as err:
-                        bb.warn("***** Failed to download Packages.gz for feed %s from %s. Skipping pkgdata creation. Error: %s *****"%(arch_name, arch_uri, err))
+                        bb.note("***** Failed to download Packages.gz for feed %s from %s. Skipping pkgdata creation. Error: %s *****"%(arch_name, arch_uri, err))
                         continue
                 with gzip.open(index_file+"Packages.gz", 'rb') as gz_file:
                     with open(index_file+arch_name, 'wb') as output_file:
@@ -1888,6 +1887,10 @@ def generate_native_prebuilts_tar(d, deploy_dir):
             oe.utils.multiprocess_launch(exec_sls_cmd, cmds, d)
 
 python feed_index_creation () {
+    index_check = os.path.join(e.data.getVar("TOPDIR"),"index_created")
+    if os.path.exists(index_check):
+        os.remove(index_check)
+
     if e.data.getVar("STACK_LAYER_EXTENSION") or e.data.getVar("TARGET_BASED_IPK_STAGING") == "1":
         import shutil
         cache_folder = os.path.join(d.getVar("TOPDIR"),"cache")
