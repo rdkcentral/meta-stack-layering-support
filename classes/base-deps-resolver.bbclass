@@ -541,7 +541,7 @@ python do_install_ipk_recipe_sysroot () {
         if feed is not None:
             archs.append(feed.group(1))
     for arch in archs:
-        skipped_pkg_file = os.path.join(feed_info_dir,"%s/skipped/gobject-introspection"%arch)
+        skipped_pkg_file = os.path.join(feed_info_dir,"%s/skipped/%sgobject-introspection"%(arch,prefix))
         if os.path.exists(skipped_pkg_file) and "%sgobject-introspection"%prefix in d.getVar("DEPENDS").split():
             bb.note(" [deps-resolver] gobject-introspection requires cross compilation support")
             g_ir_cc_support(d,recipe_sysroot,pkg_pn)
