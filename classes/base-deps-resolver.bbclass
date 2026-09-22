@@ -1978,3 +1978,5 @@ addhandler get_pkgs_handler
 get_pkgs_handler[eventmask] = "bb.event.DepTreeGenerated"
 
 do_build[recrdeptask] += "do_package_write_ipk do_src_build_metadata"
+
+do_compile[vardeps] += "RECOMPILE_TOKEN"
