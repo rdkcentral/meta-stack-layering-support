@@ -1296,11 +1296,29 @@ def get_rdeps_provider_ipk(d, rdep):
 
 def check_file_provider_ipk(d, file, rdeps):
     ipk = ""
+    components_dir = d.getVar("COMPONENTS_DIR")
+    package_archs = (d.getVar("STACK_LAYER_EXTENSION") or "").split()
+    missing_file = os.path.basename(file)
+    if components_dir and package_archs and missing_file:
+        for rdep in rdeps:
+            rdep = rdep.split("(", 1)[0].strip()
+            if not rdep:
+                continue
+            for package_arch in package_archs:
+                rdep_component_dir = os.path.join(components_dir, package_arch, rdep)
+                if not os.path.isdir(rdep_component_dir):
+                    continue
+                if any(missing_file in filenames for _, _, filenames in os.walk(rdep_component_dir)):
+                    ipk = rdep
+                    break
+            if ipk:
+                break
+
     layer_sysroot = d.getVar("SYSROOT_IPK")
     lpkgopkg_path = os.path.join(layer_sysroot,"usr/lib/opkg/alternatives")
     alternatives_file_path = os.path.join(lpkgopkg_path,file.split("/")[-1])
     alternatives_check_file_path = d.getVar("SYSROOT_ALTERNATIVES")
-    if os.path.exists(alternatives_file_path):
+    if not ipk and os.path.exists(alternatives_file_path):
         with open(alternatives_file_path,"r", errors="ignore") as fd:
             lines = fd.readlines()
         for l in lines:
