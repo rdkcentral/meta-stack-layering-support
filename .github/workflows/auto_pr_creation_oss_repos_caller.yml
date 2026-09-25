@@ -1,0 +1,16 @@
+name: OSS Manifest Auto PR Creation Caller
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - develop
+      - 'support/*.*.*'
+      - 'support/*.*.*.*'
+
+jobs:
+  call_oss_auto_pr_workflow:
+    uses: rdk-e/build_tools_workflows/.github/workflows/auto_pr_creation_oss_manifest.yml@develop
+    secrets:
+      rdke_github_token: ${{ secrets.RDKE_GITHUB_TOKEN }}
+      rdkcentral_github_token: ${{ secrets.RDKCENTRAL_GITHUB_TOKEN }}
