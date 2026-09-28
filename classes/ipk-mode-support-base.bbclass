@@ -106,6 +106,7 @@ do_ipk_download[sstate-inputdirs] = "${IPK_CACHE_DIR_PN}"
 do_ipk_download[sstate-outputdirs] = "${PKGWRITECACHEIPK}"
 do_ipk_download[cleandirs] = "${IPK_CACHE_DIR_PN}"
 do_ipk_download[vardeps] += "PV PR"
+do_ipk_download[vardepsexclude] += "IPK_CACHE_DIR_PN"
 
 python do_ipk_download_setscene () {
     manifest_file = d.getVar("SSTATE_MANFILEPREFIX", True)+".packagedata"
