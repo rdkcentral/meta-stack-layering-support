@@ -317,6 +317,7 @@ python(){
 do_populate_ipk_sysroot[umask] = "022"
 
 do_populate_ipk_sysroot[network] = "1"
+do_populate_ipk_sysroot[vardepsexclude] += " IPK_CACHE_DIR TARGET_DEPS_LIST"
 deltask do_fetch
 deltask do_unpack
 deltask do_patch
