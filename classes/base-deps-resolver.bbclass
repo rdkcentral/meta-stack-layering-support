@@ -606,9 +606,13 @@ def check_targets(d, pkg):
     return is_target
 
 def check_depends_on_targets(d):
-    deps = d.getVar("DEPENDS",True).split()
     is_target = False
+
+    if d.getVar('DISABLE_DEPS_SRC_BUILD') == "1":
+        return is_target
+
     targets = get_target_list(d)
+    deps = d.getVar("DEPENDS",True).split()
     for dep in deps:
         if dep.startswith("virtual/"):
             preferred_provider = d.getVar('PREFERRED_PROVIDER_%s' % dep, True)
@@ -676,6 +680,10 @@ def check_depends_version_change(d, variant, pn):
     version_check = True
     isVersionChanged = False
     archs = []
+
+    if d.getVar('DISABLE_DEPS_SRC_BUILD') == "1":
+        return isVersionChanged
+
     recipe_version_map =  loadRecipeVersionMap(d)
     if not recipe_version_map:
         return isVersionChanged
