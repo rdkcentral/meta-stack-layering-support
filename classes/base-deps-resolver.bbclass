@@ -844,8 +844,6 @@ python update_recipe_deps_handler() {
                         gcc_arch = d.getVar('GCC_LAYER_ARCH')
                         d.setVar("PACKAGE_ARCH", gcc_arch)
                     update_build_tasks(e.data, arch, "native")
-                elif pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant) :
-                    update_build_tasks(e.data, arch, "native")
                 else:
                     if not d.getVar("REBUILD_REASON"):
                         if pn not in exclusion_list:
@@ -887,8 +885,6 @@ python update_recipe_deps_handler() {
                 bb.build.addtask('do_kernel_devel_create', None, 'do_ipk_download',e.data)
             if bb.data.inherits_class('update-alternatives',e.data):
                 bb.build.addtask('do_get_alternative_pkg','do_package_write_ipk', 'do_ipk_download do_populate_sysroot',e.data)
-        elif d.getVar("PREBUILT_NATIVE_SUPPORT") == "1" and staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
-            update_build_tasks(e.data, arch, "native")
         else:
             if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', e.data):
                 e.data.appendVarFlag('do_packagedata', 'prefuncs', ' do_clean_pkgdata')
