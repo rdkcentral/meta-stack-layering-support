@@ -144,6 +144,12 @@ def ipk_sysroot_creation(d):
     ipk_install(d, cmd, ipk_install_list, install_dir)
     os.remove(opkg_conf)
     bb.build.exec_func("sysroot_stage_all", d)
+    # Match source mode sysroot content; funcs needing ${S}/${B} can't work without sources
+    for f in (d.getVar('SYSROOT_PREPROCESS_FUNCS') or '').split():
+        try:
+            bb.build.exec_func(f, d)
+        except Exception as e:
+            bb.note("[ipk_sysroot_creation] Skipping %s in IPK mode: %s" % (f, e))
     multiprov = d.getVar("BB_MULTI_PROVIDER_ALLOWED").split()
     provdir = d.expand("${SYSROOT_DESTDIR}${base_prefix}/sysroot-providers/")
     opkg_extra_src = d.expand("${D}${base_prefix}/var/lib/opkg/")
