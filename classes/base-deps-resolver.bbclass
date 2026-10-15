@@ -902,12 +902,13 @@ python update_recipe_deps_handler() {
             # do_kernel_devel_create only when the kernel is in IPK mode (task exists on that recipe).
             if pn == "make-mod-scripts":
                 kernel_pn = e.data.getVar('PREFERRED_PROVIDER_virtual/kernel') or ''
+                targets = get_target_list(e.data)
                 if kernel_pn:
                     recipe_version_map =  loadRecipeVersionMap(d)
                     if recipe_version_map:
                         kernel_ver = getDepsVersion(d, kernel_pn, recipe_version_map)
                         (kernel_ipk_mode, _, _) = check_deps_ipk_mode(e.data, kernel_pn, False, kernel_ver)
-                        if kernel_ipk_mode:
+                        if kernel_ipk_mode and kernel_pn not in targets:
                             e.data.appendVarFlag('do_configure', 'depends', ' virtual/kernel:do_kernel_devel_create')
             # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
             postfuncs = (e.data.getVarFlag('do_prepare_recipe_sysroot', 'postfuncs') or "").split()
