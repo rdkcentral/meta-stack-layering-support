@@ -908,7 +908,7 @@ python update_recipe_deps_handler() {
                     if recipe_version_map:
                         kernel_ver = getDepsVersion(d, kernel_pn, recipe_version_map)
                         (kernel_ipk_mode, _, _) = check_deps_ipk_mode(e.data, kernel_pn, False, kernel_ver)
-                        if kernel_ipk_mode and kernel_pn not in targets:
+                        if kernel_ipk_mode and kernel_pn not in {target[:-1] for target in targets}:
                             e.data.appendVarFlag('do_configure', 'depends', ' virtual/kernel:do_kernel_devel_create')
             # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
             postfuncs = (e.data.getVarFlag('do_prepare_recipe_sysroot', 'postfuncs') or "").split()
