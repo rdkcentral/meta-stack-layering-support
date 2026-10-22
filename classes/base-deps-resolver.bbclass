@@ -1709,13 +1709,21 @@ python create_stack_layer_info () {
             if not os.path.exists(index_check):
                 open(index_check, 'w').close()
 
+        bb.note("***** IPK Feed details *****")
+        seen_feeds = set()
         for line in (e.data.getVar('IPK_FEED_URIS') or "").split():
             feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
             if feed is not None:
-                if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
-                    continue
                 arch_name = feed.group(1)
                 arch_uri = feed.group(2)
+                feed_key = (arch_name, arch_uri)
+                if feed_key in seen_feeds:
+                    continue
+                seen_feeds.add(feed_key)
+                if d.getVar("EXCLUDE_IPK_FEEDS") and arch_name in d.getVar("EXCLUDE_IPK_FEEDS").split():
+                    bb.note("Excluded %s##%s"%(arch_name, arch_uri))
+                    continue
+                bb.note("%s##%s"%(arch_name, arch_uri))
                 index_file = feed_info_dir+"index/"
                 if arch_uri.startswith("file:"):
                     src_pkg = os.path.join(arch_uri[5:], "Packages.gz")
@@ -1734,6 +1742,7 @@ python create_stack_layer_info () {
                         shutil.copyfileobj(gz_file, output_file)
                 os.remove(index_file+"/Packages.gz")
                 create_ipk_pkgdata(e.data, index_file+arch_name ,feed_info_dir,arch_name)
+        bb.note("****************************")
 }
 addhandler create_stack_layer_info
 create_stack_layer_info[eventmask] = "bb.event.ConfigParsed bb.event.MultiConfigParsed bb.event.CacheLoadStarted"
