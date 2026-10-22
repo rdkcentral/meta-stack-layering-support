@@ -1709,13 +1709,16 @@ python create_stack_layer_info () {
             if not os.path.exists(index_check):
                 open(index_check, 'w').close()
 
+        bb.note("***** IPK Feed details *****")
         for line in (e.data.getVar('IPK_FEED_URIS') or "").split():
             feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
             if feed is not None:
-                if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
-                    continue
                 arch_name = feed.group(1)
                 arch_uri = feed.group(2)
+                if d.getVar("EXCLUDE_IPK_FEEDS") and arch_name in d.getVar("EXCLUDE_IPK_FEEDS").split():
+                    bb.note("Excluded %s:%s"%(arch_name, arch_uri))
+                    continue
+                bb.note("%s:%s"%(arch_name, arch_uri))
                 index_file = feed_info_dir+"index/"
                 if arch_uri.startswith("file:"):
                     src_pkg = os.path.join(arch_uri[5:], "Packages.gz")
