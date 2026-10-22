@@ -1710,11 +1710,16 @@ python create_stack_layer_info () {
                 open(index_check, 'w').close()
 
         bb.note("***** IPK Feed details *****")
+        seen_feeds = set()
         for line in (e.data.getVar('IPK_FEED_URIS') or "").split():
             feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
             if feed is not None:
                 arch_name = feed.group(1)
                 arch_uri = feed.group(2)
+                feed_key = (arch_name, arch_uri)
+                if feed_key in seen_feeds:
+                    continue
+                seen_feeds.add(feed_key)
                 if d.getVar("EXCLUDE_IPK_FEEDS") and arch_name in d.getVar("EXCLUDE_IPK_FEEDS").split():
                     bb.note("Excluded %s:%s"%(arch_name, arch_uri))
                     continue
