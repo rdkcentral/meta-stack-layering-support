@@ -844,8 +844,6 @@ python update_recipe_deps_handler() {
                         gcc_arch = d.getVar('GCC_LAYER_ARCH')
                         d.setVar("PACKAGE_ARCH", gcc_arch)
                     update_build_tasks(e.data, arch, "native")
-                elif pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant) :
-                    update_build_tasks(e.data, arch, "native")
                 else:
                     if not d.getVar("REBUILD_REASON"):
                         if pn not in exclusion_list:
@@ -887,8 +885,6 @@ python update_recipe_deps_handler() {
                 bb.build.addtask('do_kernel_devel_create', None, 'do_ipk_download',e.data)
             if bb.data.inherits_class('update-alternatives',e.data):
                 bb.build.addtask('do_get_alternative_pkg','do_package_write_ipk', 'do_ipk_download do_populate_sysroot',e.data)
-        elif d.getVar("PREBUILT_NATIVE_SUPPORT") == "1" and staging_native_prebuilt_path and os.path.exists(staging_native_prebuilt_path) and pn.startswith("gcc-source-") and not gcc_source_mode_check(e.data, pn, variant):
-            update_build_tasks(e.data, arch, "native")
         else:
             if arch in (e.data.getVar("STACK_LAYER_EXTENSION") or "").split(" ") and bb.data.inherits_class('kernel', e.data):
                 e.data.appendVarFlag('do_packagedata', 'prefuncs', ' do_clean_pkgdata')
@@ -902,12 +898,13 @@ python update_recipe_deps_handler() {
             # do_kernel_devel_create only when the kernel is in IPK mode (task exists on that recipe).
             if pn == "make-mod-scripts":
                 kernel_pn = e.data.getVar('PREFERRED_PROVIDER_virtual/kernel') or ''
+                targets = get_target_list(e.data)
                 if kernel_pn:
                     recipe_version_map =  loadRecipeVersionMap(d)
                     if recipe_version_map:
                         kernel_ver = getDepsVersion(d, kernel_pn, recipe_version_map)
                         (kernel_ipk_mode, _, _) = check_deps_ipk_mode(e.data, kernel_pn, False, kernel_ver)
-                        if kernel_ipk_mode:
+                        if kernel_ipk_mode and kernel_pn not in {target[:-1] for target in targets}:
                             e.data.appendVarFlag('do_configure', 'depends', ' virtual/kernel:do_kernel_devel_create')
             # Moving the prepare_recipe_sysroot post function to run after install_ipk_recipe_sysroot
             postfuncs = (e.data.getVarFlag('do_prepare_recipe_sysroot', 'postfuncs') or "").split()
@@ -1712,13 +1709,21 @@ python create_stack_layer_info () {
             if not os.path.exists(index_check):
                 open(index_check, 'w').close()
 
+        bb.note("***** IPK Feed details *****")
+        seen_feeds = set()
         for line in (e.data.getVar('IPK_FEED_URIS') or "").split():
             feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
             if feed is not None:
-                if d.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in d.getVar("EXCLUDE_IPK_FEEDS").split():
-                    continue
                 arch_name = feed.group(1)
                 arch_uri = feed.group(2)
+                feed_key = (arch_name, arch_uri)
+                if feed_key in seen_feeds:
+                    continue
+                seen_feeds.add(feed_key)
+                if d.getVar("EXCLUDE_IPK_FEEDS") and arch_name in d.getVar("EXCLUDE_IPK_FEEDS").split():
+                    bb.note("Excluded %s##%s"%(arch_name, arch_uri))
+                    continue
+                bb.note("%s##%s"%(arch_name, arch_uri))
                 index_file = feed_info_dir+"index/"
                 if arch_uri.startswith("file:"):
                     src_pkg = os.path.join(arch_uri[5:], "Packages.gz")
@@ -1737,6 +1742,7 @@ python create_stack_layer_info () {
                         shutil.copyfileobj(gz_file, output_file)
                 os.remove(index_file+"/Packages.gz")
                 create_ipk_pkgdata(e.data, index_file+arch_name ,feed_info_dir,arch_name)
+        bb.note("****************************")
 }
 addhandler create_stack_layer_info
 create_stack_layer_info[eventmask] = "bb.event.ConfigParsed bb.event.MultiConfigParsed bb.event.CacheLoadStarted"
