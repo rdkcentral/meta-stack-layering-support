@@ -1108,9 +1108,18 @@ def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False):
     import re
     pattern = r'(\S+)(\s*\([^\)]*\))?'
     matches = re.findall(pattern, deps)
+    archs = []
+    for line in (e.data.getVar('IPK_FEED_URIS') or '').split():
+        feed = re.match(r"^[ \t]*(.*)##([^ \t]*)[ \t]*$", line)
+        if feed is not None:
+            if e.data.getVar("EXCLUDE_IPK_FEEDS") and feed.group(1) in e.data.getVar("EXCLUDE_IPK_FEEDS").split():
+                continue
+            archs.append(feed.group(1))
+
     for match in matches:
         dep = match[0].strip()
         dep_ver = match[1].strip() if len(match) > 1 and match[1] else None
+        virtual_dep = dep if dep.startswith("virtual/") else None
         dep_bpkg = get_base_pkg_name(dep)
 
         if dep.endswith("-native") or dep_bpkg == get_base_pkg_name(pkg):
@@ -1130,10 +1139,17 @@ def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False):
             (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, dep_bpkg, rrecommends, None)
 
         if ipk_mode and not arch_check:
+            if virtual_dep and virtual_dep not in ipkrdeps:
+                ipkrdeps.append(virtual_dep)
+            ipk_name = get_provider(e.data, virtual_dep, archs) if virtual_dep else dep
+            if not ipk_name:
+                ipk_name = dep
             if dep_ver:
-                ipkrdeps.append(dep +" " + dep_ver)
+                ipk_dep = ipk_name + " " + dep_ver
             else:
-                ipkrdeps.append(dep)
+                ipk_dep = ipk_name
+            if ipk_dep not in ipkrdeps:
+                ipkrdeps.append(ipk_dep)
             if not arch_check:
                 continue
 
@@ -1154,6 +1170,16 @@ def update_dep_pkgs(e):
     pkg_pn = e.data.getVar('PN',  True) 
     arch = e.data.getVar('PACKAGE_ARCH',  True)
     have_ipk_deps = False
+
+    rprovides_var = 'RPROVIDES:%s' % pkg_pn
+    rprovides = (e.data.getVar(rprovides_var) or '').split()
+    for provide in (e.data.getVar('PROVIDES') or '').split():
+        if not provide.startswith('virtual/'):
+            continue
+        preferred_provider = e.data.getVar('PREFERRED_PROVIDER_%s' % provide, True)
+        if preferred_provider == pkg_pn and provide not in rprovides:
+            e.data.appendVar(rprovides_var, ' ' + provide)
+            rprovides.append(provide)
 
     pe = d.getVar('PE')
     pv = d.getVar('PV')
