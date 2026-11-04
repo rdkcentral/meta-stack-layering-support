@@ -7,6 +7,8 @@ def get_toolchain_arch(d):
     multilib_support = d.getVar('MULTILIBS') or ""
     if multilib_support:
         arch = "rdk-arm64"
+    elif d.getVar('TARGET_ARCH') == "aarch64":
+       arch = "rdk-arm64"
     elif "armv7athf-neon" in default_tune:
         arch = "rdk-arm7a"
     elif "cortexa15hf-neon" in default_tune:
