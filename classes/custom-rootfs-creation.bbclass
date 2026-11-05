@@ -11,27 +11,35 @@
 DEPENDS += "nss-native qemuwrapper-cross systemd-systemctl-native"
 
 def get_pkg_install_version(d,release_data_file, pkggrp):
+    import os
     import re
-    version = ""
     pkgdata = {}
-    ipk_version_info = d.getVar("IPK_PKGGROUP_VER_INFO")
-    if not os.path.exists(ipk_version_info):
+    ipk_version_info = d.getVar("IPK_PKGGROUP_VER_INFO", True)
+    if ipk_version_info and not os.path.isabs(ipk_version_info):
+        ipk_version_info = os.path.join(d.getVar("TOPDIR", True), ipk_version_info)
+    if not ipk_version_info or not os.path.exists(ipk_version_info):
+        bb.warn("[custom-rootfs] IPK packagegroup version metadata not found: %s" % ipk_version_info)
         return
-    r = re.compile(r"(^.+?):\s+(.*)")
+    r = re.compile(r"^(.+?):\s+(.*)")
     with open(ipk_version_info,"r") as fr:
-        lines = fr.readlines()
-        r = re.compile(r"(^.+?):\s+(.*)")
-        for l in lines:
+        for l in fr:
             m = r.match(l)
             if m:
                 pkgdata[m.group(1)] = decode(m.group(2))
+    missing = []
     with open(release_data_file,"a") as fw:
         for pkg in pkggrp:
             if pkg in pkgdata:
-                version = pkgdata[pkg]
                 fw.write(pkg +"=" +pkgdata[pkg]+"\n")
+            else:
+                missing.append(pkg)
+    if missing:
+        bb.warn("[custom-rootfs] No IPK version metadata found for packagegroups: %s (available entries: %s)" %
+                (" ".join(missing), " ".join(sorted(pkgdata))))
 
 python do_update_install_pkgs_with_version() {
+    import os
+
     m_pkggrp = []
     prefix = d.getVar('MLPREFIX') or ""
 
@@ -60,6 +68,8 @@ python do_update_install_pkgs_with_version() {
     if release_data_file is None:
         bb.note("[custom-rootfs] RELEASE_LAYER_VERSIONS is not defined")
         return
+    if not os.path.isabs(release_data_file):
+        release_data_file = os.path.join(d.getVar("TOPDIR", True), release_data_file)
     pkgdata = {}
     pkgdatadir = d.getVar('PKGDATA_DIR')
     runtime = pkgdatadir + "/runtime"

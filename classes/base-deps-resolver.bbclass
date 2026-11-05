@@ -1693,6 +1693,7 @@ python create_stack_layer_info () {
     if isinstance(e, bb.event.MultiConfigParsed):
         # For multiconfig builds.
         if not os.path.exists(index_check):
+            bb.utils.mkdirhier(os.path.dirname(index_check))
             open(index_check, 'w').close()
     if isinstance(e, bb.event.ConfigParsed):
         ipk_feed_var_dep_exclude(e.data)
