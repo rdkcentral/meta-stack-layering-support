@@ -5,7 +5,8 @@
 # Description : qemu wrapper functions
 # -------------------------------------------
 
-inherit qemu
+# This global user class needs qemu's recipe-class helpers at recipe finalization.
+inherit_defer qemu
 
 def generate_wrapper(d):
     import os

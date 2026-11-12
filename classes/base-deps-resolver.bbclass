@@ -573,21 +573,32 @@ def get_ipk_list(d, pkg_arch):
                 ipk_list.append(pkg_ipk)
     return ipk_list
 
-def get_target_list(d):
+def write_target_list(d, target_list):
     import bb.main
+    import os
+    cmdline = d.getVar("BB_CMDLINE")
+    if not cmdline:
+        return False
+
+    options, targets = bb.main.BitBakeConfigParameters.parseCommandLine(d, cmdline)
+    if "None" in targets:
+        return False
     feed_info_dir = d.getVar("FEED_INFO_DIR")
+    if not os.path.exists(feed_info_dir + "target/"):
+        bb.utils.mkdirhier(feed_info_dir + "target/")
+    with open(target_list, 'w') as file:
+        for target in targets:
+            if ":" in target:
+                target = target.split(":")[-1]
+            file.write("%s\n" % target)
+    return True
+
+def get_target_list(d):
+    import os
     target_list = os.path.join(d.getVar("TOPDIR"),"target_pkg_list")
     if not os.path.exists(target_list):
-        options, targets = bb.main.BitBakeConfigParameters.parseCommandLine(d, d.getVar("BB_CMDLINE"))
-        if "None" in targets:
+        if not write_target_list(d, target_list):
             return []
-        if not os.path.exists(feed_info_dir+"target/"):
-            bb.utils.mkdirhier(feed_info_dir+"target/")
-        with open(target_list, 'w') as file:
-            for target in targets:
-                if ":" in target:
-                    target = target.split(":")[-1]
-                file.write("%s\n"%target)
 
     with open(target_list,"r") as fd:
         targets = fd.readlines()
@@ -1152,6 +1163,7 @@ def get_inter_layer_pkgs(e, pkg, deps, rrecommends = False):
 
 # Create metadata for the direct dependent ipk packages.
 def update_dep_pkgs(e):
+    d = e.data
     src_pkgs, ipk_pkgs = ([] for i in range(2))
 
     pkg_pn = e.data.getVar('PN',  True) 
@@ -1472,6 +1484,7 @@ python do_update_rdeps_ipk () {
 
 # Find ipk pkgs (recipes unavailabe) from the DEPENDS/RDEPENDS list.
 python deps_update_handler () {
+    d = e.data
     pn = e.data.getVar('PN')
     # This needs to be updated once start using the prebuilt toolchain
     if not bb.data.inherits_class('native', d) and not bb.data.inherits_class('cross', d):
@@ -1693,6 +1706,7 @@ python create_stack_layer_info () {
             os.remove(dep_tree_check)
         if os.path.exists(target_check):
             os.remove(target_check)
+        write_target_list(e.data, target_check)
     if isinstance(e, bb.event.MultiConfigParsed):
         # For multiconfig builds.
         if not os.path.exists(index_check):
