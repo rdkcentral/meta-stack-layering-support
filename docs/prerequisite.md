@@ -1,64 +1,29 @@
-meta-stack-layering module provides the additional functionalities to handle packages in the ipk format that do not have a corresponding recipe. It requires, below changes in Yocto to generate the proper runtime dependencies:
- 
-# Define PKGCONFIGSKIPLIST
-To generate the broken stack layer's pkgconfig dependencies from packages that do not have a corresponding recipe.
-This variable should be set with a list of pkgconfig modules that are not found in any recipe packages. It will be used in the stack layering module to identify the missing dependency from the ipk package.
+# Prerequisites
 
-do_pkgconfig function in package bbclass.
->             if found == False:
->                 bb.note("couldn't find pkgconfig module '%s' in any package" % n)
->                 if n not in (d.getVar('PKGCONFIGSKIPLIST_%s'%pkg) or "").split():
->                    d.appendVar('PKGCONFIGSKIPLIST_%s'%pkg,"%s "%(n))
->         deps_file = os.path.join(pkgdest, pkg + ".pcdeps")
+Add this layer to the build and configure the IPK feeds before enabling IPK consumption. The layer provides the resolver and staging classes, but it does not patch OpenEmbedded Core or other layers. The following integration changes are needed only when the corresponding code is not already present in the build.
 
-# Define SHLIBSKIPLIST.
-To generate the broken stack layer's shared library runtime dependencies from packages that do not have a corresponding recipe.
-This variable should be set with a list of shared libraries that are not found in any recipe packages. It will be used in the stack layering module to identify the missing dependency from the ipk package.
+## Capture unresolved pkg-config and shared-library dependencies
 
-do_shlibs function in package bbclass.
->             bb.note("Couldn't find shared library provider for %s, used by files: %s" % (n[0], n[1]))
->             if n[0] not in (d.getVar('SHLIBSKIPLIST_%s'%pkg) or "").split():
->                 d.appendVar('SHLIBSKIPLIST_%s'%pkg,"%s "%(n[0]))
->         deps_file = os.path.join(pkgdest, pkg + ".shlibdeps")
+The resolver reads `PKGCONFIGSKIPLIST_<package>` and `SHLIBSKIPLIST_<package>` when `do_update_rdeps_ipk` runs after `read_shlibdeps`. Core's package dependency scanners must record unresolved modules/libraries in those variables, in addition to reporting them, so the resolver can locate their providers in the IPK sysroot and add runtime dependencies.
 
+The integration points are the `do_pkgconfig` and `do_shlibs` functions in `package.bbclass`. Preserve the existing scanner behavior and append each unresolved item to the package-specific variable, avoiding duplicates. The resolver uses pkg-config module names to look for `.pc` files and shared-library names to look for library files.
 
-# Add "install_ipk_recipe_sysroot" in useradd bbclass.
-To handle the use case where base files are in ipk format
+## Allow useradd sysroot setup with IPK staging
 
-useradd_sysroot_sstate function in useradd bbclass.
->         bb.build.exec_func("useradd_sysroot", d)
->     elif task == "prepare_recipe_sysroot" or task == "install_ipk_recipe_sysroot":
+If the build's `useradd.bbclass` only runs `useradd_sysroot` for `do_prepare_recipe_sysroot`, update its task check to also handle `do_install_ipk_recipe_sysroot`. This layer adds that task between `do_prepare_recipe_sysroot` and `do_configure`; the useradd hook must run for the newly staged recipe sysroot as well.
 
-# Add check for FILES_IPK_PKG:pkg in insane bbclass.
-To skip qa check for the files from IPK packages.
+## Skip QA errors for files supplied by IPKs
 
-package_qa_check_rdepends function in insane bbclass.
->            if filerdepends:
->                for key in filerdepends:
->                    if bb.data.inherits_class('base-deps-resolver', d):
->                        if key.split("(")[0] in (d.getVar("FILES_IPK_PKG:%s"%pkg) or ""):
->                            # Skip qa check for files from IPK
->                            bb.warn("Skipping qa check for file %s which is available in IPK"%key)
->                            continue
->                        else:
->                            # Check for non lib files from IPK
->                            ipk = check_file_provider_ipk(d, key.split("(")[0], rdepends)
->                            if ipk:
->                                bb.warn("Skipping qa check for file %s which is available in IPK %s"%(key, ipk))
->                                continue
->                    error_msg = "%s contained in package %s requires %s, but no providers found in RDEPENDS:%s?" %
+Update the build's `insane.bbclass` runtime-dependency QA check to consult `FILES_IPK_PKG:<package>` for files recorded as coming from an IPK. For missing file dependencies not listed there, call `check_file_provider_ipk(d, file, rdepends)` before reporting an error. This lets QA distinguish files supplied by staged IPKs from genuinely unresolved dependencies.
 
-# Requires the upstream patch "Add Requires.private field in process_pkgconfig".
+## pkg-config private requirements
 
-https://github.com/openembedded/openembedded-core/commit/4b5c8b7006aae2162614ba810ecf4418ca3f36b4
+The build needs the OpenEmbedded Core change that preserves `Requires.private` while processing pkg-config metadata:
 
-# Add custom opkg configure function in meta/lib/oe/package_manager/ipk/__init__.py
-To set the priority for the feeds.
+<https://github.com/openembedded/openembedded-core/commit/4b5c8b7006aae2162614ba810ecf4418ca3f36b4>
 
->        self.from_feeds = (self.d.getVar('BUILD_IMAGES_FROM_FEEDS') or "") == "1"
->        if bb.data.inherits_class('custom-rootfs-creation', d):
->            from oe.sls_utils import sls_opkg_conf
->            sls_opkg_conf (d, self.config_file)
->        elif self.from_feeds:
->             self._create_custom_config()
+## Custom opkg configuration hook
 
+Rootfs and SDK package-manager code must use the layer's configured feed data and priorities. The custom rootfs class prepares `IPK_FEED_URIS` and sets `BUILD_IMAGES_FROM_FEEDS`; the opkg package-manager path should call `oe.sls_utils.sls_opkg_conf(d, config_file)` for the `custom-rootfs-creation` class so feed priorities from `OPKG_ARCH_PRIORITY:<arch>` are included.
+
+Verify these integrations against the Yocto/OpenEmbedded revision used by the build. Function names and task hooks can differ between releases; do not apply duplicate patches if the equivalent behavior is already present.
