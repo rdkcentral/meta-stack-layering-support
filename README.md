@@ -25,7 +25,7 @@ Sreejith Ravi
 ├── CONTRIBUTING.md
 ├── COPYING -> LICENSE
 ├── docs
-│   ├── ipk-mode-support.md
+│   ├── ipk-mode-within-stack-layer.md
 │   ├── nativepkg-toolchain-prebuilt-mode.md
 │   ├── prerequisite.md
 │   ├── stack-layering-support.md
@@ -41,7 +41,7 @@ Sreejith Ravi
 ```
 ## Introduction
 
-The **meta-stack-layering-support** layer enhances our Yocto-based (`yotco`) build process by enabling a modular, IPK-driven workflow. Instead of rebuilding every component from source in a monolithic fashion, this layer allows you to:
+The **meta-stack-layering-support** layer enhances our Yocto-based build process by enabling a modular, IPK-driven workflow. Instead of rebuilding every component from source in a monolithic fashion, this layer allows you to:
 
 - **Consume prebuilt IPKs** from other stack layers without using package recipes. It also helps IPK consumption within the same stack layer when versions match — speeding up builds and saving disk space.  
 - **Rebuild from source** based on version changes, ensuring traceability and consistency.  
@@ -113,7 +113,7 @@ _For a full walkthrough, see [Native Pkgs and Toolchain Prebuilt Mode](https://g
 
 ## Custom Rootfs Creation & IPK Dependency Resolution
 
-**Purpose:** Create custom opkg configuration and generate version info for the packagegroups set in the IMAGE_INSTALL. This will support rootfs genration using both in IPK mode and source mode packages
+**Purpose:** Create custom opkg configuration and generate version info for the packagegroups set in the IMAGE_INSTALL. This supports rootfs generation using both IPK-mode and source-mode packages.
 
 _For design details and log locations, see [Stack Layering Support](https://github.com/rdkcentral/meta-stack-layering-support/blob/develop/docs/stack-layering-support.md)._
 
@@ -146,7 +146,7 @@ _For detailed steps and examples, see [IPK Mode within stack layer](https://gith
 | `DOCKER_NATIVE_SYSROOT`   | Path to the prebuilt toolchain and native packages.                                |
 | `KERNEL_IMAGEDEST`        | Kernel image destination folder which is required for prebuilt consumption.        |
 | `FIRMWARE_IMAGEDEST`      | Firmware destination folder which is required for prebuilt consumption.            |
-| `TARGET_BASED_IPK_STAGING`| To create target based IPK staging instead of processing all avilable recipes.     |
+| `TARGET_BASED_IPK_STAGING`| To create target-based IPK staging instead of processing all available recipes.     |
 | `GENERATE_NATIVE_PKG_PREBUILT`| To generate version native prebuilts.     |
 | `DEPENDS_ON_TARGET`| To build pkg from source, if it depends on target package.     |
 | `DEPENDS_VERSION_CHECK`| To build the package from source, if a dependency's major version has changed.     |
