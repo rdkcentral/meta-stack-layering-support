@@ -19,9 +19,9 @@ By default TARGET_VENDOR is set with "-rdk".<br />
      Default value is "0" <br /> 
 - Create a packagegroup recipe for native packages with the list of all required native packages.
 - Build the packagegroup using bitbake command. <br />
-     It will generate the [pkg-name]-[version].tar.gz file  for each native packages lisyed in the packagegroup in "${NATIVE_PREBUILT_DIR}".<br /> 
+     It will generate a [pkg-name]-[version].tar.gz file for each native package listed in the packagegroup in "${NATIVE_PREBUILT_DIR}".<br />
      Default is NATIVE_PREBUILT_DIR = "${TMPDIR}/native-pre-pkgs <br /> 
-     We can update single packagegroup alos.
+     We can also update a single packagegroup.
      Example: build-rdk-arm64/tmp/native-pre-pkgs/openssl-native_3.0.15-r0.tar.gz <br /> 
      Build the required native packages using bitbake command. <br />
      Example "bitbake opkg-native".<br />

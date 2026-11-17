@@ -808,18 +808,18 @@ python update_recipe_deps_handler() {
     pn = e.data.getVar('PN')
     version = get_version_info(e.data)
     if bb.data.inherits_class('native', e.data) or bb.data.inherits_class('cross', e.data) or "gcc-initial" in pn:
-        if staging_native_prebuilt_path and d.getVar("PREBUILT_NATIVE_SUPPORT") == "1":
+        if staging_native_prebuilt_path and e.data.getVar("PREBUILT_NATIVE_SUPPORT") == "1":
             exclusion_list = (e.data.getVar("PREBUILT_NATIVE_PKG_EXCLUSION_LIST") or "").split()
             prebuilt_native_pkg_type = e.data.getVar("PREBUILT_NATIVE_PKG_TYPE")
             if prebuilt_native_pkg_type:
                 import glob
                 base_version = e.data.getVar('PV').split('+')[0]
                 if "gcc-initial" in  pn:
-                    if d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1":
+                    if e.data.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1":
                         set_gcc_glibc_pkg_arch(e.data, pn)
-                    remote_feed = d.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED') or ""
+                    remote_feed = e.data.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED') or ""
                     if remote_feed:
-                        local_feed_dir = os.path.join(d.getVar("IPK_PKGDATA_DIR"), "prebuilt_gcc_initial")
+                        local_feed_dir = os.path.join(e.data.getVar("IPK_PKGDATA_DIR"), "prebuilt_gcc_initial")
                         bb.utils.mkdirhier(local_feed_dir)
                         pr = e.data.getVar('PR')
                         if variant:
@@ -841,20 +841,20 @@ python update_recipe_deps_handler() {
 
                 if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(e.data, pn,variant) and pn not in exclusion_list :
                     if "gcc-initial" in  pn:
-                        gcc_arch = d.getVar('GCC_LAYER_ARCH')
-                        d.setVar("PACKAGE_ARCH", gcc_arch)
+                        gcc_arch = e.data.getVar('GCC_LAYER_ARCH')
+                        e.data.setVar("PACKAGE_ARCH", gcc_arch)
                     update_build_tasks(e.data, arch, "native")
                 else:
-                    if not d.getVar("REBUILD_REASON"):
+                    if not e.data.getVar("REBUILD_REASON"):
                         if pn not in exclusion_list:
-                            d.setVar("REBUILD_REASON","prebuilt tar not available")
+                            e.data.setVar("REBUILD_REASON","prebuilt tar not available")
                         else:
-                            d.setVar("REBUILD_REASON","in exclusion")
+                            e.data.setVar("REBUILD_REASON","in exclusion")
                     bb.build.addtask('do_src_build_metadata','do_populate_sysroot',None,e.data)
         if e.data.getVar("GENERATE_NATIVE_PKG_PREBUILT") == "1":
             e.data.appendVarFlag('do_populate_sysroot', 'postfuncs', ' do_add_version')
     else:
-        if d.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1":
+        if e.data.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1":
             set_gcc_glibc_pkg_arch(e.data, pn)
         arch = e.data.getVar('PACKAGE_ARCH')
         # Skipping unrequired version of recipes
@@ -865,14 +865,14 @@ python update_recipe_deps_handler() {
 
         # This is to make sure IMAGE_LINGUAS ipks are generated with stack layer packagegroups
         if check_targets(e.data, pn) and ("packagegroup" in pn or bb.data.inherits_class('image', e.data)):
-            skip_recipe_ipk_pkgs = True if "1" == d.getVar('SKIP_RECIPE_IPK_PKGS') else False
+            skip_recipe_ipk_pkgs = True if "1" == e.data.getVar('SKIP_RECIPE_IPK_PKGS') else False
             if e.data.getVar("GENERATE_GLIBC_LOCALE_IPK") == "1" and not skip_recipe_ipk_pkgs:
                 e.data.appendVarFlag('do_build', 'depends', ' glibc-locale:do_package_write_ipk')
                 e.data.appendVar("DEPENDS", ' glibc-locale')
 
         (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pn, False, version)
-        if not d.getVar("REBUILD_REASON") and not ipk_mode:
-            d.setVar("REBUILD_REASON","Ipk not available")
+        if not e.data.getVar("REBUILD_REASON") and not ipk_mode:
+            e.data.setVar("REBUILD_REASON","Ipk not available")
         if ipk_mode and not check_targets(e.data, pn) and not check_depends_on_targets(e.data) and not check_depends_version_change(e.data, variant, pn):
             skipped_pkg_dir = os.path.join(feed_info_dir,"%s/skipped/"%arch)
             if not os.path.exists(skipped_pkg_dir):
@@ -900,9 +900,9 @@ python update_recipe_deps_handler() {
                 kernel_pn = e.data.getVar('PREFERRED_PROVIDER_virtual/kernel') or ''
                 targets = get_target_list(e.data)
                 if kernel_pn:
-                    recipe_version_map =  loadRecipeVersionMap(d)
+                    recipe_version_map =  loadRecipeVersionMap(e.data)
                     if recipe_version_map:
-                        kernel_ver = getDepsVersion(d, kernel_pn, recipe_version_map)
+                        kernel_ver = getDepsVersion(e.data, kernel_pn, recipe_version_map)
                         (kernel_ipk_mode, _, _) = check_deps_ipk_mode(e.data, kernel_pn, False, kernel_ver)
                         if kernel_ipk_mode and kernel_pn not in {target[:-1] for target in targets}:
                             e.data.appendVarFlag('do_configure', 'depends', ' virtual/kernel:do_kernel_devel_create')
@@ -954,7 +954,7 @@ def create_ipk_deps_pkgdata(e,pn):
     if not os.path.exists(ipk_pkg_dir):
         bb.utils.mkdirhier(ipk_pkg_dir)
 
-    if bb.data.inherits_class('image', d):
+    if bb.data.inherits_class('image', e.data):
         pkgs = pn.split(" ")
     else:
         pkgs = e.data.getVar('PACKAGES').split(" ")
@@ -1058,7 +1058,7 @@ def check_deps_ipk_mode(d, dep_bpkg, rrecommends = False, version = None):
             if os.path.exists(src_path):
                 import bb
                 if bb.data.inherits_class('linux-kernel-base', d) and not os.path.exists(pkg_path + "package/kernel-devel"):
-                    bb.note("Linux recipe, but kernel-devel ipk not avilable. Skip Ipk mode")
+                    bb.note("Linux recipe, but kernel-devel IPK not available. Skip IPK mode")
                 else:
                     if arch != pkg_arch:
                         d.setVar("PACKAGE_ARCH", arch)
@@ -1155,11 +1155,11 @@ def update_dep_pkgs(e):
     arch = e.data.getVar('PACKAGE_ARCH',  True)
     have_ipk_deps = False
 
-    pe = d.getVar('PE')
-    pv = d.getVar('PV')
-    pr = d.getVar('PR')
+    pe = e.data.getVar('PE')
+    pv = e.data.getVar('PV')
+    pr = e.data.getVar('PR')
     version = "%s:%s-%s"%(pe,pv,pr) if pe else "%s-%s"%(pv,pr)
-    feed_info_dir = d.getVar("FEED_INFO_DIR")
+    feed_info_dir = e.data.getVar("FEED_INFO_DIR")
     version = version.replace("AUTOINC","0")
     # Handle DEPENDS which needs recipe to process
     deps = (e.data.getVar('DEPENDS') or "").strip()
@@ -1190,8 +1190,8 @@ def update_dep_pkgs(e):
                     e.data.setVar("INSTALL_RRECOMMENDS:%s"%pkg, ','.join(ipk_pkgs))
 
     # Handle IMAGE_INSTALL which needs recipe to process
-    if bb.data.inherits_class('image', d):
-        gen_debugfs = d.getVar('IMAGE_GEN_DEBUGFS')
+    if bb.data.inherits_class('image', e.data):
+        gen_debugfs = e.data.getVar('IMAGE_GEN_DEBUGFS')
         if gen_debugfs == "1":
             pkgs_inst = (e.data.getVar('PACKAGE_INSTALL') or "").strip()
             if pkgs_inst:
@@ -1231,7 +1231,7 @@ def update_dep_pkgs(e):
             if f == "read_shlibdeps":
                 e.data.appendVar('PACKAGEFUNCS'," do_update_rdeps_ipk")
 
-    if bb.data.inherits_class('multilib_global', d) and not d.getVar('MLPREFIX'):
+    if bb.data.inherits_class('multilib_global', e.data) and not e.data.getVar('MLPREFIX'):
         have_ipk_deps = False
     if have_ipk_deps:
         e.data.appendVar("DEPENDS", " ${MLPREFIX}staging-ipk-pkgs")
@@ -1362,7 +1362,7 @@ def check_file_provider_ipk(d, file, rdeps):
 # This data is read from the metadata generated while executing the package_do_shlibs (do_package).
 def update_rdeps_shlib(d,pkg):
     ipks = []
-    # SHLIBSKIPLIST should set with missing sahred libs in package_do_shlibs
+    # SHLIBSKIPLIST should be set with missing shared libraries in package_do_shlibs
     if d.getVar('SHLIBSKIPLIST_%s'%pkg):
         pkg_dir = d.getVar("IPK_PKGDATA_RUNTIME_DIR")
         if not os.path.exists(pkg_dir):
@@ -1409,7 +1409,7 @@ python do_update_rdeps_ipk () {
     pkgdata_path = d.getVar("DEPS_IPK_DIR")
 
     # "staging-ipk-pkgs" interface package should be removed from DEPENDS.
-    # Otherwie it will be added to the RRECOMMENDS for the -dev ipk
+    # Otherwise, it will be added to the RRECOMMENDS for the -dev IPK.
     depends = []
     for dep in bb.utils.explode_deps(d.getVar('DEPENDS') or ""):
         if "staging-ipk-pkgs" not in dep and dep not in depends:
@@ -1467,29 +1467,29 @@ python do_update_rdeps_ipk () {
             open(packagedfile, 'w').close()
 }
 
-# Find ipk pkgs (recipes unavailabe) from the DEPENDS/RDEPENDS list.
+# Find IPK packages (recipes unavailable) from the DEPENDS/RDEPENDS list.
 python deps_update_handler () {
     pn = e.data.getVar('PN')
     # This needs to be updated once start using the prebuilt toolchain
-    if not bb.data.inherits_class('native', d) and not bb.data.inherits_class('cross', d):
+    if not bb.data.inherits_class('native', e.data) and not bb.data.inherits_class('cross', e.data):
         update_dep_pkgs(e)
 }
 addhandler deps_update_handler
 deps_update_handler[eventmask] = "bb.event.RecipeParsed"
 
 python deps_taskhandler() {
-    pn = d.getVar('PN')
-    pe = d.getVar('PE')
-    pv = d.getVar('PV')
-    pr = d.getVar('PR')
+    pn = e.data.getVar('PN')
+    pe = e.data.getVar('PE')
+    pv = e.data.getVar('PV')
+    pr = e.data.getVar('PR')
     have_ipk_deps = True
     version = "%s:%s-%s"%(pe,pv,pr) if pe else "%s-%s"%(pv,pr)
-    feed_info_dir = d.getVar("FEED_INFO_DIR")
+    feed_info_dir = e.data.getVar("FEED_INFO_DIR")
     version = version.replace("AUTOINC","0")
 
     bbtasks = e.tasklist
     dep_list = ["depends","rdepends"]
-    staging_ipk_task = ("%sstaging-ipk-pkgs:do_populate_sysroot"%d.getVar("MLPREFIX"))
+    staging_ipk_task = ("%sstaging-ipk-pkgs:do_populate_sysroot"%e.data.getVar("MLPREFIX"))
     for task in bbtasks:
         for dep in dep_list:
             pkg_task_list = (e.data.getVarFlag(task, '%s'%dep)or"").split(" ")
@@ -1504,7 +1504,7 @@ python deps_taskhandler() {
                     pkg = preferred_provider
                 (ipk_mode, version_check, arch_check) = check_deps_ipk_mode(e.data, pkg)
                 if ipk_mode:
-                    if bb.data.inherits_class('multilib_global', d) and not e.data.getVar('MLPREFIX'):
+                    if bb.data.inherits_class('multilib_global', e.data) and not e.data.getVar('MLPREFIX'):
                         have_ipk_deps = False
                     if have_ipk_deps and staging_ipk_task not in pkgs_list:
                         pkgs_list.append(staging_ipk_task)
@@ -1669,10 +1669,10 @@ python create_stack_layer_info () {
     feed_info_dir = e.data.getVar("FEED_INFO_DIR")
     index_check = e.data.getVar("FEED_INFO_LOCK")
     target_check = os.path.join(e.data.getVar("TOPDIR"),"target_pkg_list")
-    dep_tree_check = os.path.join(d.getVar("TOPDIR"),"tree_generated")
+    dep_tree_check = os.path.join(e.data.getVar("TOPDIR"),"tree_generated")
     if isinstance(e, bb.event.CacheLoadStarted):
-        staging_native_prebuilt_path = d.getVar("PREBUILT_NATIVE_SYSROOT")
-        support = (d.getVar("PREBUILT_NATIVE_SUPPORT") or "0").strip()
+        staging_native_prebuilt_path = e.data.getVar("PREBUILT_NATIVE_SYSROOT")
+        support = (e.data.getVar("PREBUILT_NATIVE_SUPPORT") or "0").strip()
         if support == "1":
             bb.note("Prebuilt toolchain/native consumption: ENABLED")
         else:
@@ -1720,7 +1720,7 @@ python create_stack_layer_info () {
                 if feed_key in seen_feeds:
                     continue
                 seen_feeds.add(feed_key)
-                if d.getVar("EXCLUDE_IPK_FEEDS") and arch_name in d.getVar("EXCLUDE_IPK_FEEDS").split():
+                if e.data.getVar("EXCLUDE_IPK_FEEDS") and arch_name in e.data.getVar("EXCLUDE_IPK_FEEDS").split():
                     bb.note("Excluded %s##%s"%(arch_name, arch_uri))
                     continue
                 bb.note("%s##%s"%(arch_name, arch_uri))
@@ -1898,7 +1898,7 @@ def generate_native_prebuilts_tar(d, deploy_dir):
             bb.utils.mkdirhier(feed_dst_path)
             shutil.copytree(feed_src_path, feed_dst_path, dirs_exist_ok=True)
     # Support to generate libgcc-initial which is required for glibc build.
-    # libgcc-initial doesn't have ipk gneration support.
+    # libgcc-initial doesn't have IPK generation support.
     if os.path.exists(gcc_initial_dir):
         cmds = []
         for item in os.listdir(gcc_initial_dir):
@@ -1925,17 +1925,17 @@ python feed_index_creation () {
 
     if e.data.getVar("STACK_LAYER_EXTENSION") or e.data.getVar("TARGET_BASED_IPK_STAGING") == "1":
         import shutil
-        cache_folder = os.path.join(d.getVar("TOPDIR"),"cache")
+        cache_folder = os.path.join(e.data.getVar("TOPDIR"),"cache")
         if os.path.exists(cache_folder):
             shutil.rmtree(cache_folder)
-        cache_folder = os.path.join(d.getVar("TMPDIR"),"cache")
+        cache_folder = os.path.join(e.data.getVar("TMPDIR"),"cache")
         if os.path.exists(cache_folder):
             shutil.rmtree(cache_folder)
 
-    print_pkgs_in_src_mode(d)
+    print_pkgs_in_src_mode(e.data)
 
     if e.data.getVar('GENERATE_IPK_VERSION_DOC') == "1":
-        generate_packages_and_versions_md(d)
+        generate_packages_and_versions_md(e.data)
 
     if e.data.getVar("DEPLOY_IPK_FEED") == "0" and not e.data.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1":
         return
@@ -1978,16 +1978,16 @@ python feed_index_creation () {
 
     oe.utils.multiprocess_launch(exec_sls_cmd, cmds, e.data)
     if e.data.getVar('GENERATE_NATIVE_PKG_PREBUILT') == "1":
-        generate_native_prebuilts_tar(d, deploy_dir)
+        generate_native_prebuilts_tar(e.data, deploy_dir)
 }
 
 addhandler feed_index_creation
 feed_index_creation[eventmask] = "bb.event.BuildCompleted"
 
 python get_pkgs_handler () {
-    feed_info_dir = d.getVar("FEED_INFO_DIR")
+    feed_info_dir = e.data.getVar("FEED_INFO_DIR")
     if isinstance(e,bb.event.DepTreeGenerated):
-        pkg_path = d.getVar("TARGET_DEPS_LIST")
+        pkg_path = e.data.getVar("TARGET_DEPS_LIST")
         targetdeps = []
         for deps in e._depgraph['depends']:
             if deps.endswith("-native"):
