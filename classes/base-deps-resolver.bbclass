@@ -848,6 +848,7 @@ python update_recipe_deps_handler() {
                     if "gcc-initial" in  pn:
                         gcc_arch = e.data.getVar('GCC_LAYER_ARCH')
                         e.data.setVar("PACKAGE_ARCH", gcc_arch)
+                        e.data.setVarFlag("do_populate_sysroot", "network", "1")
                     update_build_tasks(e.data, arch, "native")
                 else:
                     if not e.data.getVar("REBUILD_REASON"):
