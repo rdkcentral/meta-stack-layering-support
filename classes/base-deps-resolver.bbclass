@@ -822,10 +822,7 @@ python update_recipe_deps_handler() {
                         local_feed_dir = os.path.join(e.data.getVar("IPK_PKGDATA_DIR"), "prebuilt_gcc_initial")
                         bb.utils.mkdirhier(local_feed_dir)
                         pr = e.data.getVar('PR')
-                        if variant:
-                            remote_file = os.path.join(remote_feed, f"{variant}-{pn}_{base_version}-{pr}.{prebuilt_native_pkg_type}")
-                        else:
-                            remote_file = os.path.join(remote_feed, f"{pn}_{base_version}-{pr}.{prebuilt_native_pkg_type}")
+                        remote_file = os.path.join(remote_feed, f"{pn}_{base_version}-{pr}.{prebuilt_native_pkg_type}")
                         try:
                             bb.process.run("wget %s --directory-prefix=%s"%(remote_file, local_feed_dir), stderr=subprocess.STDOUT)
                         except bb.process.ExecutionError as err:
