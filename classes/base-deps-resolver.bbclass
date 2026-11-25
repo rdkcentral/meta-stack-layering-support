@@ -307,6 +307,7 @@ def sls_generate_native_sysroot(d, staging_native_prebuilt_path):
     import os
     import subprocess
     pn = d.getVar("PN", True)
+    downloaded = False
     if "gcc-initial" in  pn:
         bb.note("sls_generate_native_sysroot : Extracting gcc-initial %s"%pn)
         remote_feed = d.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED') or ""
