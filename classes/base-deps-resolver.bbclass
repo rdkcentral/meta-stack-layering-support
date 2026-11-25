@@ -307,10 +307,21 @@ def sls_generate_native_sysroot(d, staging_native_prebuilt_path):
     import os
     import subprocess
     pn = d.getVar("PN", True)
+    downloaded = False
     if "gcc-initial" in  pn:
+        bb.note("sls_generate_native_sysroot : Extracting gcc-initial %s"%pn)
         remote_feed = d.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED') or ""
         if remote_feed:
             staging_native_prebuilt_path = os.path.join(d.getVar("IPK_PKGDATA_DIR"), "prebuilt_gcc_initial")
+            bb.utils.mkdirhier(staging_native_prebuilt_path)
+            base_version = d.getVar('PV').split('+')[0]
+            pkg_type = d.getVar("PREBUILT_NATIVE_PKG_TYPE")
+            remote_file = os.path.join(remote_feed, f"{pn}_{base_version}-{d.getVar('PR')}.{pkg_type}")
+            try:
+                bb.process.run("wget -N %s --directory-prefix=%s" % (remote_file, staging_native_prebuilt_path), stderr=subprocess.STDOUT)
+            except bb.process.ExecutionError:
+                bb.warn("Failed to download libgcc-initial prebuilt %s" % remote_file)
+            downloaded = True
         else:
             staging_native_prebuilt_path = d.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
 
@@ -331,6 +342,8 @@ def sls_generate_native_sysroot(d, staging_native_prebuilt_path):
             prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
             if prebuilt_native_pkg_type == "tar.gz":
                 bb.process.run("tar --strip-components=1 -xvzf %s -C %s" % (prebuilt_native_pkg_path, sysroot_components_dir), stderr=subprocess.STDOUT)
+                if downloaded:
+                    os.remove(prebuilt_native_pkg_path)
             else:
                 bb.note("Support for the extension %s need to add. Currently support only tar.gz "%prebuilt_native_pkg_type)
                 return False
@@ -750,7 +763,7 @@ def get_version_info(d):
     version = version.replace("AUTOINC","0")
     return version
 
-def gcc_source_mode_check(d, pn, variant):
+def gcc_source_mode_check(d, pn):
     gcc_source_mode = True
     if "gcc-" in pn:
         version = get_version_info(d)
@@ -819,30 +832,24 @@ python update_recipe_deps_handler() {
                         set_gcc_glibc_pkg_arch(e.data, pn)
                     remote_feed = e.data.getVar('PREBUILT_GCC_TARGET_REMOTE_FEED') or ""
                     if remote_feed:
-                        local_feed_dir = os.path.join(e.data.getVar("IPK_PKGDATA_DIR"), "prebuilt_gcc_initial")
-                        bb.utils.mkdirhier(local_feed_dir)
-                        pr = e.data.getVar('PR')
-                        if variant:
-                            remote_file = os.path.join(remote_feed, f"{variant}-{pn}_{base_version}-{pr}.{prebuilt_native_pkg_type}")
-                        else:
-                            remote_file = os.path.join(remote_feed, f"{pn}_{base_version}-{pr}.{prebuilt_native_pkg_type}")
-                        try:
-                            bb.process.run("wget %s --directory-prefix=%s"%(remote_file, local_feed_dir), stderr=subprocess.STDOUT)
-                        except bb.process.ExecutionError as err:
-                            bb.warn("***** Failed to download %s"%remote_file)
-                        staging_native_prebuilt_path = local_feed_dir
+                        # Select remote initial libraries only when Docker has the matching cross compiler.
+                        cross_pn = "gcc-cross-%s" % e.data.getVar("TARGET_ARCH")
+                        prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, f"{cross_pn}_{base_version}")
                     else:
                         staging_native_prebuilt_path = e.data.getVar("PREBUILT_GCC_TARGET_DOCKER_FEED")
-                prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, f"{pn}_{base_version}")
+                        prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, f"{pn}_{base_version}")
+                else:
+                    prebuilt_native_pkg_path = os.path.join(staging_native_prebuilt_path, f"{pn}_{base_version}")
 
                 prebuilt_native_pkg_path_list = glob.glob(prebuilt_native_pkg_path+"*.%s"%prebuilt_native_pkg_type)
                 if prebuilt_native_pkg_path_list:
                     prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
 
-                if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(e.data, pn,variant) and pn not in exclusion_list :
+                if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(e.data, pn) and pn not in exclusion_list :
                     if "gcc-initial" in  pn:
                         gcc_arch = e.data.getVar('GCC_LAYER_ARCH')
                         e.data.setVar("PACKAGE_ARCH", gcc_arch)
+                        e.data.setVarFlag("do_populate_sysroot", "network", "1")
                     update_build_tasks(e.data, arch, "native")
                 else:
                     if not e.data.getVar("REBUILD_REASON"):
