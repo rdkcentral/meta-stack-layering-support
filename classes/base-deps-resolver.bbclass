@@ -750,7 +750,7 @@ def get_version_info(d):
     version = version.replace("AUTOINC","0")
     return version
 
-def gcc_source_mode_check(d, pn, variant):
+def gcc_source_mode_check(d, pn):
     gcc_source_mode = True
     if "gcc-" in pn:
         version = get_version_info(d)
@@ -836,7 +836,7 @@ python update_recipe_deps_handler() {
                 if prebuilt_native_pkg_path_list:
                     prebuilt_native_pkg_path = prebuilt_native_pkg_path_list[0]
 
-                if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(e.data, pn,variant) and pn not in exclusion_list :
+                if os.path.exists(prebuilt_native_pkg_path) and not gcc_source_mode_check(e.data, pn) and pn not in exclusion_list :
                     if "gcc-initial" in  pn:
                         gcc_arch = e.data.getVar('GCC_LAYER_ARCH')
                         e.data.setVar("PACKAGE_ARCH", gcc_arch)
