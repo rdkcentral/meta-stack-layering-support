@@ -1,39 +1,37 @@
-In the stack layering model, we have separate build projects for each layer, along with an additional IA Assembler project for creating the full stack image. However, in all projects, the toolchain and native packages are built from source, which is a drawback of our layered model approach.<br/>
+# Native packages and toolchain prebuilt mode
 
-To address this, we have designed and integrated a new feature that allows consuming native packages and the toolchain from Docker/VM as prebuilts. This feature helps avoid building the toolchain and packages from source.
+The layer can consume prebuilt archives for native and cross recipes rather than running their normal build tasks. It can also generate these archives and package feeds for use by a later build. This mode is controlled by `PREBUILT_NATIVE_SUPPORT` and `GENERATE_NATIVE_PKG_PREBUILT`.
 
-### Standardize the TARGET_VENDOR variable
-The TARGET_VENDOR variable is used to generate the folder structure for toolchain components. <br />
+## Consume prebuilt archives
 
-STAGING_BINDIR_TOOLCHAIN = "${STAGING_DIR_NATIVE}${bindir_native}/${TARGET_ARCH}${TARGET_VENDOR}-${TARGET_OS}" <br />
+The defaults in `pkg-resolver.conf` are:
 
-To ensure that the prebuilt libraries are usable across all stack layers, we should standardize the TARGET_VENDOR value across the entire system.<br />
-If we do not use a common value for this variable, we won't be able to use the toolchain's prebuilt libraries, such as libgcc.<br />
+| Variable | Default | Purpose |
+|---|---|---|
+| `PREBUILT_NATIVE_SUPPORT` | `1` | Enables native/cross prebuilt lookup. |
+| `PREBUILT_NATIVE_SYSROOT` | `/opt/staging-native-toolchain/prebuilts` | Directory containing versioned prebuilt archives and optional toolchain feeds. |
+| `PREBUILT_NATIVE_PKG_TYPE` | `tar.gz` | Archive suffix supported by the current extraction code. |
+| `PREBUILT_NATIVE_PKG_EXCLUSION_LIST` | Empty | Native/cross package names that must be built from source. |
 
-By default TARGET_VENDOR is set with "-rdk".<br />
+For a recipe, the resolver looks for an archive whose name starts with `<recipe>_<PV-without-+suffix>` and ends in the configured archive type. If it finds one and the package is not excluded, it extracts the archive into the recipe sysroot and disables the usual build tasks. If the archive is missing, excluded, or unsupported, the recipe follows the source-build path. The current extraction implementation supports `tar.gz`.
 
-### Steps to generate the prebuilt native packages support in VM/docker:
-- Add meta-stack-layering-support to your project. <br />
-     Use the meta-stack-layering-support tag 2.0.3 or higher
-- Set GENERATE_NATIVE_PKG_PREBUILT to "1". <br />
-     Default value is "0" <br /> 
-- Create a packagegroup recipe for native packages with the list of all required native packages.
-- Build the packagegroup using bitbake command. <br />
-     It will generate the [pkg-name]-[version].tar.gz file  for each native packages lisyed in the packagegroup in "${NATIVE_PREBUILT_DIR}".<br /> 
-     Default is NATIVE_PREBUILT_DIR = "${TMPDIR}/native-pre-pkgs <br /> 
-     We can update single packagegroup alos.
-     Example: build-rdk-arm64/tmp/native-pre-pkgs/openssl-native_3.0.15-r0.tar.gz <br /> 
-     Build the required native packages using bitbake command. <br />
-     Example "bitbake opkg-native".<br />
-     It will generate the [pkg-name]-[version].tar.gz file  for openssl-native package in "${NATIVE_PREBUILT_DIR}".<br /> 
-     Example: build-rdk-arm64/tmp/native-pre-pkgs/openssl-native_3.0.15-r0.tar.gz <br /> 
-- Copy the native prebuilt package tar files from build directory "${NATIVE_PREBUILT_DIR}" to the Docker or VM path "${DOCKER_NATIVE_SYSROOT}". <br />
-     The default path is "/opt/staging-native/x86_64". <br /> 
-     If you need to copy to a different path, you should update the path variable "DOCKER_NATIVE_SYSROOT" using new path. <br />
+For `gcc-initial`, the resolver can instead use `PREBUILT_GCC_TARGET_REMOTE_FEED` or `PREBUILT_GCC_TARGET_DOCKER_FEED`. GCC/glibc package architecture selection uses `GCC_LAYER_ARCH` and `GLIBC_LAYER_ARCH`.
 
-### Advantages
-- Traceability: Packages can be tracked using version information.
-- Easy Updates: Each package can be updated independently.
-- Will use the prebuilt native packages and toolchain from the Docker path instead of building them from source. If any native package is missing in the Docker path, it will be built from source.
-- Ensures consistent native packages and toolchain across different stack layer projects.
-- Significantly reduces both build time and build server disk usage.
+## Generate prebuilt archives and feeds
+
+Set `GENERATE_NATIVE_PKG_PREBUILT = "1"` in the build that produces the prebuilts. Its default is `"0"`. `NATIVE_PREBUILT_DIR` defaults to `${TOPDIR}/../native-pre-pkgs`.
+
+The build writes version files into generated sysroot components. At build completion, it creates `tar.gz` archives for component directories identified as native or cross packages, copies the configured GCC/glibc IPK feeds when present, and packages `gcc-initial` components when available. The archive names include the package version and revision, for example `openssl-native_3.0.15-r0.tar.gz`.
+
+Copy the generated archives to the directory configured by `PREBUILT_NATIVE_SYSROOT` for consuming builds. Keep the target vendor/toolchain layout consistent across layers; the current configuration sets `TARGET_VENDOR` to `-rdk`.
+
+### GCC and glibc feeds
+
+The layer derives `GCC_LAYER_ARCH` and `GLIBC_LAYER_ARCH` from the toolchain configuration and Linux headers version, appends those architectures to `STACK_LAYER_EXTENSION`, and assigns opkg priorities. By default, local feeds under the prebuilt sysroot are enabled with `ENABLE_DOCKER_TARGET_GCC_FEED` and `ENABLE_DOCKER_TARGET_GLIBC_FEED`. A non-empty `PREBUILT_GCC_TARGET_REMOTE_FEED` or `PREBUILT_GLIBC_TARGET_REMOTE_FEED` takes precedence for its corresponding feed.
+
+## Notes
+
+- `PREBUILT_NATIVE_SUPPORT = "0"` disables native/cross archive consumption.
+- Packages in `PREBUILT_NATIVE_PKG_EXCLUSION_LIST` are built from source even when an archive is present.
+- Native prebuilt generation and consumption are separate: enable generation in the producer build, and enable support and configure the archive path in the consumer build.
+- Archives of types other than `tar.gz` are not currently extracted by the implementation.
